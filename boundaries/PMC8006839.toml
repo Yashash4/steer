@@ -1,7 +1,7 @@
 # Content boundaries for Narayan KMV et al., BMJ Open Diabetes Res Care 2021 (DOI 10.1136/bmjdrc-2020-001927).
 # Editorial input (written from the project's paper decisions), versioned. Claims are matched by text in their
 # QUOTE (canonical form), never by run-specific claim ids.
-version = 3
+version = 4
 pmcid = "PMC8006839"
 doi = "10.1136/bmjdrc-2020-001927"
 licence_note = "CC BY-NC: facts with attribution only; no reuse of the paper's figures or substantial text."
@@ -14,6 +14,11 @@ context_quotes = [
   "We compared diabetes incidence in South Asians aged ≥45 years in urban India (Chennai and Delhi) and Pakistan (Karachi)",
   "We compared diabetes incidence among South Asians (aged ≥45 years) (n=3136) from CARRS with blacks (n=3059) and whites (n=9924) aged 45–64 years in the USA using data from the Atherosclerosis Risk in Communities (ARIC) study.",
 ]
+
+# Never used in a post (the claim stays in the library and the studio).
+[[exclude_from_posts]]
+quote_any_of = ["Family history of diabetes was significantly associated"]
+why = "an association in this cohort; under family framing it invites 'my family's diabetes doesn't raise my risk', which would be harmful advice; other evidence treats family history as a risk factor"
 
 # Who was studied sits next to the incidence numbers (same slide), and somewhere in every Narayan post.
 [[require_qualifier]]

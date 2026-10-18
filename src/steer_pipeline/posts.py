@@ -61,10 +61,10 @@ def write_and_check(con, run_id: str, fmt: str, settings: dict, router: Router |
                     brief: dict | None = None, out_dir: str | Path = "out", render: bool = True) -> dict:
     router = router or Router(settings)
     claims, doc = claims_from_store(con, run_id)
-    usable = [c for c in claims.values() if writable(c)]
+    boundaries = load_boundaries(doc["citation"].get("pmcid") or "")
+    usable = [c for c in claims.values() if writable(c, boundaries)]
     brief = brief or pick_brief(usable, fmt, settings["writer"].get("brief_claims", 4))
     brand = load_brand()
-    boundaries = load_boundaries(doc["citation"].get("pmcid") or "")
     context = study_context(boundaries, doc)  # paper sentences behind the qualifiers: an error before any write call
     extra = required_claims(brief["claim_ids"], {c["claim_id"]: c for c in usable}, boundaries)
     if extra:  # a claim the paper's require_with rules make compulsory with the brief's claims

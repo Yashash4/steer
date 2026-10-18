@@ -86,11 +86,19 @@ def required_claims(ids: list[str], claims: dict[str, dict], boundaries: dict) -
     return added
 
 
-def writable(claim: dict) -> bool:
-    """A claim the writer may use: gate pass, no code flag, only layout review pending, and an independent
-    'supported' library cross-check."""
+def excluded(claim: dict, boundaries: dict) -> str | None:
+    """The boundaries file's reason when a claim must never be used in a post (it stays in the library and studio)."""
+    for rule in boundaries.get("exclude_from_posts", []):
+        if any(_has(claim["quote"], f) for f in rule["quote_any_of"]):
+            return rule.get("why", "excluded from posts")
+    return None
+
+
+def writable(claim: dict, boundaries: dict | None = None) -> bool:
+    """A claim the writer may use: gate pass, no code flag, only layout review pending, an independent
+    'supported' library cross-check, and not excluded from posts by the paper's boundaries file."""
     cc = claim.get("crosscheck") or {}
-    return (claim["gate"]["status"] == "pass" and not claim.get("flags")
+    return (claim["gate"]["status"] == "pass" and not claim.get("flags") and not excluded(claim, boundaries or {})
             and set(claim.get("review_reasons", [])) <= WRITABLE_REVIEW
             and cc.get("verdict") == "supported" and cc.get("independence") in COUNTS)
 
@@ -150,7 +158,7 @@ def check_line(line: dict, claims: dict[str, dict], brand: dict, rules: dict, bo
         if missing or not line["claim_ids"]:
             fails.append({"check": "structure", "code": "UNKNOWN_CLAIM", "detail": f"claim ids {missing or '[]'}"})
         for c in used:
-            if not writable(c):
+            if not writable(c, boundaries):
                 fails.append({"check": "structure", "code": "CLAIM_NOT_WRITABLE", "detail": c["claim_id"]})
     elif kind == "brand" and _norm(text) not in {_norm(w) for w in brand["whitelist"]}:
         fails.append({"check": "structure", "code": "BRAND_NOT_WHITELISTED", "detail": text})
@@ -158,7 +166,7 @@ def check_line(line: dict, claims: dict[str, dict], brand: dict, rules: dict, bo
         fails.append({"check": "structure", "code": "CTA_NOT_ALLOWED", "detail": text})
     elif kind == "signoff" and _norm(text) not in {_norm(w) for w in brand["signoff"]}:
         fails.append({"check": "structure", "code": "SIGNOFF_NOT_ALLOWED", "detail": text})
-    elif kind == "framing" and (find_numbers(text) or re.search(r"\d", text)):
+    elif kind == "framing" and (find_numbers(PRONOUNS.sub(" ", text)) or re.search(r"\d", text)):
         # no numbers in framing, no exceptions: digits glued to words ("3pm") count too
         fails.append({"check": "structure", "code": "FRAMING_HAS_NUMBER", "detail": text})
 
@@ -278,6 +286,9 @@ def key_lines(post: dict) -> list[dict]:
     return out
 
 
+PRONOUNS = re.compile(r"\b(?:no one|anyone|someone|everyone)\b", re.I)  # "one" here is no number ("one of" still is)
+
+
 def check_artwork(post: dict) -> list[dict]:
     """Per slide (and the static): the word budget, and emphasis that only repeats text of its own slide:
     key_number + key_label both exact substrings of one health line, emphasis an exact substring of a framing
@@ -299,6 +310,9 @@ def check_artwork(post: dict) -> list[dict]:
                               "detail": f"key_number {num!r} and key_label {label!r} must both be copied from one health line"})
             elif not re.search(r"\d", num):
                 fails.append({"check": "structure", "code": "KEY_NUMBER_NOT_A_NUMBER", "path": path, "detail": num})
+        if path == "static" and unit["headline"]["kind"] != "framing" and not (num and label):
+            fails.append({"check": "structure", "code": "STATIC_NO_HEADLINE", "path": path,
+                          "detail": "the static needs a framing headline or a key_number + key_label"})
         emph = unit.get("emphasis")
         targets = [lns[0]] if path == "static" else [ln for ln in lns if ln["kind"] == "framing"]
         if emph and not any(emph in ln["text"] for ln in targets):

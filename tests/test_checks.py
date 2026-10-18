@@ -431,3 +431,26 @@ def test_the_cta_is_not_sent_to_the_checker_with_the_message():
     assert "line: Weight came back at 0.4 kg a month on average.\n" in seen[0] and "programme" not in seen[0].split("message")[1]
     assert out["status"] == "draft_pending_review"
     assert next(x for x in out["lines"] if x["path"] == "message")["text"].endswith("fits you.")   # trace keeps it
+
+
+def test_family_history_is_excluded_from_posts_but_stays_a_claim():
+    fam = CLAIMS["family"]
+    assert checks.writable(fam) and not checks.writable(fam, NARAYAN)       # verified, but never writable for posts
+    assert "harmful" in checks.excluded(fam, NARAYAN)
+    assert codes(L("health", FAMILY, ["family"])) == ["CLAIM_NOT_WRITABLE"]
+
+
+def test_pronoun_one_is_not_a_number_in_framing():
+    assert codes(L("framing", "No one at home has sugar problems.")) == []
+    assert codes(L("framing", "Someone at dinner says the same, and so does everyone else.")) == []
+    assert codes(L("framing", "One in four people at the table.")) == ["FRAMING_HAS_NUMBER"]
+    assert codes(L("framing", "Is one of us next?")) == ["FRAMING_HAS_NUMBER"]
+
+
+def test_a_static_needs_a_headline_that_stops_the_scroll():
+    card = L("health", "On average weight came back at 0.4 kg a month, not a personal promise.", ["regain"])
+    st = lambda headline, **kw: {"static": {"headline": headline, "supporting": [], **kw}}
+    art = lambda p: [f["code"] for f in checks.check_artwork(p)]
+    assert art(st(card)) == ["STATIC_NO_HEADLINE"]
+    assert art(st(card, key_number="0.4 kg a month", key_label="On average weight came back")) == []
+    assert art(st(L("framing", "Will the weight come back?"))) == []
