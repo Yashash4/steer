@@ -194,6 +194,7 @@ def test_the_server_ignores_a_browser_role_and_answers_with_the_gate(tmp_path):
     try:
         with urllib.request.urlopen(base + "/api/data") as r:
             assert json.loads(r.read())["reviewers"]["note"] == "self-identified (prototype, no login)"
+            assert r.headers["Cache-Control"] == "no-store"          # a reload always shows the latest statuses
         assert post_json("/api/action", {"reviewer": "Steer editor (demo)", "role": "clinician",
                                          "action": "clinically_approved", "target": "post-00000001"})[0] == 409
         code, body = post_json("/api/action", {"reviewer": "Steer editor (demo)", "action": "layout_checked", "target": "r1/c1"})
@@ -293,3 +294,10 @@ def test_a_v3_store_upgrades_to_v4_keeping_every_action(tmp_path):
     assert [a["action"] for a in store.actions(con)] == ["layout_checked"]
     with pytest.raises(sqlite3.DatabaseError, match="append-only"):
         con.execute("DELETE FROM review_action")
+
+
+def test_later_stages_read_not_reached_while_an_earlier_one_is_open(tmp_path):
+    con, claims, posts = world(tmp_path)
+    st = studio.post_stages(posts["post-00000001"], claims, [])                # c1 still needs its layout check
+    assert st["first_open"] == "layout" and st["stages"]["editorial"]["words"] == "not reached (layout stage first)"
+    assert st["stages"]["clinical"]["words"] == "not reached (layout stage first)"

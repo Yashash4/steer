@@ -152,6 +152,11 @@ def post_stages(post: dict, claims: dict[str, dict], acts: list[dict]) -> dict:
                  else f"rejected by {cl['reviewer']} ({cl['role']}): {cl['reason']}")}
     stages = {"code": code, "layout": layout, "editorial": editorial, "clinical": clinical}
     first_open = next((k for k, v in stages.items() if not v["done"]), None)
+    order = list(stages)
+    acted = {"editorial": ed, "clinical": cl}
+    for k in order[order.index(first_open) + 1:] if first_open else []:
+        if not stages[k]["done"] and not acted.get(k):   # a later stage is not "awaiting" while an earlier one is open
+            stages[k] = stages[k] | {"words": f"not reached ({first_open} stage first)"}
     return {"stages": stages, "first_open": first_open, "words": stages[first_open]["words"] if first_open else
             clinical["words"], "claims": {i: s["words"] for i, s in statuses.items()}}
 
@@ -523,8 +528,9 @@ def make_handler(con, state, reviewers: dict[str, str], brand: dict, cache: Path
             self.end_headers()
             self.wfile.write(body)
 
-        def _json(self, code: int, obj):
-            self._send(code, json.dumps(obj, ensure_ascii=False, default=str).encode(), "application/json; charset=utf-8")
+        def _json(self, code: int, obj):   # never cached: statuses change with every reviewer action
+            self._send(code, json.dumps(obj, ensure_ascii=False, default=str).encode(), "application/json; charset=utf-8",
+                       {"Cache-Control": "no-store"})
 
         def log_message(self, *a):   # quiet
             pass
