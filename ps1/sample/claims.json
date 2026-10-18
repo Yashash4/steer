@@ -1,5 +1,5 @@
 {
- "version": 1,
+ "version": "1.1",
  "built_at": "2026-10-18T14:00:00+00:00",
  "brand": {
   "palette": {
@@ -18,7 +18,7 @@
   },
   "wordmark": "steer",
   "signoff": "steerclub.com",
-  "footer": "Prototype, not an official steer product."
+  "footer": "Educational hackathon prototype · content pending review by a Steer doctor · not a medical assessment"
  },
  "ui": {
   "lock": "Lock my guess",
@@ -38,7 +38,8 @@
   "id": "hook",
   "doubt": "is_it_for_me",
   "kind": "slider",
-  "question": "Guess: a slim South Asian woman and a slim white woman. How much higher is her diabetes risk?",
+  "context": "Adults aged 45+ in Chennai, Delhi and Karachi · BMI below 25 · South Asian women vs US white women",
+  "question": "Guess the difference. How did diabetes incidence compare in this study?",
   "stops": [
    {
     "label": "1×",
@@ -89,9 +90,7 @@
     "sentence": "South Asian women aged 45 and over in Chennai, Delhi and Karachi with BMI under 25 kg/m2 had 5.3 times higher diabetes risk than US white women."
    }
   ],
-  "qualifiers": [
-   "Adults aged 45 and over in Chennai, Delhi and Karachi, compared with US cohorts."
-  ],
+  "qualifiers": [],
   "quote": "Similarly, in women, the risk of diabetes in those with BMI <25 kg/m2 was 5.3 times higher in South Asian (IRR (95% CI) 5.27 (3.64 to 7.54)) than in white women.",
   "source": {
    "short": "Narayan et al. 2021",
@@ -107,27 +106,38 @@
   {
    "id": "is_it_safe",
    "label": "Is it safe?",
-   "answered_by": "gap-safety"
+   "answered_by": [
+    "gap-safety"
+   ]
   },
   {
    "id": "will_i_lose_muscle",
    "label": "Will I lose muscle?",
-   "answered_by": "muscle"
+   "answered_by": [
+    "muscle-a",
+    "muscle-b"
+   ]
   },
   {
    "id": "will_weight_come_back",
    "label": "Will the weight come back?",
-   "answered_by": "regain"
+   "answered_by": [
+    "regain"
+   ]
   },
   {
    "id": "only_for_diabetics",
    "label": "Is this only for diabetics?",
-   "answered_by": "gap-diabetics"
+   "answered_by": [
+    "gap-diabetics"
+   ]
   },
   {
    "id": "is_it_for_me",
    "label": "Is it even for me?",
-   "answered_by": "hook"
+   "answered_by": [
+    "hook"
+   ]
   }
  ],
  "rounds": [
@@ -135,41 +145,43 @@
    "id": "regain",
    "doubt": "will_weight_come_back",
    "kind": "slider",
-   "question": "After stopping a weight management medicine, how long until weight is back where it would have been?",
+   "context": null,
+   "question": "After stopping a weight management medicine, how fast does weight come back each month?",
    "stops": [
     {
-     "label": "Six months",
-     "value": 0.5
+     "label": "None",
+     "value": 0
     },
     {
-     "label": "About a year",
-     "value": 1.0
+     "label": "0.1 kg",
+     "value": 0.1
     },
     {
-     "label": "About a year and a half",
-     "value": 1.5
+     "label": "0.4 kg",
+     "value": 0.4
     },
     {
-     "label": "Three years",
-     "value": 3.0
+     "label": "1 kg",
+     "value": 1
     },
     {
-     "label": "Never",
-     "value": 99
+     "label": "2 kg",
+     "value": 2
     }
    ],
-   "answer": 1.4,
+   "answer": 0.4,
    "reveals": [
     {
-     "number": "1.4 years",
-     "label": "weight was no different",
-     "sentence": "Across 28 randomised controlled trials, weight was no different between treatment and control groups 1.4 years after weight management medication stopped."
+     "number": "0.4 kg",
+     "label": "average monthly rate of weight regain",
+     "sentence": "The average monthly rate of weight regain was 0.4 kg (95% CI 0.3 to 0.5) after stopping."
     }
    ],
    "qualifiers": [
-    "An average across studies, not a prediction for you."
+    "An average across studies, not a prediction for you.",
+    "All weight-management medicines, not only GLP-1."
    ],
-   "quote": "Among 28 randomised controlled trials, weight was no different between treatment and control groups 1.4 years after cessation of WMM.",
+   "quote": "The average monthly rate of weight regain was 0.4 kg (95% confidence interval (CI) 0.3 to 0.5)",
    "source": {
     "short": "West et al. 2026",
     "doi": "10.1136/bmj-2025-085304",
@@ -177,14 +189,15 @@
     "full": "West S, Scragg J, Aveyard P et al. Weight regain after cessation of medication for weight management: systematic review and meta-analysis. BMJ, 2026."
    },
    "claim_ids": [
-    "run-a7cddabed62e/c004-01"
+    "run-a7cddabed62e/c000-01"
    ]
   },
   {
-   "id": "muscle",
+   "id": "muscle-a",
    "doubt": "will_i_lose_muscle",
    "kind": "choice",
-   "question": "On these medicines, does lean mass go up or down?",
+   "context": null,
+   "question": "On these medicines, does the amount of lean mass in kilograms go up, down or stay the same?",
    "stops": [
     {
      "label": "Up",
@@ -195,27 +208,22 @@
      "value": "down"
     },
     {
-     "label": "Both, depending how you count",
-     "value": "both"
+     "label": "No change",
+     "value": "same"
     }
    ],
-   "answer": "both",
+   "answer": "down",
    "reveals": [
     {
      "number": "1.74 kg",
      "label": "Absolute lean mass fell",
      "sentence": "Absolute lean mass fell by 1.74 kg on average."
-    },
-    {
-     "number": "1.81%",
-     "label": "Lean mass as a share of total weight rose",
-     "sentence": "Lean mass as a share of total weight rose by 1.81% on average."
     }
    ],
    "qualifiers": [
     "Results varied a lot between studies."
    ],
-   "quote": "(layout sample only: not a usable claim yet)",
+   "quote": "(layout sample only: needs check_cleared before it is usable)",
    "source": {
     "short": "Laverde et al. 2026",
     "doi": "10.1038/s41366-026-00000-0",
@@ -223,6 +231,46 @@
     "full": "Laverde et al. GLP-1 receptor agonists and lean mass: systematic review and meta-analysis. International Journal of Obesity, 2026."
    },
    "claim_ids": []
+  },
+  {
+   "id": "muscle-b",
+   "doubt": "will_i_lose_muscle",
+   "kind": "choice",
+   "context": null,
+   "question": "And lean mass as a share of body weight: up, down or the same?",
+   "stops": [
+    {
+     "label": "Up",
+     "value": "up"
+    },
+    {
+     "label": "Down",
+     "value": "down"
+    },
+    {
+     "label": "No change",
+     "value": "same"
+    }
+   ],
+   "answer": "up",
+   "reveals": [
+    {
+     "number": "1.81%",
+     "label": "Lean mass as a share of total weight rose",
+     "sentence": "Lean mass as a share of total weight rose by 1.81% on average."
+    }
+   ],
+   "qualifiers": [],
+   "quote": "GLP1-RA significantly improved lean mass as a proportion of total weight, with an observed increase of 1.81% (95% CI: 1.1– 2.52; p < 0.00001; I² = 7%).",
+   "source": {
+    "short": "Laverde et al. 2026",
+    "doi": "10.1038/s41366-026-00000-0",
+    "location": "page 1",
+    "full": "Laverde et al. GLP-1 receptor agonists and lean mass: systematic review and meta-analysis. International Journal of Obesity, 2026."
+   },
+   "claim_ids": [
+    "run-e4d5ed8559e6/c000-00"
+   ]
   }
  ],
  "gap_cards": [
@@ -238,10 +286,11 @@
   }
  ],
  "readout": {
-  "under": "You underestimated {n} of {m}",
-  "over": "You overestimated {n} of {m}",
+  "under": "You guessed below the study on {n} of {m}",
+  "over": "You guessed above the study on {n} of {m}",
   "close": "You were close on {n} of {m}",
-  "meaning_title": "What the studies found"
+  "direction": "You got the direction right on {n} of {m}",
+  "meaning_title": "What this study tells us — and what it doesn't"
  },
  "doctor_questions": {
   "is_it_for_me": [
@@ -263,11 +312,11 @@
  "cta": {
   "primary": {
    "label": "See if the programme fits you",
-   "url": "https://steerclub.com/?utm_source=ps1&utm_medium=quiz"
+   "url": "https://steerclub.com/?utm_source=steer_quiz&utm_campaign=guess_the_number"
   },
   "secondary": {
    "label": "Talk to a Steer doctor",
-   "url": "https://steerclub.com/?utm_source=ps1&utm_medium=quiz&utm_content=doctor"
+   "url": "https://steerclub.com/?utm_source=steer_quiz&utm_campaign=guess_the_number"
   }
  },
  "warm_lead": {

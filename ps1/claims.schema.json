@@ -1,107 +1,425 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "steer/ps1_claims/1",
-  "title": "claims.json v1: everything the PS1 quiz may draw. Written by `steer ps1 build` from verified (or S4-cleared) claims and copy that passed the PS2 checks. The page draws no other text and never formats a revealed number: scale stops and reveals are strings from here.",
+  "$id": "steer/ps1_claims/1.1",
+  "title": "claims.json v1.1: everything the PS1 quiz may draw. Written by `steer ps1 build` from verified (or S4-cleared) claims and copy that passed the PS2 checks. The page draws no other text and never formats a revealed number: scale stops and reveals are strings from here.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "built_at", "brand", "ui", "hook", "doubts", "rounds", "gap_cards", "readout", "doctor_questions", "cta", "warm_lead"],
+  "required": [
+    "version",
+    "built_at",
+    "brand",
+    "ui",
+    "hook",
+    "doubts",
+    "rounds",
+    "gap_cards",
+    "readout",
+    "doctor_questions",
+    "cta",
+    "warm_lead"
+  ],
   "properties": {
-    "version": {"const": 1},
-    "built_at": {"type": "string", "description": "ISO time of the build (shown in the footer)"},
+    "version": {
+      "const": "1.1"
+    },
+    "built_at": {
+      "type": "string",
+      "description": "ISO time of the build (shown in the footer)"
+    },
     "brand": {
-      "type": "object", "additionalProperties": false,
-      "required": ["palette", "fonts", "wordmark", "signoff", "footer"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "palette",
+        "fonts",
+        "wordmark",
+        "signoff",
+        "footer"
+      ],
       "properties": {
-        "palette": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}},
-        "fonts": {"type": "object", "additionalProperties": false, "required": ["serif", "serif_italic", "sans"],
-                  "properties": {"serif": {"type": "string"}, "serif_italic": {"type": "string"}, "sans": {"type": "string"}}},
-        "wordmark": {"type": "string"},
-        "signoff": {"type": "string"},
-        "footer": {"type": "string", "description": "'Prototype, not an official steer product.'"}
+        "palette": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$"
+          }
+        },
+        "fonts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "serif",
+            "serif_italic",
+            "sans"
+          ],
+          "properties": {
+            "serif": {
+              "type": "string"
+            },
+            "serif_italic": {
+              "type": "string"
+            },
+            "sans": {
+              "type": "string"
+            }
+          }
+        },
+        "wordmark": {
+          "type": "string"
+        },
+        "signoff": {
+          "type": "string"
+        },
+        "footer": {
+          "type": "string",
+          "description": "'Educational hackathon prototype · content pending review by a Steer doctor · not a medical assessment'"
+        }
       }
     },
     "ui": {
-      "type": "object", "additionalProperties": {"type": "string"},
-      "required": ["lock", "you_guessed", "see_quote", "hide_quote", "next", "pick_worries", "pick_hint", "start_rounds", "done", "readout_title", "questions_title", "restart"],
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "required": [
+        "lock",
+        "you_guessed",
+        "see_quote",
+        "hide_quote",
+        "next",
+        "pick_worries",
+        "pick_hint",
+        "start_rounds",
+        "done",
+        "readout_title",
+        "questions_title",
+        "restart"
+      ],
       "description": "fixed button and heading words, checked as framing copy (no numbers, no health assertion)"
     },
-    "hook": {"$ref": "#/$defs/round", "description": "the first round (answers the doubt 'is_it_for_me')"},
-    "doubts": {"type": "array", "minItems": 1, "items": {
-      "type": "object", "additionalProperties": false, "required": ["id", "label", "answered_by"],
-      "properties": {
-        "id": {"enum": ["is_it_safe", "will_i_lose_muscle", "will_weight_come_back", "only_for_diabetics", "is_it_for_me"]},
-        "label": {"type": "string", "description": "the chip text, from the doc's five doubts"},
-        "answered_by": {"type": "string", "description": "a round id, 'hook', or a gap card id"}
-      }
-    }},
-    "rounds": {"type": "array", "items": {"$ref": "#/$defs/round"}},
-    "gap_cards": {"type": "array", "items": {
-      "type": "object", "additionalProperties": false, "required": ["id", "title", "body"],
-      "properties": {"id": {"type": "string"}, "title": {"type": "string"}, "body": {"type": "string"}}
-    }},
-    "readout": {
-      "type": "object", "additionalProperties": false, "required": ["under", "over", "close", "meaning_title"],
-      "properties": {
-        "under": {"type": "string", "description": "template with {n} and {m}: 'You underestimated {n} of {m}'"},
-        "over": {"type": "string", "description": "template with {n} and {m}"},
-        "close": {"type": "string", "description": "template with {n} and {m}"},
-        "meaning_title": {"type": "string", "description": "heading above the revealed claims' sentences (no new facts)"}
+    "hook": {
+      "$ref": "#/$defs/round",
+      "description": "the first round (answers the doubt 'is_it_for_me')"
+    },
+    "doubts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "answered_by"
+        ],
+        "properties": {
+          "id": {
+            "enum": [
+              "is_it_safe",
+              "will_i_lose_muscle",
+              "will_weight_come_back",
+              "only_for_diabetics",
+              "is_it_for_me"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "the chip text, from the doc's five doubts"
+          },
+          "answered_by": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            },
+            "description": "round ids (played in order), ['hook'], or one gap card id"
+          }
+        }
       }
     },
-    "doctor_questions": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}},
-                         "description": "doubt id -> questions to take to a doctor (questions, never claims)"},
-    "cta": {
-      "type": "object", "additionalProperties": false, "required": ["primary", "secondary"],
+    "rounds": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/round"
+      }
+    },
+    "gap_cards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "body"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "readout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "under",
+        "over",
+        "close",
+        "direction",
+        "meaning_title"
+      ],
       "properties": {
-        "primary": {"$ref": "#/$defs/link", "description": "'See if the programme fits you'; the page appends &doubts=<ids> to url"},
-        "secondary": {"$ref": "#/$defs/link", "description": "'Talk to a Steer doctor'"}
+        "under": {
+          "type": "string",
+          "description": "number rounds only, template with {n} and {m}; no count line when no number round was played"
+        },
+        "over": {
+          "type": "string",
+          "description": "template with {n} and {m}"
+        },
+        "close": {
+          "type": "string",
+          "description": "template with {n} and {m}"
+        },
+        "meaning_title": {
+          "type": "string",
+          "description": "'What this study tells us — and what it doesn't' (then the revealed sentences only)"
+        },
+        "direction": {
+          "type": "string",
+          "description": "template with {n} and {m}: direction rounds (choices), scored separately"
+        }
+      }
+    },
+    "doctor_questions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "description": "doubt id -> questions to take to a doctor (questions, never claims)"
+    },
+    "cta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary",
+        "secondary"
+      ],
+      "properties": {
+        "primary": {
+          "$ref": "#/$defs/link",
+          "description": "'See if the programme fits you'; url carries only utm_source=steer_quiz&utm_campaign=guess_the_number; the page adds NOTHING to it (no user state in any URL)"
+        },
+        "secondary": {
+          "$ref": "#/$defs/link",
+          "description": "'Talk to a Steer doctor'"
+        }
       }
     },
     "warm_lead": {
-      "type": "object", "additionalProperties": false, "required": ["title", "note", "doubts_label", "guesses_label"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "note",
+        "doubts_label",
+        "guesses_label"
+      ],
       "properties": {
-        "title": {"type": "string", "description": "'What Steer's team would see'"},
-        "note": {"type": "string", "description": "'Shown, not sent: this page makes no network call and has no form.'"},
-        "doubts_label": {"type": "string"},
-        "guesses_label": {"type": "string"}
+        "title": {
+          "type": "string",
+          "description": "'What Steer's team would see'"
+        },
+        "note": {
+          "type": "string",
+          "description": "'Shown, not sent: this page makes no network call and has no form.'"
+        },
+        "doubts_label": {
+          "type": "string"
+        },
+        "guesses_label": {
+          "type": "string"
+        }
       }
     }
   },
   "$defs": {
-    "link": {"type": "object", "additionalProperties": false, "required": ["label", "url"],
-             "properties": {"label": {"type": "string"}, "url": {"type": "string", "pattern": "^https://"}}},
-    "reveal": {
-      "type": "object", "additionalProperties": false, "required": ["number", "label", "sentence"],
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "url"
+      ],
       "properties": {
-        "number": {"type": "string", "description": "the revealed number, an EXACT substring of sentence (drawn large)"},
-        "label": {"type": "string", "description": "what it measures, an EXACT substring of sentence (drawn beside the number)"},
-        "sentence": {"type": "string", "description": "the checked plain sentence (a health line that passed the PS2 checks)"}
+        "label": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://"
+        }
+      }
+    },
+    "reveal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "label",
+        "sentence"
+      ],
+      "properties": {
+        "number": {
+          "type": "string",
+          "description": "the revealed number, an EXACT substring of sentence (drawn large)"
+        },
+        "label": {
+          "type": "string",
+          "description": "what it measures, an EXACT substring of sentence (drawn beside the number)"
+        },
+        "sentence": {
+          "type": "string",
+          "description": "the checked plain sentence (a health line that passed the PS2 checks)"
+        }
       }
     },
     "round": {
-      "type": "object", "additionalProperties": false,
-      "required": ["id", "doubt", "kind", "question", "stops", "answer", "reveals", "qualifiers", "quote", "source", "claim_ids"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "doubt",
+        "kind",
+        "context",
+        "question",
+        "stops",
+        "answer",
+        "reveals",
+        "qualifiers",
+        "quote",
+        "source",
+        "claim_ids"
+      ],
       "properties": {
-        "id": {"type": "string"},
-        "doubt": {"type": "string"},
-        "kind": {"enum": ["slider", "choice"]},
-        "question": {"type": "string", "description": "the framing question (no numbers, no health assertion)"},
-        "stops": {"type": "array", "minItems": 2, "items": {
-          "type": "object", "additionalProperties": false, "required": ["label", "value"],
-          "properties": {"label": {"type": "string", "description": "drawn as is, e.g. '2×' or 'Up'"},
-                         "value": {"type": ["number", "string"], "description": "compared only, never drawn"}}
-        }, "description": "slider stops (ordered) or choices; the page starts on no stop, never on the answer"},
-        "answer": {"type": ["number", "string"], "description": "compared with a stop's value for the readout; never drawn"},
-        "reveals": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/reveal"},
-                    "description": "one, or a pair shown together (the Laverde lean-mass pair)"},
-        "qualifiers": {"type": "array", "items": {"type": "string"},
-                       "description": "boundary qualifiers drawn with the reveal ('an average across studies, not a prediction for you')"},
-        "quote": {"type": "string", "description": "the exact quote(s) from the paper, behind 'see the exact sentence'"},
-        "source": {
-          "type": "object", "additionalProperties": false, "required": ["short", "full", "location", "doi"],
-          "properties": {"short": {"type": "string"}, "full": {"type": "string"}, "location": {"type": "string"}, "doi": {"type": "string"}}
+        "id": {
+          "type": "string"
         },
-        "claim_ids": {"type": "array", "items": {"type": "string"}, "description": "run/claim keys (trace only, not drawn)"}
+        "doubt": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "slider",
+            "choice"
+          ],
+          "description": "slider: a number round (scored below / above / close); choice: a direction round (scored right / wrong, separately)"
+        },
+        "question": {
+          "type": "string",
+          "description": "the framing question (no numbers, no health assertion)"
+        },
+        "stops": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "label",
+              "value"
+            ],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "drawn as is, e.g. '2×' or 'Up'"
+              },
+              "value": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "description": "compared only, never drawn"
+              }
+            }
+          },
+          "description": "slider stops (ordered) or choices; the page starts on no stop, never on the answer"
+        },
+        "answer": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "compared with a stop's value for the readout; never drawn"
+        },
+        "reveals": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/reveal"
+          },
+          "description": "one, or a pair shown together (the Laverde lean-mass pair)"
+        },
+        "qualifiers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "boundary qualifiers drawn with the reveal ('an average across studies, not a prediction for you')"
+        },
+        "quote": {
+          "type": "string",
+          "description": "the exact quote(s) from the paper, behind 'see the exact sentence'"
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "short",
+            "full",
+            "location",
+            "doi"
+          ],
+          "properties": {
+            "short": {
+              "type": "string"
+            },
+            "full": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "doi": {
+              "type": "string"
+            }
+          }
+        },
+        "claim_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "run/claim keys (trace only, not drawn)"
+        },
+        "context": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "who and what was studied, built from the paper's boundaries qualifiers and context quotes (the only place numbers appear outside stops and reveals), e.g. 'Adults aged 45+ in Chennai, Delhi and Karachi · BMI below 25 · South Asian women vs US white women'"
+        }
       }
     }
   }
