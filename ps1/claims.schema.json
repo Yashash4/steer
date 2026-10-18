@@ -187,6 +187,19 @@
               "null"
             ],
             "description": "info card only: the paper's own gate-checked population sentence, as a context line"
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "short"
+            ],
+            "properties": {
+              "short": {
+                "type": "string"
+              }
+            },
+            "description": "info card with a context line: the short cite of the paper that sentence comes from"
           }
         }
       }

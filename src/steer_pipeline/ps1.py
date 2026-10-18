@@ -320,7 +320,10 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
         "doubts": [{"id": d["id"], "label": d["label"], "answered_by": answered[d["id"]]} for d in spec["doubt"]],
         "rounds": [r for r in out_rounds if r["id"] != "hook"],
         "gap_cards": [{"id": g["id"], "title": g["title"], "body": g["body"], "opener": openers[g["opener"]],
-                       "context": g.get("context")} for g in gaps_used.values()],
+                       "context": g.get("context"),
+                       # an info card with a context line names the paper it comes from (short cite, as on the rounds)
+                       **({"source": {"short": _source(paper(g["pmcid"])[2], next(iter(paper(g["pmcid"])[1].values())))["short"]}}
+                          if g.get("context") else {})} for g in gaps_used.values()],
         "readout": spec["readout"], "points": spec["points"], "doctor_questions": spec["doctor_questions"],
         "cta": {"primary": {"label": spec["cta"]["primary"], "url": spec["cta"]["url"]},
                 "secondary": {"label": spec["cta"]["secondary"], "url": spec["cta"]["url"]}},

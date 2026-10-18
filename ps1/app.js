@@ -155,7 +155,7 @@ function hud() {
 // an info card, not a guess: nothing is asked and nothing enters S.guesses
 function gapCard(card, next, n) {
   const c = h("div", ["card", "gap"]);
-  if (card.context) c.append(h("p", "context", card.context));
+  if (card.context) c.append(h("p", "context", card.context), h("p", "small", card.source.short));
   c.append(h("h2", null, card.title), h("p", null, card.body));
   show(progress(n), h("p", "opener", card.opener), c, button(C.ui.next, next));
 }
@@ -250,7 +250,9 @@ function readout() {
     });
     cards.forEach((x) => {
       const li = h("li");
-      li.append(h("p", "small", C.ui.unscored), h("p", null, x.body));
+      li.append(h("p", "small", C.ui.unscored));
+      if (x.context) li.append(h("p", null, x.context), h("p", "small", x.source.short));
+      li.append(h("p", null, x.body));
       ul.append(li);
     });
     grp.append(ul);

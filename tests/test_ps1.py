@@ -371,3 +371,14 @@ def test_the_game_layer_is_one_tap_with_a_silent_ring_and_a_local_share_card():
     assert "animation-play-state:paused" in css and "10s linear" in css
     assert "&& navigator.vibrate)" in js        # feature-detected
     assert "toBlob" in js and "fetch(" not in js.replace('fetch("./claims.json")', "")
+
+
+def test_the_info_card_context_line_and_cite_show_on_the_card_and_in_the_readout():
+    g = GAP["gap-diabetics"]
+    assert g["context"] == "This review looked at non-diabetic subjects with overweight or obesity." and g["pmcid"] == "PMC12532569"
+    js = (ps1.PS1 / "app.js").read_text()
+    body = lambda name: js.split(f"function {name}(", 1)[1].split("\nfunction ", 1)[0]
+    assert "card.context" in body("gapCard") and "card.source.short" in body("gapCard")
+    assert "x.context" in body("readout") and "x.source.short" in body("readout") and "C.ui.unscored" in body("readout")
+    schema = json.loads((ps1.PS1 / "claims.schema.json").read_text())
+    assert "source" in schema["properties"]["gap_cards"]["items"]["properties"]

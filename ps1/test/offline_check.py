@@ -121,6 +121,10 @@ def play(browser, w, h, tag):
                 need_everywhere(body, "readout")
                 for r in played(): assert r["source"]["short"] in body, "short cite missing on the readout"
                 readout_done = True
+            flat = " ".join(body.split())
+            for gc in claims["gap_cards"]:   # the same context line + cite on the readout, still "Not scored"
+                if gc.get("context"):
+                    assert gc["context"] in flat and gc["source"]["short"] in flat and claims["ui"]["unscored"] in flat, "readout lost the info card's context"
             # grouped by doubt; "Worth a chat" on exactly the doubts with a "different" result; gap cards never scored
             groups = p.locator(".group")
             want = [d for d in claims["doubts"] if any(i in results or i in [g["id"] for g in claims["gap_cards"]] for i in d["answered_by"])]
@@ -152,6 +156,9 @@ def play(browser, w, h, tag):
             seen_n = n
             assert p.locator(".opener").is_visible() and p.inner_text(".opener"), "an opener is missing"
         if p.locator(".card.gap").count():
+            gc = next(x for x in claims["gap_cards"] if x["title"] == p.inner_text(".card.gap h2"))
+            if gc.get("context"):   # the info card carries its gate-checked context line and the paper's short cite
+                assert gc["context"] in p.inner_text(".card.gap") and gc["source"]["short"] in p.inner_text(".card.gap"), "info card lost its context"
             snap(f"{k:02}-gap"); k += 1; p.click(".btn"); continue
         if p.locator(".verdict").count():
             snap(f"{k:02}-reveal"); k += 1; p.click(".btn"); continue
