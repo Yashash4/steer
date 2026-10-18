@@ -60,13 +60,13 @@ export const PhoneEvidence = (p: { e: Evidence; t: number; ink: string; accent: 
   const { e, t } = p;
   if (t < e.start || t >= e.end) return null;
   const k = easeOut((t - e.start) / 0.35);
-  const PW = 560, PH = L.evidence.height, top = L.evidence.top;   // between the setting line and the captions
+  const PW = 640, PH = L.evidence.height, top = L.evidence.top;   // between the setting line and the captions
   // the boxes as drawn: screen = PW - 2 x 18; header padding 40 each side; quote margin 40 + padding 24 each side + 6 border
   const h = fit(e.header, SANS, 600, 3, PW - 36 - 80, L.evidence.px, L.evidence.px);
   let q: ReturnType<typeof fit> | null = null;
   if (!e.image) {   // the largest size >= the floor (34 px: the reviewer could not read it) whose lines fit the screen's height
     const room = PH - 36 - 54 - 18 - h.lines.length * h.fontSize * 1.3 - 20 - 40 - 24;
-    for (let size = L.evidence.px + 6; size >= L.evidence.px && !q; size--) {
+    for (let size = L.evidence.px + 12; size >= L.evidence.px && !q; size--) {
       const lines = Math.floor(room / (size * 1.35));
       try { if (lines > 0) q = fit(e.quote, SERIF, 500, lines, PW - 36 - 80 - 48 - 6, size, size); } catch { q = null; }
     }

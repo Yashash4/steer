@@ -261,7 +261,8 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
     <AbsoluteFill style={{ background: c.ground, clipPath: wp < 1 ? `inset(0 ${100 - wp * 100}% 0 0)` : undefined,
       textShadow: media ? "0 2px 14px rgba(0,0,0,0.6), 0 0 2px rgba(0,0,0,0.5)" : undefined,
       transform: zin < 1 ? `scale(${1.25 - 0.25 * ease(zin)})` : undefined, opacity: zin < 1 ? ease(zin) : undefined }}>
-      {scene.broll ? <BrollBg b={scene.broll} sceneStart={scene.start} scale={z} origin="50% 40%" /> : null}
+      {scene.broll ? <BrollBg b={scene.broll} sceneStart={scene.start} origin="50% 40%"
+        scale={z * (1 + 0.04 * clamp01((t - scene.broll.start) / Math.max(0.1, scene.broll.end - scene.broll.start)))} /> : null}
       {scene.presenter ? <PresenterLayer pr={scene.presenter} sceneStart={scene.start} c={c} scale={z} /> : null}
       {media ? null : (
         <div style={{
@@ -315,7 +316,7 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
       ) : null}
       <div style={{
         position: "absolute", top: L.pill.top, right: 48, height: L.pill.height, boxSizing: "border-box", padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
-        fontSize: 26, color: media ? "#FFFFFF" : c.sub, border: "2px solid " + (media ? "#FFFFFF" : c.sub),
+        fontSize: L.pill.px, color: media ? "#FFFFFF" : c.sub, border: "2px solid " + (media ? "#FFFFFF" : c.sub),
         background: media ? "rgba(0,0,0,0.25)" : undefined,
       }}>{props.chrome.draft_mark}</div>
       <div style={{
@@ -330,7 +331,7 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
 const OuterPill = (p: { props: ReelProps }) => (
   <div style={{
     position: "absolute", top: L.pill.top, right: 48, height: L.pill.height, boxSizing: "border-box", padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
-    fontSize: 26, color: p.props.palette.ink, border: "2px solid " + p.props.palette.ink, background: "rgba(245, 235, 223, 0.92)",
+    fontSize: L.pill.px, color: p.props.palette.ink, border: "2px solid " + p.props.palette.ink, background: "rgba(245, 235, 223, 0.92)",
   }}>{p.props.chrome.draft_mark}</div>
 );
 

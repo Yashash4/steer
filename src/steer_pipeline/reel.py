@@ -729,8 +729,9 @@ def edit_plan(scenes: list[dict], assets: dict, v5: bool = False) -> list[dict]:
     plan, prev, evidence_done = [], None, False
     # v5: the phone shows the quote being spoken: under the WHY line (a health line without two result numbers); with no
     # such line, under the second half of the numbers line (after both of its numbers have popped)
-    has_why = any("health" in {ln["kind"] for ln in sc["lines"]} and
-                  not any(len(RESULT_NUMBER.findall(ln["text"])) >= 2 for ln in sc["lines"]) for sc in scenes)
+    whys = [sc["index"] for sc in scenes if "health" in {ln["kind"] for ln in sc["lines"]} and
+            not any(len(RESULT_NUMBER.findall(ln["text"])) >= 2 for ln in sc["lines"])]
+    has_why = bool(whys)   # the LAST such scene is the WHY beat (a one-number numbers line comes before it)
     for sc in scenes:
         kinds = {ln["kind"] for ln in sc["lines"]}
         numbers = any(number_values(ln["text"]) for ln in sc["lines"])
@@ -756,7 +757,7 @@ def edit_plan(scenes: list[dict], assets: dict, v5: bool = False) -> list[dict]:
         evidence = "health" in kinds
         if v5:   # one evidence phone, under the setting line's voice
             two = any(len(RESULT_NUMBER.findall(ln["text"])) >= 2 for ln in sc["lines"])
-            evidence = "health" in kinds and (not two if has_why else two) and not evidence_done
+            evidence = "health" in kinds and (sc["index"] == whys[-1] if has_why else two) and not evidence_done
             evidence_done = evidence_done or evidence
         plan.append({"scene": sc["index"], "background": bg, "presenter": pres, "broll": clip,
                      "captions": bg != "graphics" and sc["kind"] not in ("hook", "status"),   # status: its ticks show it
@@ -773,7 +774,7 @@ REMOTION_DURATION = (20.0, 45.0)
 HOOK_MAX = 4.0   # the hook line is spoken in at most 4 s (its own speech; the 0.4 s lead before it is not counted)
 REMOTION_END_CARD, HEALTH_HOLD = 5.0, 0.8   # the sources card holds >= 5 s (its text >= 40 px)
 PRESENTER_LABEL = "AI-generated presenter · not a Steer clinician"   # D-026: on every frame a presenter clip is on screen
-LABEL_BOX = (60, 282, 220, 30)  # x, y, w, h inside the label pill (top left, layout.json "presenter_label"; Reel.tsx LABEL_BG / LABEL_INK)
+LABEL_BOX = (60, 288, 220, 30)  # x, y, w, h inside the label pill (top left, layout.json "presenter_label"; Reel.tsx LABEL_BG / LABEL_INK)
 GROUNDS = {"hook": "cream", "brand": "maroon", "cta": "cream", "sources": "cream", "checklist": "cream", "pullback": "cream", "status": "cream"}
 
 

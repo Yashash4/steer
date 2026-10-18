@@ -529,3 +529,14 @@ def test_the_spoken_class_name_glp_1_is_not_a_heard_number():
     assert reel.audio_numbers_match(line, "on average 0.4 kilograms a month after stopping, not only GLP 1, not a prediction")["ok"]
     assert reel.audio_numbers_match(line, "on average 0.4 kilograms a month, not only GLP one")["ok"]
     assert not reel.audio_numbers_match(line, "on average 1.4 kilograms a month, not only GLP 1")["ok"]
+
+
+def test_the_evidence_phone_goes_under_the_why_line_when_the_numbers_line_has_one_number():
+    sc = lambda i, kind, text: {"index": i, "kind": kind, "start": i * 5.0, "end": i * 5.0 + 5,
+                                "lines": [{"kind": kind if kind in ("health", "brand") else "framing", "text": text, "start": i * 5.0}]}
+    scenes = [sc(0, "hook", "Will the weight come back?"), sc(1, "health", "Adults regained 0.4 kg a month on average."),
+              sc(2, "health", "Among 28 randomised controlled trials, weight came back to the control groups' level.")]
+    for s_ in scenes[1:]:
+        s_["kind"] = "point"
+    plan = reel.edit_plan(scenes, {"presenter": {0: "a", 1: "b"}, "broll": {"lane": "l.mp4"}}, v5=True)
+    assert [p["evidence"] for p in plan] == [False, False, True]
