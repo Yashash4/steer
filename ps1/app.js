@@ -115,9 +115,10 @@ function ask(round, done, n) {
   show(...nodes);
 }
 
-// a finding is never drawn without its qualifiers: the round's own, or the note that it is a group comparison
+// a finding is never drawn without its qualifiers: the build puts all of them (the one-study note included, for single
+// studies only) in round.qualifiers, and every surface draws that list
 function quals(round) {
-  return round.qualifiers.length ? round.qualifiers : (C.ui.reveal_note ? [C.ui.reveal_note] : []);
+  return round.qualifiers;
 }
 function qualList(round, cls) {
   const ul = h("ul", cls || "quals");

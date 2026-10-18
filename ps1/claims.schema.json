@@ -378,7 +378,8 @@
         "source",
         "claim_ids",
         "opener",
-        "prompt"
+        "prompt",
+        "design"
       ],
       "properties": {
         "id": {
@@ -498,6 +499,13 @@
             "null"
           ],
           "description": "small guess prompt right above the buttons (framing)"
+        },
+        "design": {
+          "enum": [
+            "single_study",
+            "review"
+          ],
+          "description": "the paper's design: only single studies carry the one-study note"
         }
       }
     }

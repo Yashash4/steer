@@ -43,7 +43,7 @@ def rounds_file(tmp_path, extra=(), **override):
             "question": "Guess how many people finished the study?",
             "stops": [["About a hundred", 100], ["About three hundred", 300], ["About six hundred", 600]], "answer": 352,
             "sentence": "A total of 352 participants completed the study.", "reveal_number": "352",
-            "reveal_label": "participants completed the study", "qualifiers": [], "opener": "chai"} | override
+            "reveal_label": "participants completed the study", "qualifiers": [], "opener": "chai", "design": "single_study"} | override
     spec = dict(ROUNDS)
     spec["round"] = [hook, *extra]
     spec["doubt"] = [d | {"answered_by": ["hook"]} if d["id"] == "is_it_for_me" else
@@ -108,7 +108,7 @@ def test_an_unusable_round_with_a_fallback_becomes_its_gap_card(stored, tmp_path
                   playable=False, fonts=False)
     chol = {"id": "chol", "doubt": "will_weight_come_back", "pmcid": "PMCTEST", "kind": "choice",
             "question": "Did total cholesterol go up or down?", "stops": [["Up", "up"], ["Down", "down"]], "answer": "down",
-            "qualifiers": [], "fallback_gap": "gap-regain", "opener": "bus"} | needs
+            "qualifiers": [], "fallback_gap": "gap-regain", "opener": "bus", "design": "review"} | needs
     rep = ps1.build(stored, tmp_path / "f", SETTINGS, rounds_file(tmp_path, extra=[chol]), playable=False, fonts=False)
     out = json.loads((tmp_path / "f" / "claims.json").read_text())
     assert rep["fallbacks"] and "-> gap card gap-regain" in rep["fallbacks"][0]
@@ -243,5 +243,70 @@ def test_every_surface_draws_the_qualifiers_through_one_helper():
     body = lambda name: js.split(f"function {name}(", 1)[1].split("\nfunction ", 1)[0]
     assert "qualList(round)" in body("reveal") and "qualList(g.round" in body("readout")
     assert "qualList(g.round" in body("warmLead") and "quals(g.round)" in body("warmLead")   # preview and copy/share text
-    for r in ROUNDS["round"]:   # a finding always has its own qualifiers, or the build-wide group-comparison note
-        assert r["qualifiers"] or ROUNDS["ui"]["reveal_note"], r["id"]
+    for r in ROUNDS["round"]:   # a finding always has qualifiers: its own, or the one-study note for a single study
+        assert ps1.merged_qualifiers(r, ROUNDS), r["id"]
+
+
+def real_built_rounds(drop=None):
+    """The real rounds.toml in claims.json form, with stand-in claims whose quote holds the sentence (no store needed)."""
+    out, claims = {}, {}
+    for r in ROUNDS["round"]:
+        cid = f"c-{r['id']}"
+        quals = ps1.merged_qualifiers(r, ROUNDS)
+        if drop and drop[0] == r["id"]:
+            quals = [q for q in quals if q != drop[1]]
+        out.setdefault(r["pmcid"], []).append({"id": r["id"], "claim_ids": [f"run/{cid}"], "qualifiers": quals, "context": r.get("context"),
+                                               "reveals": [{"sentence": r["sentence"], "label": r["reveal_label"]}]})
+        claims[cid] = {"claim_id": cid, "quote": r["quote_contains"] + " " + r["sentence"]}
+    return out, claims
+
+
+def test_the_real_rounds_pass_every_papers_boundaries_with_the_post_engine():
+    out, claims = real_built_rounds()
+    for pm, rounds in out.items():
+        assert ps1.boundary_failures(rounds, claims, checks.load_boundaries(pm)) == [], pm
+
+
+@pytest.mark.parametrize("round_id,qualifier,paper_rule", [
+    ("regain", "An average across studies, not a prediction for you.", "average"),
+    ("muscle-a", "Results varied a lot between studies.", "heterogeneity"),
+    ("muscle-b", "The authors advise nutrition and exercise alongside treatment.", "nutrition"),
+    ("safety", "Measured in clinical trials.", "trials"),
+    ("safety", "These findings are about this class of medicines, not one product.", "class"),
+    ("safety", "A doctor weighs the benefits against the side effects for each person.", "doctor")])
+def test_a_round_missing_a_required_qualifier_fails_by_the_post_engine(round_id, qualifier, paper_rule):
+    out, claims = real_built_rounds(drop=(round_id, qualifier))
+    pm = ROUND[round_id]["pmcid"]
+    fails = ps1.boundary_failures(out[pm], claims, checks.load_boundaries(pm))
+    assert [f["code"] for f in fails] == ["QUALIFIER_MISSING"], fails
+
+
+def test_the_build_fails_naming_the_rule_when_a_required_qualifier_is_missing(stored, tmp_path, monkeypatch):
+    rule = {"when_claim_quote_contains": [], "placement": "post", "any_of": ["zebra stripes"], "why": "test rule: needs zebra"}
+    monkeypatch.setattr(ps1, "load_boundaries", lambda pm: {"require_qualifier": [rule]})
+    with pytest.raises(ps1.BuildError, match="QUALIFIER_MISSING.*test rule: needs zebra"):
+        ps1.build(stored, tmp_path / "q", SETTINGS, rounds_file(tmp_path), playable=False, fonts=False)
+    # the same rule, met by a qualifier (checked as framing copy like any other)
+    ps1.build(stored, tmp_path / "r", SETTINGS, rounds_file(tmp_path, qualifiers=["Zebra stripes are noted."]), playable=False, fonts=False)
+
+
+def test_an_excluded_claim_cannot_reach_a_round(stored, tmp_path, monkeypatch):
+    monkeypatch.setattr(ps1, "load_boundaries", lambda pm: {"exclude_from_posts": [{"quote_any_of": ["352 participants"], "why": "test"}]})
+    with pytest.raises(ps1.BuildError, match="not usable"):
+        ps1.build(stored, tmp_path / "x", SETTINGS, rounds_file(tmp_path), playable=False, fonts=False)
+
+
+def test_the_one_study_note_is_only_for_single_studies(stored, tmp_path):
+    note = ROUNDS["single_study_note"]
+    for r in ROUNDS["round"]:
+        assert r["design"] in ("single_study", "review")
+        assert (note in ps1.merged_qualifiers(r, ROUNDS)) == (r["design"] == "single_study"), r["id"]
+    assert {r["id"] for r in ROUNDS["round"] if r["design"] == "single_study"} == {"hook"}   # Narayan, a cohort study
+    assert "reveal_note" not in (ps1.PS1 / "app.js").read_text() and "reveal_note" not in json.dumps(ROUNDS)
+    ps1.build(stored, tmp_path / "a", SETTINGS, rounds_file(tmp_path), playable=False, fonts=False)
+    assert note in json.loads((tmp_path / "a" / "claims.json").read_text())["hook"]["qualifiers"]
+    ps1.build(stored, tmp_path / "b", SETTINGS, rounds_file(tmp_path, design="review"), playable=False, fonts=False)
+    out = json.loads((tmp_path / "b" / "claims.json").read_text())
+    assert all(note not in r["qualifiers"] for r in [out["hook"], *out["rounds"]])      # a review never carries it
+    with pytest.raises(ps1.BuildError, match="design must be"):
+        ps1.build(stored, tmp_path / "c", SETTINGS, rounds_file(tmp_path, design="cohort"), playable=False, fonts=False)

@@ -1,6 +1,6 @@
 # Content boundaries for West S et al., BMJ 2026 (DOI 10.1136/bmj-2025-085304). No page layout (PMC text).
 # Editorial input, versioned. Claims are matched by text in their quote (canonical form).
-version = 1
+version = 2
 pmcid = "PMC12776922"
 doi = "10.1136/bmj-2025-085304"
 
@@ -13,7 +13,7 @@ why = "0.4 kg a month is an average across weight-management medicines"
 [[require_qualifier]]
 when_claim_quote_contains = ["0.4 kg"]
 placement = "same_slide"
-any_of = ["not a personal promise", "not a prediction for any one person", "varies from person to person"]
+any_of = ["not a personal promise", "not a prediction for any one person", "not a prediction for you", "varies from person to person"]
 why = "an average is never a personal promise"
 
 # The 0.4 kg average covers all weight-management medicines: never present it as a GLP-1-only or drug-specific figure.

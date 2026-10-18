@@ -1,6 +1,6 @@
 # Content boundaries for Laverde LP et al., Int J Obes 2026 (DOI 10.1038/s41366-026-02118-y).
 # Editorial input, versioned. Claims are matched by text in their quote (canonical form).
-version = 1
+version = 2
 pmcid = "PMC13461373"
 doi = "10.1038/s41366-026-02118-y"
 
@@ -17,7 +17,7 @@ why = "lean mass fell in kilograms but rose as a share of total weight: either n
 [[require_qualifier]]
 when_claim_quote_contains = ["-1.74 kg"]
 placement = "same_slide"
-any_of = ["vary a lot between studies", "varied widely between studies", "I² = 98%", "I2 = 98%"]
+any_of = ["vary a lot between studies", "varied a lot between studies", "varied widely between studies", "I² = 98%", "I2 = 98%"]
 why = "heterogeneity was very high (I² = 98%) for the -1.74 kg result"
 
 [[require_qualifier]]

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import store
-from .checks import (_has, check_line, crosscheck_lines, frags, framing_attributes, load_boundaries, split_rule, study_context,
+from .checks import (_has, check_boundaries, check_line, crosscheck_lines, frags, framing_attributes, load_boundaries, split_rule, study_context,
                      writable)
 from .numbers import find_numbers
 from .posts import claims_from_store, load_brand
@@ -32,7 +32,8 @@ FIXED_QUALIFIERS = {"An average across studies, not a prediction for you.", "All
                     "Results varied a lot between studies.", "A comparison between groups in one study, not a prediction for you.",
                     # the safety paper's boundaries rules (class, in trials, a doctor weighs benefits and side effects)
                     "These findings are about this class of medicines, not one product.", "Measured in clinical trials.",
-                    "A doctor weighs the benefits against the side effects for each person."}
+                    "A doctor weighs the benefits against the side effects for each person.",
+                    "The authors advise nutrition and exercise alongside treatment."}
 # copy that must never appear anywhere in the quiz (the hook asks about the difference, not about "her" risk or a "slim" woman)
 GLP1 = re.compile(r"\bGLP-1\b(?![\w-])")
 
@@ -86,6 +87,27 @@ def _source(doc: dict, claim: dict) -> dict:
             "full": f"{s['authors']} {s['title']}. {journal_display(s['journal'])}, {s['year']}."}
 
 
+def merged_qualifiers(r: dict, spec: dict) -> list[str]:
+    """A round's qualifiers: the one-study note first when its paper is a single study (never for a review or meta-analysis),
+    then its own. Every surface (reveal, readout, form preview, copied text) draws exactly this list."""
+    return ([spec["single_study_note"]] if r.get("design") == "single_study" else []) + list(r.get("qualifiers", []))
+
+
+def boundary_failures(rounds: list[dict], claims: dict, boundaries: dict) -> list[dict]:
+    """The paper's boundaries rules, run by the SAME engine the posts use (checks.check_boundaries). Each round of the paper
+    is one unit: its sentence as the health line (backed by its claim), and its qualifiers, reveal label and context line
+    as the lines beside it. `rounds` are built rounds (claims.json form)."""
+    lines = []
+    for i, r in enumerate(rounds):
+        cid = r["claim_ids"][0].split("/", 1)[1]
+        where = {"surface": "artwork", "unit": i}
+        lines.append({"kind": "health", "text": r["reveals"][0]["sentence"], "claim_ids": [cid], "path": f"{r['id']}/sentence"} | where)
+        for k, text in [("label", r["reveals"][0]["label"]), ("context", r.get("context"))] + [("qualifier", q) for q in r["qualifiers"]]:
+            if text:
+                lines.append({"kind": "framing", "text": text, "claim_ids": [], "path": f"{r['id']}/{k}"} | where)
+    return check_boundaries(lines, claims, boundaries)
+
+
 def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Path = PS1 / "rounds.toml",
           router=None, playable: bool = True, fonts: bool = True) -> dict:
     """Write the quiz into `out`; returns a report. router=None skips the line cross-check (offline tests only)."""
@@ -131,6 +153,9 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
         # checked as a health line of its own (below)
         if r["reveal_number"] and (r["reveal_number"] not in r["sentence"] or r["reveal_label"] not in r["sentence"]):
             raise BuildError(f"round {r['id']}: the reveal number and label must be copied from its sentence")
+        if r.get("design") not in ("single_study", "review"):
+            raise BuildError(f"round {r['id']}: design must be 'single_study' or 'review' (the one-study note is for single studies only)")
+        quals = merged_qualifiers(r, spec)
         if r["opener"] not in openers:
             raise BuildError(f"round {r['id']}: no opener {r['opener']!r}")
         # a round without a number says so in the file (reveal_number = ""); then the sentence must hold no number either
@@ -155,12 +180,12 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
             lines.append(("health", r["reveal_label"], [c["claim_id"]], f"{r['id']}/headline", r["pmcid"]))
         lines.append(("opener", openers[r["opener"]], [], f"{r['id']}/opener", r["pmcid"]))
         lines += [("qualifier" if q in FIXED_QUALIFIERS else "framing", q, [c["claim_id"]], f"{r['id']}/qualifier", r["pmcid"])
-                  for q in r.get("qualifiers", [])]
+                  for q in quals]
         out_rounds.append({"id": r["id"], "doubt": r["doubt"], "kind": r["kind"], "context": r.get("context"),
                            "question": r["question"], "opener": openers[r["opener"]], "prompt": r.get("prompt"), "stops": [{"label": s[0], "value": s[1]} for s in r["stops"]],
                            "answer": r["answer"],
                            "reveals": [{"number": r["reveal_number"], "label": r["reveal_label"], "sentence": r["sentence"]}],
-                           "qualifiers": r.get("qualifiers", []), "quote": c["quote"], "source": _source(doc, c),
+                           "design": r["design"], "qualifiers": quals, "quote": c["quote"], "source": _source(doc, c),
                            "claim_ids": [f"{run}/{c['claim_id']}"]})
         report["rounds"].append(f"{r['id']}: {run}/{c['claim_id']} ({'cleared in the studio' if c.get('s4_cleared') else 'verified'})")
     # the paper's require_with pairs hold across rounds: a round whose partner is missing falls back too (or fails)
@@ -199,6 +224,12 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
             if x in gap_ids:
                 gaps_used[x] = gap_ids[x]
 
+    # each paper's boundaries rules, by the same engine as the posts (qualifiers, pairs): a failure names the rule
+    pm_of = {x["id"]: x["pmcid"] for x in spec["round"]}
+    for pm, (_, claims, _, b, _) in papers.items():
+        mine = [r for r in out_rounds if pm_of[r["id"]] == pm]
+        for f in (boundary_failures(mine, claims, b) if mine else []):
+            report["failures"].append(f"boundaries {pm}: {f['code']} ({f.get('detail', '')})")
     # every line of copy through the PS2 checks
     for k, v in spec["ui"].items():
         v = v.replace("{n}", "").replace("{m}", "")

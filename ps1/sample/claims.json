@@ -68,7 +68,9 @@
     "sentence": "South Asian women aged 45 and over in Chennai, Delhi and Karachi with BMI under 25 kg/m2 had 5.3 times higher diabetes risk than US white women."
    }
   ],
-  "qualifiers": [],
+  "qualifiers": [
+   "A comparison between groups in one study, not a prediction for you."
+  ],
   "quote": "Similarly, in women, the risk of diabetes in those with BMI <25 kg/m2 was 5.3 times higher in South Asian (IRR (95% CI) 5.27 (3.64 to 7.54)) than in white women.",
   "source": {
    "short": "Narayan et al. 2021",
@@ -80,7 +82,8 @@
    "run-244d0fbd0c04/c004-01"
   ],
   "opener": "Chai break at the office, and someone brings up blood sugar.",
-  "prompt": "Guess: how did diabetes rates compare?"
+  "prompt": "Guess: how did diabetes rates compare?",
+  "design": "single_study"
  },
  "doubts": [
   {
@@ -172,7 +175,8 @@
     "run-a7cddabed62e/c000-01"
    ],
    "opener": "On the bus home, a reel about weight medicines pops up on the phone.",
-   "prompt": null
+   "prompt": null,
+   "design": "review"
   },
   {
    "id": "muscle-a",
@@ -214,7 +218,8 @@
    },
    "claim_ids": [],
    "opener": "Morning in the neighbourhood park, and a friend asks about sugar tests.",
-   "prompt": null
+   "prompt": null,
+   "design": "review"
   },
   {
    "id": "muscle-b",
@@ -244,7 +249,10 @@
      "sentence": "Lean mass as a share of total weight rose by 1.81% on average."
     }
    ],
-   "qualifiers": [],
+   "qualifiers": [
+    "Results varied a lot between studies.",
+    "The authors advise nutrition and exercise alongside treatment."
+   ],
    "quote": "GLP1-RA significantly improved lean mass as a proportion of total weight, with an observed increase of 1.81% (95% CI: 1.1– 2.52; p < 0.00001; I² = 7%).",
    "source": {
     "short": "Laverde et al. 2026",
@@ -256,7 +264,8 @@
     "run-e4d5ed8559e6/c000-00"
    ],
    "opener": "A cousin's wedding, and the aunties are comparing health reports.",
-   "prompt": null
+   "prompt": null,
+   "design": "review"
   }
  ],
  "gap_cards": [

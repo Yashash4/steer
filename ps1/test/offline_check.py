@@ -17,7 +17,8 @@ url = page_path.as_uri()
 if shots: shots.mkdir(parents=True, exist_ok=True)
 
 def quals_of(r):   # the qualifiers a finding must carry on every surface
-    return r["qualifiers"] or [claims["ui"]["reveal_note"]]
+    assert r["qualifiers"], r["id"]
+    return r["qualifiers"]
 
 def played():      # the rounds a full play (every open doubt picked) guesses
     return [claims["hook"], *claims["rounds"]]
