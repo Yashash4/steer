@@ -152,3 +152,31 @@ def test_narayan_context_fields_and_gate():
     assert [f["code"] for f in kept[out[1][1]["claim_text"]]["flags"]] == ["CONTEXT_NOT_IN_QUOTE"]
     assert kept[out[1][2]["claim_text"]]["flags"] == []                      # "white women" is in the quote
     assert all(c in run["needs_check"] for c in kept.values())                # page 1 needs a layout check
+
+
+@pytest.mark.network
+def test_narayan_same_statistic_from_two_sentences():
+    # the men's 2.09 to 4.28 interval: the abstract sentence names no comparator for men; the results
+    # sentence does ("as compared with US whites"). comparison_group may only come from the quoted sentence.
+    from steer_pipeline.fetch import fetch
+    doc = fetch("PMC8006839", "evidence")
+    abstract = ("In normal weight (BMI <25 kg/m2), diabetes incidence adjusted for age was 2.9 times higher "
+                "(2.09 to 4.28) in South Asian men, and 5.3 times (3.64 to 7.54) in South Asian women than in white women.")
+    results = ("In those with BMI <25 kg/m2 (table 3), risk of diabetes in men was 3 times higher in South Asians "
+               "(IRR (95% CI) 2.99 (2.09 to 4.28)) and 2.1 times higher in US blacks (IRR (95% CI) 2.11 (1.35 to 3.25)) "
+               "as compared with US whites.")
+    out = {1: [claim("Normal-weight South Asian men: 2.9 times higher diabetes incidence (2.09 to 4.28).", abstract,
+                     population="South Asian men with BMI <25 kg/m2"),
+               claim("Normal-weight South Asian men: 2.9 times higher incidence (2.09 to 4.28) than white men.", abstract,
+                     comparison_group="white men")],
+           5: [claim("Normal-weight South Asian men had 2.99 (2.09 to 4.28) times the diabetes risk of US whites.", results,
+                     comparison_group="US whites", outcome="risk of diabetes")]}
+    run = ex.extract(doc, router_with(out))
+    kept = {c["claim_text"]: c for c in run["passed"] + run["needs_check"]}
+    assert run["summary"]["rejected"] == 0 and len(kept) == 3
+    a0, a1, r0 = (kept[c["claim_text"]] for c in (out[1][0], out[1][1], out[5][0]))
+    assert a0["comparison_group"] is None and a0["flags"] == []
+    assert [f["code"] for f in a1["flags"]] == ["CONTEXT_NOT_IN_QUOTE"]       # the abstract does not name white men
+    assert r0["comparison_group"] == "US whites" and r0["flags"] == []       # the results sentence does
+    assert a0["gate"]["matches"][0]["sids"] == ["p0001-s0027"]
+    assert r0["gate"]["matches"][0]["sids"] == ["p0005-s0003"]

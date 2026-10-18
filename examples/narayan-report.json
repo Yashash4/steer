@@ -43,7 +43,7 @@
    "mixed": 2,
    "single": 2
   },
-  "sentences": 409,
+  "sentences": 428,
   "warnings": [
    {
     "code": "UNCERTAIN_COLUMN_ORDER",
@@ -67,7 +67,7 @@
    {
     "code": "TABLE_OR_FIGURE_TEXT",
     "page": 4,
-    "detail": "31 number-dense lines (tables, figures or reference lists)"
+    "detail": "52 number-dense lines (tables, figures or reference lists)"
    },
    {
     "code": "TABLE_OR_FIGURE_TEXT",
@@ -116,7 +116,7 @@
    }
   ],
   "timing_seconds": {
-   "fetch_and_ingest": 3.368,
+   "fetch_and_ingest": 3.343,
    "verify": 0.013
   }
  },
@@ -183,7 +183,7 @@
     "expect": "pass"
    },
    {
-    "claim_id": "b-wrong-comparison-group",
+    "claim_id": "b-invented-quote",
     "document_id": "doc-5d6b5b66fbf1e92d",
     "status": "reject",
     "reasons": [
@@ -195,9 +195,10 @@
     "warnings": [],
     "matches": [],
     "numbers_checked": [
-     "2.9"
+     "2.9",
+     "2.09 to 4.28"
     ],
-    "expect": "reject: QUOTE_NOT_FOUND"
+    "expect": "reject: QUOTE_NOT_FOUND (the quote is invented)"
    },
    {
     "claim_id": "c-changed-number",
