@@ -128,6 +128,8 @@ def main(argv: list[str] | None = None) -> int:
         for k in ("1_verification_integrity", "2_error_detection", "3_false_alarms", "4_extraction_coverage"):
             print(f"{k}: {r[k]['wording']}", file=sys.stderr)
         print(f"self-test: {r['harness_self_test']['wording']}", file=sys.stderr)
+        return 0
+
     if args.cmd == "learn":
         from . import learn
         r = learn.run(args.urls, args.db, args.out, args.posts, args.offline,
