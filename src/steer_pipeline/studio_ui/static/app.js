@@ -97,7 +97,7 @@
   // a cleared flag stays listed with its clearance: an editorial disposition, never clinical approval
   function clearedNote(c, code) {
     var k = (c.clearances || []).filter(function (x) { return x.code === code; })[0];
-    return k ? ' <span class="chip st-passed">' + esc(code) + " cleared by " + esc(k.reviewer) + " (" + esc(k.role) + "), " + esc(k.at) + ": " + esc(k.reason) + "</span>" : "";
+    return k ? '<div class="small cleared-note">' + esc(code) + " cleared by " + esc(k.reviewer) + " (" + esc(k.role) + ") &middot; " + esc(ist(k.at)) + " &mdash; " + esc(k.reason) + "</div>" : "";
   }
   function counts(xs, fn) { var o = {}; xs.forEach(function (c) { fn(c).forEach(function (k) { o[k] = (o[k] || 0) + 1; }); }); return o; }
   function rowsOf(o) { return Object.keys(o).sort(function (a, b) { return o[b] - o[a]; }).map(function (k) { return "<tr><td>" + esc(rc(k)) + '</td><td class="n">' + o[k] + "</td></tr>"; }).join(""); }

@@ -129,3 +129,4 @@ table.lines .chip{white-space:nowrap}
 @media(max-width:600px){table.lines td,table.lines td.wide{white-space:normal;min-width:0;width:auto}}
 .review-status .clearances p{margin:6px 0;overflow-wrap:anywhere;white-space:normal}
 .review-status .chip{white-space:nowrap}
+.cleared-note{margin:4px 0;overflow-wrap:anywhere;white-space:normal}
