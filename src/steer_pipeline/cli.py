@@ -74,6 +74,9 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("--serve", action="store_true")
     st.add_argument("--port", type=int, default=8765)
     st.add_argument("--export", help="write a read-only copy (no actions) to this folder")
+    st.add_argument("--public", help="write the PUBLIC read-only snapshot (static, no API) of real runs to this folder")
+    st.add_argument("--merge-db", nargs="*", default=[], help="with --public: other stores whose runs join the copy (e.g. the safety run)")
+    st.add_argument("--page-cache", help="with --public: a copy of studio-cache holding the source PDFs")
     q = sub.add_parser("ps1", help="build the 'Guess the number' quiz from verified or studio-cleared claims")
     q.add_argument("action", choices=["build"])
     q.add_argument("--db", required=True)
@@ -88,6 +91,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "studio":
         from . import studio
         dirs, static = [Path(d) for d in args.posts], Path(args.static) if args.static else None
+        if args.public:
+            r = studio.export_public(args.db, dirs, args.reviewers, Path(args.public), args.merge_db,
+                                     Path(args.page_cache) if args.page_cache else None)
+            print(f"public snapshot in {args.public}: {r}", file=sys.stderr)
+            return 0
         if args.export:
             r = studio.export_site(args.db, dirs, args.reviewers, Path(args.export), static)
             print(f"read-only copy in {args.export}: {r}", file=sys.stderr)

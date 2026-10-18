@@ -675,3 +675,97 @@ def export_site(db: str | Path, post_dirs: list[Path], reviewers_path: str | Pat
     (out / "data.js").write_text("window.STEER_DATA = " + json.dumps(snap, ensure_ascii=False, default=str) + ";\n",
                                  encoding="utf-8")
     return {"posts": len(snap["posts"]), "claims": len(snap["claims"]), "page_images": sorted(set(pages))}
+
+
+# --- the public, read-only snapshot (D-031): static files only, built from a COPY of the store ---
+
+PUBLIC_UI = Path(__file__).parent / "studio_ui" / "public"
+_PUB_CLAIM = ("key", "paper", "claim_id", "bucket", "status", "status_word", "reasons", "claim_text", "quote", "claim_type",
+              "population", "comparison_group", "outcome", "time_point", "limitations", "hedged", "direction", "sids", "pages",
+              "sentences", "context", "gate_status", "gate_reasons", "gate_warnings", "flags", "numbers_checked", "boxes",
+              "excluded", "clearance_history", "used_in", "page_note")
+_PUB_PAPER = ("pmcid", "citation", "license", "short", "page_images", "pmc_url", "page_sizes_pt", "no_page_layout", "pages",
+              "sentences_in_document", "ingest_warnings", "access")
+
+
+def _merge_into(con, other: str | Path) -> None:
+    """Copy documents/runs/claims/crosschecks of another store into this (copied) one; existing rows win."""
+    con.execute("ATTACH DATABASE ? AS o", (str(other),))
+    with con:
+        for t in ("documents", "runs", "claims", "crosschecks"):
+            con.execute(f"INSERT OR IGNORE INTO {t} SELECT * FROM o.{t}")
+    con.execute("DETACH DATABASE o")
+
+
+def public_snapshot(snap: dict, acts: list[dict], reel_of) -> dict:
+    """Whitelist what the public copy may carry: no folders, no model endpoints, no reviewer list, no ids that only the
+    live studio needs. The review history is the append-only log as recorded."""
+    claims = [{k: c.get(k) for k in _PUB_CLAIM} | {"crosscheck": {"verdict": (c.get("crosscheck") or {}).get("verdict"),
+                                                                  "reason": (c.get("crosscheck") or {}).get("reason"),
+                                                                  "independence": (c.get("crosscheck") or {}).get("independence")}
+                                                    if c.get("crosscheck") else None} for c in snap["claims"]]
+    keyname = {c["target"]: f"{c['paper']}/{c['claim_id']}" for c in snap["claims"]}
+    posts = [{"id": p["post_id"], "paper": p["paper"], "format": p["format"], "status": p["status"], "stages": p["stages"],
+              "message": p["message"], "claim_status": p["claim_status"], "pngs": p["pngs"], "reel": reel_of(p),
+              "lines": [{k: ln[k] for k in ("path", "kind", "text", "claim_ids")} | {"failures": [f["code"] for f in ln["failures"]],
+                        "crosscheck": (ln.get("crosscheck") or {}).get("verdict") if isinstance(ln.get("crosscheck"), dict) else None}
+                        for ln in p["lines"]]} for p in snap["posts"]]
+    history = [{"id": a["id"], "at": a["at"], "reviewer": a["reviewer"], "role": a["role"], "action": a["action"],
+                "target": keyname.get(a["target"], a["target"]), "target_kind": a["target_kind"], "clears": a.get("clears"),
+                "revokes": a.get("revokes"), "reason": a.get("reason"), "after_status": a.get("after_status")} for a in acts]
+    return {"generated_at": snap["generated_at"], "papers": {k: {f: v.get(f) for f in _PUB_PAPER} for k, v in snap["papers"].items()},
+            "claims": claims, "posts": posts, "history": history,
+            "clinician_review": "no Steer clinician has reviewed anything here" if not any(
+                a["role"] == "clinician" for a in acts) else "see the review history"}
+
+
+def export_public(db: str | Path, post_dirs: list[Path], reviewers_path: str | Path, out: Path, merge: list[str] = (),
+                  cache: Path | None = None) -> dict:
+    """steer studio --public OUT: a static bundle (HTML + JS + images + reel MP4s) of real runs with their TRUE review
+    statuses. Works on a copy of the store (the live file is only read); the bundle has no API, forms or db file."""
+    import shutil
+    import sqlite3
+    import tempfile
+
+    out.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="steer-public-") as tmp:
+        copy = Path(tmp) / "copy.db"
+        src = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        dst = sqlite3.connect(copy)
+        src.backup(dst)
+        src.close(), dst.close()
+        con = store.connect(copy)
+        for m in merge:
+            _merge_into(con, m)
+        docs, claims, posts = load(con, post_dirs)
+        snap = data(con, docs, claims, posts, load_reviewers(reviewers_path), public=True)
+        cache = cache or Path(tmp) / "cache"
+        for sub in ("files", "pages", "fonts"):
+            shutil.rmtree(out / sub, ignore_errors=True)
+        shutil.copytree(PUBLIC_UI, out, dirs_exist_ok=True)
+        shutil.copytree(Path(__file__).parent / "studio_ui" / "static" / "fonts", out / "fonts")
+        shutil.copy(Path(__file__).parent / "studio_ui" / "static" / "studio.css", out / "studio.css")
+        reel_of = lambda p: f"files/{p['post_id']}/reel.mp4" if (Path(p["folder"]) / "reel.mp4").exists() else None
+        for p in snap["posts"]:
+            dest = out / "files" / p["post_id"]
+            dest.mkdir(parents=True, exist_ok=True)
+            for url in p["pngs"]:
+                if (Path(p["folder"]) / Path(url).name).exists():
+                    shutil.copy(Path(p["folder"]) / Path(url).name, dest / Path(url).name)
+            if reel_of(p):
+                shutil.copy(Path(p["folder"]) / "reel.mp4", dest / "reel.mp4")
+        pages = set()
+        for c in snap["claims"]:
+            paper = snap["papers"][c["paper"]]
+            if paper["page_images"] and not paper["no_page_layout"]:   # CC BY only (cc_by); BY-NC and unknown never
+                for n in c["pages"] or []:
+                    f = page_image(docs[c["run_id"]], n, cache)
+                    (out / "pages").mkdir(exist_ok=True)
+                    shutil.copy(f, out / "pages" / f.name)
+                    pages.add(f.name)
+        pub = public_snapshot(snap, store.actions(con), reel_of)
+        con.close()
+    (out / "data.js").write_text("window.STEER_PUBLIC = " + json.dumps(pub, ensure_ascii=False, default=str) + ";\n",
+                                 encoding="utf-8")
+    return {"papers": sorted(pub["papers"]), "posts": [p["id"] for p in pub["posts"]], "claims": len(pub["claims"]),
+            "page_images": sorted(pages), "reels": [p["id"] for p in pub["posts"] if p["reel"]]}
