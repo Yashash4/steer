@@ -72,6 +72,13 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("--serve", action="store_true")
     st.add_argument("--port", type=int, default=8765)
     st.add_argument("--export", help="write a read-only copy (no actions) to this folder")
+    q = sub.add_parser("ps1", help="build the 'Guess the number' quiz from verified or studio-cleared claims")
+    q.add_argument("action", choices=["build"])
+    q.add_argument("--db", required=True)
+    q.add_argument("--out", required=True)
+    q.add_argument("--rounds", help="rounds.toml (default: code/ps1/rounds.toml)")
+    q.add_argument("--settings")
+    q.add_argument("--no-crosscheck", action="store_true", help="skip the line cross-check (offline only; not for a release)")
     d = sub.add_parser("render", help="render (again) the PNGs of a written post folder")
     d.add_argument("folder", help="out/<run_id>/<post_id>")
     args = ap.parse_args(argv)
@@ -88,6 +95,19 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         print("say --serve or --export DIR", file=sys.stderr)
         return 2
+
+    if args.cmd == "ps1":
+        from . import ps1
+        settings = load_settings(args.settings)
+        try:
+            rep = ps1.build(args.db, args.out, settings, args.rounds or ps1.PS1 / "rounds.toml",
+                            router=None if args.no_crosscheck else Router(settings))
+        except ps1.BuildError as e:
+            print(f"ps1 build FAILED: {e}", file=sys.stderr)
+            return 1
+        print(json.dumps({k: rep[k] for k in ("rounds", "fallbacks", "fonts", "playable")}, ensure_ascii=False, indent=1),
+              file=sys.stderr)
+        return 0
 
     if args.cmd == "reel":
         settings = load_settings(args.settings)

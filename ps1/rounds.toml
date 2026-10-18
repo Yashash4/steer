@@ -1,0 +1,153 @@
+# PS1 "Guess the number": rounds and quiz copy. Rounds find their claim by a QUOTE FRAGMENT in a stored run, never by
+# a typed number. `steer ps1 build` fails unless each round's claim is verified (D-021) or cleared in the studio (S4),
+# and runs every line of copy through the PS2 checks. A round with `fallback_gap` becomes that gap card instead when
+# its claim is not usable (the build says so).
+
+wordmark = "steer"
+signoff = "steerclub.com"
+footer = "Educational hackathon prototype · content pending review by a Steer doctor · not a medical assessment"
+
+[ui]
+lock = "Lock my guess"
+you_guessed = "You guessed"
+see_quote = "See the exact sentence"
+hide_quote = "Hide the sentence"
+next = "Next"
+pick_worries = "Pick your worries"
+pick_hint = "Tap the questions you have. Each becomes a short round."
+start_rounds = "Start"
+done = "Already answered"
+readout_title = "Your readout"
+questions_title = "Questions to take to a doctor"
+restart = "Play again"
+
+[readout]
+under = "You guessed below the study on {n} of {m}"
+over = "You guessed above the study on {n} of {m}"
+close = "You were close on {n} of {m}"
+direction = "You got the direction right on {n} of {m}"
+meaning_title = "What this study tells us — and what it doesn't"
+
+[cta]
+primary = "See if the programme fits you"
+secondary = "Talk to a Steer doctor"
+url = "https://steerclub.com/?utm_source=steer_quiz&utm_campaign=guess_the_number"
+
+[warm_lead]
+title = "What your first conversation could start from"
+note = "Shown, not sent: this page makes no network call and has no form."
+doubts_label = "Questions picked"
+guesses_label = "Guesses and the real numbers"
+
+[[doubt]]
+id = "is_it_safe"
+label = "Is it safe?"
+answered_by = ["gap-safety"]
+
+[[doubt]]
+id = "will_i_lose_muscle"
+label = "Will I lose muscle?"
+answered_by = ["muscle-a", "muscle-b"]
+
+[[doubt]]
+id = "will_weight_come_back"
+label = "Will the weight come back?"
+answered_by = ["regain"]
+
+[[doubt]]
+id = "only_for_diabetics"
+label = "Is this only for diabetics?"
+answered_by = ["gap-diabetics"]
+
+[[doubt]]
+id = "is_it_for_me"
+label = "Is it even for me?"
+answered_by = ["hook"]
+
+[[round]]
+id = "hook"
+doubt = "is_it_for_me"
+pmcid = "PMC8006839"
+quote_contains = "the risk of diabetes in those with BMI <25 kg/m2 was 5.3 times higher"
+kind = "slider"
+# who and what was studied: its numbers must be in the claim's quote or the paper's context quotes
+context = "Adults aged 45+ in Chennai, Delhi and Karachi · BMI below 25 · South Asian women vs US white women"
+question = "Guess the difference. How did diabetes incidence compare in this study?"
+stops = [["1×", 1], ["2×", 2], ["3×", 3], ["4×", 4], ["5×", 5], ["6×", 6], ["7×", 7], ["8×", 8], ["9×", 9], ["10×", 10]]
+answer = 5.3
+sentence = "South Asian women aged 45 and over in Chennai, Delhi and Karachi with BMI under 25 kg/m2 had a 5.3 times higher risk of diabetes than US whites."
+reveal_number = "5.3 times"
+reveal_label = "higher risk of diabetes"
+qualifiers = []
+
+[[round]]
+id = "regain"
+doubt = "will_weight_come_back"
+pmcid = "PMC12776922"
+quote_contains = "The average monthly rate of weight regain was 0.4 kg"
+kind = "slider"
+question = "After stopping a weight management medicine, how fast does weight come back each month?"
+stops = [["None", 0], ["0.1 kg", 0.1], ["0.4 kg", 0.4], ["1 kg", 1], ["2 kg", 2]]
+answer = 0.4
+sentence = "On average, the monthly rate of weight regain was 0.4 kg (95% CI 0.3 to 0.5)."
+reveal_number = "0.4 kg"
+reveal_label = "monthly rate of weight regain"
+qualifiers = ["An average across studies, not a prediction for you.", "All weight-management medicines, not only GLP-1."]
+fallback_gap = "gap-regain"
+
+[[round]]
+id = "muscle-a"
+doubt = "will_i_lose_muscle"
+pmcid = "PMC13461373"
+quote_contains = "a significant decrease was observed in the absolute change in lean mass"
+kind = "choice"
+question = "On these medicines, does the amount of lean mass in kilograms go up, down or stay the same?"
+stops = [["Up", "up"], ["Down", "down"], ["No change", "same"]]
+answer = "down"
+sentence = "Absolute lean mass fell by 1.74 kg on average."
+reveal_number = "1.74 kg"
+reveal_label = "Absolute lean mass fell"
+qualifiers = ["Results varied a lot between studies."]
+fallback_gap = "gap-muscle"
+
+[[round]]
+id = "muscle-b"
+doubt = "will_i_lose_muscle"
+pmcid = "PMC13461373"
+quote_contains = "lean mass as a proportion of total weight, with an observed increase of 1.81%"
+kind = "choice"
+question = "And lean mass as a share of body weight: up, down or the same?"
+stops = [["Up", "up"], ["Down", "down"], ["No change", "same"]]
+answer = "up"
+sentence = "Lean mass as a share of total weight rose by 1.81% on average."
+reveal_number = "1.81%"
+reveal_label = "Lean mass as a share of total weight rose"
+qualifiers = []
+fallback_gap = "gap-muscle"
+
+[[gap]]
+id = "gap-safety"
+title = "Is it safe?"
+body = "Our papers don't answer this well. Ask a doctor about it, with your own history."
+
+[[gap]]
+id = "gap-diabetics"
+title = "Is this only for diabetics?"
+body = "Our papers don't answer this well. Ask a doctor about it, with your own history."
+
+[[gap]]
+id = "gap-regain"
+title = "Will the weight come back?"
+body = "Our checked papers don't answer this well enough yet. Ask a doctor about it, with your own history."
+
+[[gap]]
+id = "gap-muscle"
+title = "Will I lose muscle?"
+body = "Our checked papers don't answer this well enough yet. Ask a doctor about it, with your own history."
+
+[doctor_questions]
+is_it_for_me = ["Should my lab tests be read differently because I am South Asian?"]
+will_weight_come_back = ["What would a planned exit look like for me?"]
+will_i_lose_muscle = ["How do we protect my muscle while I lose weight?"]
+is_it_safe = ["Which screening tests should come before any medicine?"]
+only_for_diabetics = ["Does my risk call for care before diabetes?"]
