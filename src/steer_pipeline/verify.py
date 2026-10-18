@@ -63,7 +63,11 @@ def check_claim(claim: dict, docs: dict[str, _Doc], min_words: int = MIN_WORDS) 
 
     claim_nums, quote_nums = find_numbers(claim.get("text", "")), find_numbers(quote)
     quote_keys = {n.key() for n in quote_nums}
+    warnings = []
     for n in claim_nums:
+        if n.key() in quote_keys and not n.hedged and any(q.hedged and q.key() == n.key() for q in quote_nums):
+            warnings.append(_reason("HEDGE_DROPPED", f"the quote hedges {n.text!r} (for example 'approximately'); "
+                                                     "the claim states it without a hedge"))
         if n.key() not in quote_keys:
             reasons.append(_reason("NUMBER_NOT_IN_QUOTE", f"{n.text!r} (value {n.low}"
                                    + (f" to {n.high}" if n.high is not None else "")
@@ -79,6 +83,7 @@ def check_claim(claim: dict, docs: dict[str, _Doc], min_words: int = MIN_WORDS) 
         "document_id": claim.get("document_id"),
         "status": "reject" if reasons else "pass",
         "reasons": reasons,
+        "warnings": warnings,
         "matches": matches,
         "numbers_checked": [n.text for n in claim_nums],
     }

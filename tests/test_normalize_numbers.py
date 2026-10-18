@@ -57,3 +57,16 @@ def test_identifiers_are_not_numbers():
 
 def test_number_words():
     assert keys("within one year") == keys("within 1 year")
+
+
+def test_duration_words_are_not_comparators():
+    assert keys("lost 5 kg over 12 weeks") == keys("5 kg for 12 weeks")
+    assert keys("under 2 years") == keys("2 years")
+    assert keys("over 30 kg/m2") != keys("30 kg/m2")
+    assert keys("more than 12 weeks") != keys("12 weeks")  # phrase comparators always attach
+
+
+def test_hedge_is_recorded_not_compared():
+    a, b = find_numbers("approximately 55%–65%")[0], find_numbers("55% to 65%")[0]
+    assert a.key() == b.key() and a.hedged and not b.hedged
+    assert find_numbers("~ 20 kg")[0].hedged and find_numbers("about 3 days")[0].hedged

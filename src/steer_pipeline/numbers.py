@@ -30,6 +30,9 @@ UNITS = {  # spelling (lowercase) -> canonical unit; case is ignored for every u
     "months": "month", "month": "month", "weeks": "week", "week": "week", "wks": "week", "wk": "week",
     "days": "day", "day": "day", "hours": "hour", "hour": "hour", "hrs": "hour", "h": "hour", "min": "min",
 }
+TIME_UNITS = {"year", "month", "week", "day", "hour", "min"}
+DURATION_WORDS = {"over", "under", "above", "below"}  # "over 12 weeks" is a duration, not "> 12 weeks"
+HEDGE = re.compile(r"(?:\b(?:approximately|about|around|roughly|nearly)|~|≈)\s*$", re.IGNORECASE)
 _unit_alt = "|".join(re.escape(u) for u in sorted(UNITS, key=len, reverse=True))
 _comp_alt = "|".join(  # symbols anywhere ("p<0.05"); words only as whole words ("over", not "turnover")
     re.escape(c) if not c[0].isalpha() else rf"(?<![A-Za-z]){re.escape(c)}"
@@ -54,6 +57,7 @@ class Num(NamedTuple):
     high: Decimal | None
     unit: str | None
     text: str
+    hedged: bool = False  # "approximately", "about", "~"... right before the number (not part of equality)
 
     def key(self) -> tuple:
         return (self.comparator, self.plus_minus, self.low, self.high, self.unit)
@@ -71,7 +75,8 @@ def _words_to_digits(text: str) -> str:
 
 def find_numbers(text: str) -> list[Num]:
     out = []
-    for m in TOKEN.finditer(_words_to_digits(basic(text))):
+    norm = _words_to_digits(basic(text))
+    for m in TOKEN.finditer(norm):
         sign = m["sign"]
         if sign and sign.startswith("+/"):
             sign = "±"
@@ -82,7 +87,10 @@ def find_numbers(text: str) -> list[Num]:
         if m["ci"]:
             unit = f"{unit or ''} ci"
         comp = COMPARATORS[m["comp"].lower()] if m["comp"] else None
+        if m["comp"] and m["comp"].lower() in DURATION_WORDS and (unit or "").split("..")[0] in TIME_UNITS:
+            comp = None
         low = _value(m["n1"], sign if sign != "±" else None)
         high = _value(m["n2"], m["sign2"]) if m["n2"] else None
-        out.append(Num(comp, sign == "±", low, high, unit, m.group(0).strip()))
+        hedged = bool(HEDGE.search(norm[max(0, m.start() - 20):m.start()]))
+        out.append(Num(comp, sign == "±", low, high, unit, m.group(0).strip(), hedged))
     return out

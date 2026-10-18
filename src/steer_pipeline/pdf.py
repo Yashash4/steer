@@ -17,6 +17,7 @@ EXTRACTION_VERSION = "pdf-1"
 FURNITURE_BAND = 0.07      # top/bottom share of the page height checked for headers/footers
 SAME_ROW = 2.0             # pt: line fragments whose vertical centres differ less than this are one row
 FONT_STEP = 1.0           # pt: a larger change of the main font size between rows starts a paragraph
+ROW_GAP = 0.25            # share of the text width: a wider gap between fragments on one baseline splits the row
 EDGE = 3.0                 # pt: tolerance when clustering line start positions
 DOI_RE = re.compile(r"\b(10\.\d{4,9}/[^\s\"<>]+[^\s\"<>.,;)])")
 PAGE_NO_RE = re.compile(r"^(page\s*)?\d{1,4}(\s*(of|/)\s*\d{1,4})?$", re.I)
@@ -44,50 +45,71 @@ def _upright(bbox: list[float], direction: tuple[float, float]) -> list[float]:
     return list(bbox)
 
 
+def join_fragments(frags: list[dict], text_width: float) -> list[dict]:
+    """Merge fragments of one baseline (same direction) into rows, left to right.
+
+    Two neighbours further apart than ROW_GAP x the text width stay separate rows, so a block that
+    spans both columns never fuses a left-column line with the right-column line beside it.
+    """
+    frags = sorted(frags, key=lambda f: (f["dir"], (f["bbox"][1] + f["bbox"][3]) / 2))
+    groups: list[list[dict]] = []
+    for f in frags:
+        g = groups[-1] if groups else None
+        centre = (f["bbox"][1] + f["bbox"][3]) / 2
+        if g and g[0]["dir"] == f["dir"] and centre - (g[0]["bbox"][1] + g[0]["bbox"][3]) / 2 < SAME_ROW:
+            g.append(f)
+        else:
+            groups.append([f])
+    rows = []
+    for g in groups:
+        g.sort(key=lambda f: f["bbox"][0])
+        row = None
+        for f in g:
+            if row is None or f["bbox"][0] - row["bbox"][2] > ROW_GAP * text_width:
+                row = dict(f)
+                rows.append(row)
+                continue
+            if len(f["raw"].strip()) > len(row["raw"].strip()):
+                row["size"] = f["size"]
+            row["raw"] = row["raw"].rstrip() + " " + f["raw"].lstrip()
+            row["bbox"] = [row["bbox"][0], min(row["bbox"][1], f["bbox"][1]), max(row["bbox"][2], f["bbox"][2]),
+                           max(row["bbox"][3], f["bbox"][3])]
+            pb, fb = row["page_bbox"], f["page_bbox"]
+            row["page_bbox"] = [min(pb[0], fb[0]), min(pb[1], fb[1]), max(pb[2], fb[2]), max(pb[3], fb[3])]
+    return rows
+
+
 def _rows(page) -> tuple[list[dict], bool]:
     """Text rows of a page and whether it has images.
 
     Each row has `page_bbox` (page coordinates, for highlighting), `bbox` (an upright frame for
-    its text direction, used for ordering) and `dir`. Justified-text fragments on one baseline
-    within a block are merged into one row, joined by a single space.
+    its text direction, used for ordering) and `dir`. Fragments on one baseline within a block
+    are merged into one row (see join_fragments).
     """
     d = page.get_text("dict")
     has_image = any(b["type"] == 1 for b in d["blocks"])
-    rows = []
+    by_block: dict[int, list[dict]] = {}
     for bi, b in enumerate(d["blocks"]):
         if b["type"] != 0:
             continue
-        frags = []
         for ln in b["lines"]:
             text = "".join(s["text"] for s in ln["spans"])
             if not text.strip():
                 continue
             direction = (round(ln["dir"][0]), round(ln["dir"][1]))
             main_span = max(ln["spans"], key=lambda sp: len(sp["text"].strip()))
-            frags.append({"page_bbox": list(ln["bbox"]), "bbox": _upright(ln["bbox"], direction),
-                          "raw": text, "block": bi, "dir": direction, "size": main_span["size"]})
-        # group fragments of one baseline (same direction), then join each group left to right
-        frags.sort(key=lambda f: (f["dir"], (f["bbox"][1] + f["bbox"][3]) / 2))
-        groups: list[list[dict]] = []
-        for f in frags:
-            g = groups[-1] if groups else None
-            centre = (f["bbox"][1] + f["bbox"][3]) / 2
-            if g and g[0]["dir"] == f["dir"] and centre - (g[0]["bbox"][1] + g[0]["bbox"][3]) / 2 < SAME_ROW:
-                g.append(f)
-            else:
-                groups.append([f])
-        for g in groups:
-            g.sort(key=lambda f: f["bbox"][0])
-            row = dict(g[0])
-            for f in g[1:]:
-                if len(f["raw"].strip()) > len(row["raw"].strip()):
-                    row["size"] = f["size"]
-                row["raw"] = row["raw"].rstrip() + " " + f["raw"].lstrip()
-                row["bbox"] = [row["bbox"][0], min(row["bbox"][1], f["bbox"][1]), max(row["bbox"][2], f["bbox"][2]),
-                               max(row["bbox"][3], f["bbox"][3])]
-                pb, fb = row["page_bbox"], f["page_bbox"]
-                row["page_bbox"] = [min(pb[0], fb[0]), min(pb[1], fb[1]), max(pb[2], fb[2]), max(pb[3], fb[3])]
-            rows.append(row)
+            by_block.setdefault(bi, []).append({
+                "page_bbox": list(ln["bbox"]), "bbox": _upright(ln["bbox"], direction),
+                "raw": text, "block": bi, "dir": direction, "size": main_span["size"]})
+    widths: dict[tuple, float] = {}
+    for f in (f for frags in by_block.values() for f in frags):
+        lo, hi = widths.get(f["dir"], (f["bbox"][0], f["bbox"][2]))
+        widths[f["dir"]] = (min(lo, f["bbox"][0]), max(hi, f["bbox"][2]))
+    rows = []
+    for frags in by_block.values():
+        for direction in {f["dir"] for f in frags}:
+            lo, hi = widths[direction]
+            rows += join_fragments([f for f in frags if f["dir"] == direction], hi - lo)
     return rows, has_image
 
 

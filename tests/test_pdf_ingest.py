@@ -63,11 +63,11 @@ def test_single_column_layout(single):
 def test_furniture_removed_but_kept_on_page(single, two):
     assert "3/19" not in single["text"]
     assert "Qi et al. (2026), PeerJ, DOI" not in single["text"]
-    footer = [ln["raw"] for ln in two["pages"][1]["lines"] if ln["furniture"]]
-    assert any(f.startswith("Frontiers in Nutrition") for f in footer)
-    assert not any(f in two["text"] for f in footer)
+    furn2 = sorted(ln["raw"] for ln in two["pages"][1]["lines"] if ln["furniture"])
+    # header and footer pieces sit far apart on their baselines, so they stay separate rows
+    assert furn2 == ["02", "10.3389/fnut.2022.1055923", "Frontiers in Nutrition", "Gayathri et al.", "frontiersin.org"]
     furn = [ln["raw"] for ln in single["pages"][2]["lines"] if ln["furniture"]]
-    assert furn == ["Qi et al. (2026), PeerJ, DOI 10.7717/peerj.21713 3/19"]
+    assert sorted(furn) == ["3/19", "Qi et al. (2026), PeerJ, DOI 10.7717/peerj.21713"]
 
 
 def test_hyphen_joins_keep_mapping(single, two):
@@ -169,3 +169,22 @@ def test_document_id_differs_by_role(two):
     assert ctx["document_id"] != two["document_id"]                  # different reading
     assert re.fullmatch(r"doc-[0-9a-f]{16}", two["document_id"])
     assert ingest_pdf(TWO, "evidence")["document_id"] == two["document_id"]
+
+
+def test_two_columns_in_one_block_stay_apart(tmp_path):
+    # TextWriter puts both columns into ONE PyMuPDF block, on shared baselines
+    doc = pymupdf.open()
+    page = doc.new_page()
+    tw = pymupdf.TextWriter(page.rect)
+    left = [f"Left line {i} tells the first story." for i in range(1, 9)]
+    right = [f"Right line {i} tells another story." for i in range(1, 9)]
+    for i, (lt, rt) in enumerate(zip(left, right)):
+        tw.append((50, 100 + i * 14), lt, fontsize=10)
+        tw.append((320, 100 + i * 14), rt, fontsize=10)
+    tw.write_text(page)
+    assert len([b for b in page.get_text("dict")["blocks"] if b["type"] == 0]) == 1
+    path = tmp_path / "oneblock.pdf"
+    doc.save(path)
+    out = ingest_pdf(path, "evidence")
+    assert out["pages"][0]["layout"] == "two_column"
+    assert [s["text"] for s in out["sentences"]] == left + right

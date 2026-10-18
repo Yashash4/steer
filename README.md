@@ -54,7 +54,9 @@ The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
 
 ## How PDFs are read
 
-- Text lines come from PyMuPDF with their coordinates. Fragments of one justified line are merged.
+- Text lines come from PyMuPDF with their coordinates. Fragments on one baseline are merged left to right
+  (justified words, table cells), except across a gap wider than a quarter of the text width. That keeps
+  side-by-side columns apart even when the PDF stores them in one block.
 - **Columns.** A page has two columns when a group of lines starts 20–75% of the way across the text, and the
   lines starting at the left edge end before it. Lines that cross the gutter (titles, abstracts, wide
   figures) split the page into bands. Bands are read top to bottom; inside a band the left column comes
@@ -112,8 +114,13 @@ Units ignore case (mg/dL = mg/dl, kg/m² = kg/m2 = kg/m^2). "Percentage points" 
 a confidence label. A claim token must equal a quote token in comparator, sign, value(s) and unit. There is
 no rounding: "about 1 in 5" never matches "21%".
 
+"over", "under", "above" and "below" before a duration ("over 12 weeks") mean a time span, not a
+comparison, so they are not comparators there.
+
 Numbers glued to letters are identifiers, not values (GLP-1, T2D, HbA1c). The words one to ten count as
-numbers. Words like "approximately" are ignored.
+numbers. Hedges ("approximately", "about", "around", "roughly", "nearly", "~") are not part of the
+comparison. When the quote hedges a number and the claim drops the hedge, the claim still passes, with
+a `HEDGE_DROPPED` warning for the reviewer.
 
 ## Licence
 

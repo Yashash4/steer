@@ -160,3 +160,17 @@ def test_report_counts_and_cli(two, tmp_path):
     assert report["summary"] == {"claims": 2, "passed": 1, "rejected": 1}
     assert [r["status"] for r in report["results"]] == ["pass", "reject"]
     assert report["gate_version"] == "gate-1" and report["min_words"] == 5
+
+
+def test_hedge_dropped_is_a_warning_not_a_rejection(one):
+    q = ("approximately 55%–65% of the weight lost is regained within one year of discontinuation "
+         "(Gaesser et al., 2025).")
+    r = run(one, "55% to 65% of lost weight returns within one year", q)
+    assert r["status"] == "pass" and [w["code"] for w in r["warnings"]] == ["HEDGE_DROPPED"]
+    r = run(one, "about 55% to 65% of lost weight returns within one year", q)
+    assert r["status"] == "pass" and r["warnings"] == []
+
+
+def test_duration_wording_passes_gate(two):
+    q = "The intervention group received 43 g of almonds/day for 12 weeks"
+    assert run(two, "Participants ate 43 g of almonds a day over 12 weeks", q)["status"] == "pass"
