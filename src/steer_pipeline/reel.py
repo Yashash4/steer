@@ -27,6 +27,7 @@ import wave
 from decimal import Decimal
 from pathlib import Path
 
+from . import lineart
 from . import render as rd
 from .numbers import find_numbers
 
@@ -979,6 +980,7 @@ def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | N
                     if shot.get("sources") else None,
                     "presenter": {"video": f"presenter-{sc['index']}.mp4", "start": round(sc["start"], 3), "end": round(sc["end"], 3),
                                   "label": PRESENTER_LABEL} if presenter and sc["index"] in presenter else None, "lines": lines,
+                    "lineart": None,
                     "sources": {"heading": "Sources", "entries": [source_entry_parts(e) for e in entries],
                                 "footnote": rd.FOOTNOTE, "url": "steerclub.com",
                                 "url_at": round(next((ln["start"] for ln in sc["lines"] if ln["kind"] == "signoff"), sc["start"])
@@ -987,7 +989,8 @@ def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | N
     props = {"version": 3, "fps": FPS, "width": W, "height": H, "durationInFrames": int(round(scenes[-1]["end"] * FPS)),
              "audio": "voice.wav", "fonts": {"serif": "Fraunces.ttf", "serif_italic": "Fraunces-Italic.ttf", "sans": "Inter.ttf"},
              "palette": brand["palette"], "chrome": {"draft_mark": rd.DRAFT, "wordmark": "steer"}, "scenes": out}
-    return fill_static(props) if v5 else props
+    brief = record.get("brief") or {}
+    return fill_static(reel_lineart(props, brief.get("theme") or "", brief.get("doubt") or "")) if v5 else props
 
 
 def voice_problems(props: dict) -> list[dict]:
@@ -1005,6 +1008,31 @@ def voice_problems(props: dict) -> list[dict]:
     if gaps and max(gaps) > MAX_SILENCE + 1e-6:
         out.append({"code": "MAX_SILENT_GAP", "detail": {"longest": round(max(gaps), 2)}})
     return out
+
+
+LINEART_DRAW, LINEART_FRAMES, LINEART_WIDTH = 2.0, 24, 360   # v5: drawn on in 2 s (24 pre-rendered steps), then held
+
+
+def reel_lineart(props: dict, theme: str = "", doubt: str = "") -> dict:
+    """v5: at most one code-chosen drawing, on the CTA scene (no presenter there), under the sources card's text: chosen by
+    lineart.choose() on the card's own text (the paper titles included, so no food drawing beside an outcome)."""
+    for sc in props["scenes"]:
+        if sc["kind"] == "cta" and sc["sources"] and sc["sources_at"] is not None and not sc["presenter"]:
+            texts = [ln["text"] for ln in sc["lines"]] + [e["before"] + e["journal"] + e["after"] for e in sc["sources"]["entries"]]
+            pick = lineart.choose([{"texts": texts, "has_health": False, "eligible": True}], theme, doubt)
+            if pick:
+                sc["lineart"] = {"id": pick[0], "frames": LINEART_FRAMES, "at": sc["sources_at"], "dur": LINEART_DRAW}
+    return props
+
+
+def lineart_frames(la: dict, ink: str) -> dict:
+    """{public name: PNG path}: lineart-<id>-<k>.png, the drawing after (k + 1) / frames of its path length."""
+    from playwright.sync_api import sync_playwright
+    tmp = Path(tempfile.mkdtemp(prefix="steer-reel-lineart-"))
+    names = {f"lineart-{la['id']}-{k}.png": tmp / f"{k}.png" for k in range(la["frames"])}
+    with sync_playwright() as pw:
+        lineart.draw_png(pw, [(la["id"], ink, LINEART_WIDTH, p, (k + 1) / la["frames"]) for k, p in enumerate(names.values())])
+    return names
 
 
 STATIC_MAX, URL_DELAY = 3.0, 1.5   # v5: no span over 3 s without a visual change; the URL enters 1.5 s after the card
@@ -1032,6 +1060,8 @@ def visual_changes(props: dict) -> list[tuple[float, float]]:
             out.append((sc["sources_at"], sc["sources_at"] + 0.3))
         if sc["sources"] and sc["sources"].get("url_at") is not None:
             out.append((sc["sources"]["url_at"], sc["sources"]["url_at"] + 0.35))
+        if sc.get("lineart"):
+            out.append((sc["lineart"]["at"], sc["lineart"]["at"] + sc["lineart"]["dur"]))
     return sorted(out)
 
 
@@ -1344,6 +1374,9 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
         extra = {f"broll-{n}.mp4": c for n, c in ((v4 or {}).get("broll") or {}).items()}
         if (v4 or {}).get("pullback"):
             extra["pullback.png"] = v4["pullback"]
+        for sc in props["scenes"]:   # the draw-on as PNG steps, drawn by the slides' own renderer (no WebGL in the reel)
+            if sc.get("lineart"):
+                extra |= lineart_frames(sc["lineart"], props["palette"]["ink"])
         if plan:
             import hashlib
             v4_trace = {"edit_plan": plan, "pullback": (v4 or {}).get("pullback_meta"), "assets_sha256": {n: hashlib.sha256(Path(c).read_bytes()).hexdigest()

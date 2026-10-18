@@ -18,6 +18,7 @@ WIDTHS = (520, 440, 370, 310, 260)   # displayed width of the drawing's own boun
 PAD = 48                             # min gap between the drawing and any text box (footer wordmark and page counter included)
 BLEED = 0.15                         # at most this share of the drawing may run off the slide edge
 STEP = 20
+FOOTER = 170                         # render.py .content bottom: the footer band below it
 
 
 @lru_cache(maxsize=1)
@@ -96,7 +97,9 @@ def overlaps(box, text_boxes, pad=0) -> list:
 
 def place(aspect: float, text_boxes: list, w: int = 1080, h: int = 1350) -> list[float] | None:
     """The drawing's box [x0, y0, x1, y1] on the slide, or None when nothing fits. Largest size first; among the
-    positions that clear every text box by PAD, the one nearest a slide edge (bottom or side), lowest first."""
+    positions that clear every text box by PAD, the one nearest a slide edge (bottom or side), lowest first. The footer
+    band (the bottom FOOTER px: wordmark and page counter) is a no-go zone, so a drawing never sits tight on it."""
+    text_boxes = list(text_boxes) + [[0, h - FOOTER, w, h]]
     for width in WIDTHS:
         height = width * aspect
         best = None
@@ -120,7 +123,7 @@ def place(aspect: float, text_boxes: list, w: int = 1080, h: int = 1350) -> list
 PAGE = """<!doctype html><meta charset=utf-8><body style="margin:0">
 <script src="{brush}"></script><script src="{draw}"></script>
 <script>brush.createCanvas({w}, {h}, {{parent: document.body, pixelDensity: 1}}); brush.scaleBrushes(2);
-window.go = (d, ink) => {{ window.INK_WEIGHT = {weight}; drawChai(brush, d, 1, {w}, {h}, '#000000', '#ffffff'); }}</script>"""
+window.go = (d, ink, p) => {{ window.INK_WEIGHT = {weight}; drawChai(brush, d, p, {w}, {h}, '#000000', '#ffffff'); }}</script>"""
 
 # p5.brush mixes pigment, so it draws black on white; darkness becomes the alpha of the ink colour (one colour).
 ALPHA_JS = """(ink) => { const s = document.querySelector('canvas'), c = document.createElement('canvas');
@@ -130,14 +133,15 @@ ALPHA_JS = """(ink) => { const s = document.querySelector('canvas'), c = documen
   x.putImageData(d, 0, 0); return c.toDataURL('image/png'); }"""
 
 
-def draw_png(pw, requests: list[tuple[str, str, int, Path]]) -> None:
-    """Render [(drawing id, ink colour '#rrggbb', displayed width px of its bounding box, out path)] as transparent PNGs."""
+def draw_png(pw, requests: list[tuple]) -> None:
+    """Render [(drawing id, ink colour '#rrggbb', displayed width px of its bounding box, out path[, progress 0..1])] as
+    transparent PNGs; progress < 1 is the draw-on so far (by path length), for the reel's frames."""
     import base64
     import tempfile
 
     with tempfile.TemporaryDirectory(prefix="steer-lineart-") as tmp:   # pw: a running sync_playwright() (render.py's)
         b = pw.chromium.launch(args=["--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
-        for id_, ink, width, out in requests:
+        for id_, ink, width, out, *prog in requests:
             d = drawing(id_)
             x0, y0, x1, y1 = bbox(d)
             s = width / (x1 - x0)
@@ -151,7 +155,7 @@ def draw_png(pw, requests: list[tuple[str, str, int, Path]]) -> None:
                                         w=cw, h=ch, weight=6 * 1.08 / s))
             pg = b.new_page(viewport={"width": cw, "height": ch})
             pg.goto(html.as_uri())
-            pg.evaluate("([d, i]) => go(d, i)", [shifted, ink])
+            pg.evaluate("([d, i, p]) => go(d, i, p)", [shifted, ink, prog[0] if prog else 1])
             out.write_bytes(base64.b64decode(pg.evaluate(ALPHA_JS, ink).split(",", 1)[1]))
             pg.close()
         b.close()

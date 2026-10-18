@@ -35,7 +35,7 @@ WORD_BUDGET = 35
 FLOORS = {"body": 28, "sources": 24}
 LADDERS = {  # px, largest first; the last step is the floor
     "hook": [96, 88, 80, 72, 64, 56], "serif": [64, 58, 52, 46, 40], "body": [44, 40, 36, 32, 28],
-    "key": [132, 116, 100, 88, 72], "sources": [28, 26, 24],
+    "key": [132, 116, 100, 88, 72], "sources": [28, 26, 24], "small": [34, 32, 30, 28],
 }
 SOURCES_PER_SLIDE = 3
 DRAFT = "draft · pending doctor review"
@@ -102,6 +102,9 @@ body.bold .wordmark {{ color: {p['cream']}; }}
 .label {{ font-size: 24px; color: {p['clay']}; margin-top: 14px; }}
 .key {{ font-family: Fraunces; font-variation-settings: 'WONK' 0, 'SOFT' 50; color: {p['rust']}; line-height: 1.0; }}
 .keylabel {{ color: {p['ink']}; line-height: 1.25; margin-top: 10px; }}
+.setting {{ color: {p['clay']}; line-height: 1.3; margin-bottom: 20px; }}
+.hero {{ font-family: Fraunces; font-variation-settings: 'WONK' 0, 'SOFT' 50; font-weight: 600; color: {p['rust']};
+        font-size: 2.2em; line-height: 1.05; }}
 .cta {{ color: {p['rust']}; }}
 .brand {{ font-style: italic; }}
 .signoff {{ color: {p['rust']}; font-weight: 600; }}
@@ -114,7 +117,7 @@ body.bold .wordmark {{ color: {p['cream']}; }}
 
 
 def _fit(kind: str, cls: str, inner: str, tag: str = "div") -> str:
-    floor_kind = {"hook": "headline", "serif": "headline", "key": "headline"}.get(kind, kind)
+    floor_kind = {"hook": "headline", "serif": "headline", "key": "headline", "small": "body"}.get(kind, kind)
     return (f'<{tag} class="{cls}" data-kind="{floor_kind}" data-ladder="{",".join(map(str, LADDERS[kind]))}">'
             f"{inner}</{tag}>")
 
@@ -169,9 +172,31 @@ def merge_locations(locations: list[str]) -> str:
     return "; ".join(parts + other)
 
 
+HERO = re.compile(r"(\d+(?:\.\d+)?)[ \u00a0]times\b")
+UNIT_NUMBER = re.compile(r"\d+(?:\.\d+)?[ \u00a0](?:kg(?!/)|years?|months?|weeks?)\b|\d+(?:\.\d+)?%")   # not a "kg/m2" threshold
+
+
+def hero_parts(text: str, key_number: str | None = None) -> tuple[str, str] | None:
+    """The reel's card treatment for a number line: (setting, findings) as HTML. The setting is the run before the first
+    ": " (who was studied, small); in the findings each "N times" is shown as a large "N×" (the one display transform),
+    else the unit's key number, as it is written, is the hero. None when the line has no hero number."""
+    setting, rest = text.split(": ", 1) if ": " in text else ("", text)
+    body = _esc(rest)
+    if HERO.search(body):
+        body = HERO.sub(lambda m: f'<span class="hero">{m.group(1)}×</span>', body)
+    elif key_number and _esc(key_number) in body:
+        body = body.replace(_esc(key_number), f'<span class="hero">{_esc(key_number)}</span>', 1)
+    elif m := UNIT_NUMBER.search(body):   # else the line's first number with its unit, as written ("0.4 kg")
+        body = body[:m.start()] + f'<span class="hero">{m.group(0)}</span>' + body[m.end():]
+    else:
+        return None
+    return (_esc(setting + ":") if setting else "", body)
+
+
 def _lines_html(lines: list[dict], unit: dict, by_claim: dict, hook: bool) -> str:
     out = []
-    if unit.get("key_number") and unit.get("key_label"):
+    heroes = {id(ln): h for ln in lines if ln["kind"] == "health" and (h := hero_parts(ln["text"], unit.get("key_number")))}
+    if unit.get("key_number") and unit.get("key_label") and not heroes:   # the hero card replaces the key pair
         out.append('<div>' + _fit("key", "key", _esc(unit["key_number"]))
                    + _fit("body", "keylabel", _esc(unit["key_label"])) + "</div>")
     first_framing = True
@@ -179,7 +204,9 @@ def _lines_html(lines: list[dict], unit: dict, by_claim: dict, hook: bool) -> st
         k, t = ln["kind"], ln["text"]
         if k == "health":
             labels = [short_source(e) for e in source_entries([by_claim[i] for i in ln["claim_ids"] if i in by_claim])]
-            out.append('<div class="card">' + _fit("body", "body", _esc(t))
+            h = heroes.get(id(ln))
+            out.append('<div class="card">' + ((_fit("small", "setting", h[0]) if h[0] else "") + _fit("body", "body", h[1])
+                                               if h else _fit("body", "body", _esc(t)))
                        + "".join(f'<div class="label">{html.escape(x)}</div>' for x in labels) + "</div>")
         elif k == "framing":
             big = hook and first_framing

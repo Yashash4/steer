@@ -5,6 +5,7 @@ import {
 } from "remotion";
 import { DIM, buildsUp, cardsShown, onScreen } from "./beats";
 import { BrollBg, Captions, ChecklistView, PhoneEvidence, PullBack, StackCards, zoomAt } from "./Fx";
+import { ReelLineArt } from "./LineArt";
 import { SANS, SERIF, SERIF_ITALIC, SERIF_VARS, fit } from "./fit";
 import L from "../layout.json";
 import type { Card, Ground, Line, Palette, Presenter, ReelProps, Scene } from "./types";
@@ -199,7 +200,7 @@ const KeyPair = (p: { number: string; label: string; at: number; t: number; fram
   );
 };
 
-const SourcesCard = (p: { s: NonNullable<Scene["sources"]>; c: Colors; t: number }) => {
+const SourcesCard = (p: { s: NonNullable<Scene["sources"]>; c: Colors; t: number; artTop?: number | null }) => {
   const { s, c } = p;
   const m = useMemo(() => {
     // every string on the card at least 40 px (1080 wide), so the DOI and location read on a phone
@@ -209,16 +210,22 @@ const SourcesCard = (p: { s: NonNullable<Scene["sources"]>; c: Colors; t: number
       const size = Math.min(...fits.map((f) => f.fontSize));
       const h = fits.reduce((a, f) => a + f.lines.length * size * 1.3 + 30, 0);
       if (size < L.sources.px) throw new Error("sources do not fit at " + L.sources.px + "px");
-      if (h <= 1060) return size;
+      if (h <= (p.artTop ? p.artTop - L.sources.top - 400 : 1060)) return size;   // with a drawing: room above it
       max = size - 1;
     }
   }, [s]);
   const foot = useMemo(() => fit(s.footnote, SANS, 500, 6, BOX - 20, L.sources.px, L.sources.px), [s]);
   const url = useMemo(() => fit(s.url, SERIF, 600, 1, BOX, 56, L.sources.px), [s]);
+  if (p.artTop) {   // LINEART_OVER_TEXT: the card's text (top-aligned) ends >= 48 px above the drawing
+    const fits = s.entries.map((e) => fit(e.before + e.journal + e.after, SANS, 500, 16, BOX - 20, m, 1));
+    const bottom = L.sources.top + 64 * 1.2 + fits.reduce((a, f) => a + f.lines.length * m * 1.3, 0)
+      + foot.lines.length * foot.fontSize * 1.35 + url.fontSize * 1.2 + 28 * (s.entries.length + 2);
+    if (bottom + 48 > p.artTop) throw new Error("LINEART_OVER_TEXT: sources text ends at " + Math.round(bottom) + "px");
+  }
   return (
     <div style={{
       position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: L.sources.top, height: L.sources.height, display: "flex", flexDirection: "column",
-      gap: 28, justifyContent: "center", color: c.ink,
+      gap: 28, justifyContent: p.artTop ? "flex-start" : "center", color: c.ink,
     }}>
       <div style={{ fontFamily: SERIF, fontVariationSettings: SERIF_VARS, fontWeight: 600, fontSize: 64 }}>{s.heading}</div>
       {s.entries.map((e, i) => (
@@ -301,7 +308,11 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
           fromFrame={p.from} c={c} ground={scene.ground} {...keyBox} />
       ) : null}
       {scene.checklist ? <ChecklistView c={scene.checklist} t={t} ink={c.ink} accent={props.palette.rust} low={media} /> : null}
-      {scene.sources ? <SourcesCard s={scene.sources} c={c} t={t} /> : null}
+      {scene.sources ? <SourcesCard s={scene.sources} c={c} t={t} artTop={scene.lineart ? L.lineart_sources.top : null} /> : null}
+      {scene.lineart && t >= scene.lineart.at ? (
+        <ReelLineArt id={scene.lineart.id} frames={scene.lineart.frames} at={scene.lineart.at} dur={scene.lineart.dur} t={t}
+          top={L.lineart_sources.top} size={L.lineart_sources.height} />
+      ) : null}
       <div style={{
         position: "absolute", top: L.pill.top, right: 48, height: L.pill.height, boxSizing: "border-box", padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
         fontSize: 26, color: media ? "#FFFFFF" : c.sub, border: "2px solid " + (media ? "#FFFFFF" : c.sub),

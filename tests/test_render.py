@@ -38,7 +38,7 @@ def test_every_page_has_the_draft_mark_and_emphasis_only_repeats_text():
     pages = render.build_pages(RECORD, BRAND)
     assert all(render.DRAFT in p["html"] for p in pages)
     assert "Will the weight <em>come back</em>?" in pages[0]["html"]
-    assert 'class="key"' in pages[1]["html"] and "weight came back" in pages[1]["html"]
+    assert 'class="hero"' in pages[1]["html"] and 'class="key"' not in pages[1]["html"] and "weight came back" in pages[1]["html"]
     assert "Pending review by a Steer doctor" in pages[-1]["html"]
 
 

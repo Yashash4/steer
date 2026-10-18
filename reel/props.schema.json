@@ -348,6 +348,42 @@
             }
           ],
           "description": "v5: the cta scene shows the pull-back, then the sources card from this time (under the voice)"
+        },
+        "lineart": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "frames",
+                "at",
+                "dur"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "frames": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 60
+                },
+                "at": {
+                  "$ref": "#/$defs/seconds"
+                },
+                "dur": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2
+                }
+              }
+            }
+          ],
+          "description": "v5: a code-chosen drawing (code/lineart) drawn on stroke by stroke under the sources card, then held"
         }
       }
     },

@@ -76,5 +76,9 @@
     "top": 272,
     "height": 50,
     "px": 30
+  },
+  "lineart_sources": {
+    "top": 1090,
+    "height": 400
   }
 }

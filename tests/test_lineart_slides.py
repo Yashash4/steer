@@ -91,3 +91,17 @@ def test_the_drawing_is_recorded_in_post_json_and_adds_no_text(tmp_path):
     assert json.loads((tmp_path / "post.json").read_text())["render"]["lineart"] == rec["lineart"]
     pages = render.build_pages(_record(), BRAND)
     assert all("lineart" not in pg["html"] for pg in pages)      # the HTML (the checked text) carries no drawing
+
+
+def test_a_number_line_gets_the_hero_card_and_art_keeps_off_the_footer():
+    from steer_pipeline import render as rd
+    s, b = rd.hero_parts("Aged 45+, with BMI under 25 kg/m2: diabetes risk was 5.27 times higher in women and 2.99 times in men.")
+    assert s == "Aged 45+, with BMI under 25 kg/m²:" and b.count('class="hero"') == 2 and "5.27×" in b and "2.99×" in b
+    assert rd.hero_parts("On average 0.4 kg a month.", "0.4 kg")[1].count('class="hero"') == 1
+    assert rd.hero_parts("No number here.") is None
+    assert '<span class="hero">0.4\u00a0kg</span>' in rd.hero_parts("Adults regained 0.4 kg monthly on average.")[1]
+    html = rd._lines_html([{"kind": "health", "text": "Adults: risk was 5.27 times higher.", "claim_ids": []}],
+                          {"key_number": "5.27 times", "key_label": "higher"}, {}, False)
+    assert 'class="key"' not in html and 'class="hero"' in html          # the hero card replaces the key pair
+    box = lineart.place(1.0, [], 1080, 1350)
+    assert box[3] + lineart.PAD <= 1350 - lineart.FOOTER                  # never tight on the footer band
