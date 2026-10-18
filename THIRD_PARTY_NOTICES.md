@@ -57,6 +57,14 @@ line is sent to it.
 
 Both were taken unmodified from the google/fonts repository (`ofl/fraunces`, `ofl/inter`) and renamed only.
 
+## Generated clips (optional: b-roll and the AI presenter placeholder)
+
+`broll/ltx_comfy.py` asks a local ComfyUI to run Lightricks' LTX-2.5 (22B distilled, int8; Gemma-4 12B text encoder;
+video/audio VAEs; x2 spatial upscaler), from huggingface.co/Lightricks/LTX-2.5. The weights are not part of this repository.
+They are licensed under the **LTX-2.x Community License Agreement** (https://github.com/Lightricks/LTX-2/blob/main/LICENSE-2_x),
+which has its own conditions for commercial use; Steer would need to check them before production use. Clips made with it
+are labelled "AI presenter · placeholder" (presenter) and pass a frame-sheet review before use.
+
 ## Development and test dependencies (not needed to run the pipeline)
 
 | Package | Version | Licence |
