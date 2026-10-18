@@ -18,6 +18,7 @@ h1,h2,h3,.q{font-family:var(--serif);font-variation-settings:'WONK' 0,'SOFT' 50;
 h2{font-size:clamp(26px,7vw,34px);font-style:italic}
 h3{font-size:22px;font-style:italic}
 .small{font-size:13px;color:var(--clay)}
+.context{font-size:17px;color:var(--ink);font-weight:400;line-height:1.4}
 p{margin:0}
 .btn{appearance:none;border:0;cursor:pointer;font:600 17px/1.2 var(--sans);min-height:56px;padding:14px 28px;border-radius:999px;background:var(--rust);color:var(--cream);transition:transform .15s,opacity .15s,background .15s;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center}
 .btn:hover{background:var(--maroon)}

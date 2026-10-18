@@ -73,7 +73,7 @@ pmcid = "PMC8006839"
 quote_contains = "the risk of diabetes in those with BMI <25 kg/m2 was 5.3 times higher"
 kind = "slider"
 # who and what was studied: its numbers must be in the claim's quote or the paper's context quotes
-context = "Adults aged 45+ in Chennai, Delhi and Karachi · BMI below 25 · women: South Asian vs US whites"
+context = "South Asian women aged 45+ with BMI below 25 in Chennai, Delhi and Karachi, compared with US white women."
 question = "Guess the difference. How did diabetes incidence compare in this study?"
 stops = [["1×", 1], ["2×", 2], ["3×", 3], ["4×", 4], ["5×", 5], ["6×", 6], ["7×", 7], ["8×", 8], ["9×", 9], ["10×", 10]]
 answer = 5.3

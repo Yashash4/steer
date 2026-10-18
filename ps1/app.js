@@ -86,7 +86,7 @@ function slider(round, onChange) {
 
 function ask(round, done) {
   const nodes = [];
-  if (round.context) nodes.push(h("p", "small", round.context));
+  if (round.context) nodes.push(h("p", "context", round.context));
   nodes.push(h("h1", "q", round.question));
   if (round.kind === "choice") {
     const box = h("div", "choices");

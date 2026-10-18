@@ -36,6 +36,7 @@ def play(browser, w, h, tag):
     p.locator(".slider").focus(); p.keyboard.press("ArrowRight"); p.keyboard.press("ArrowRight")
     assert p.locator('[role=slider]').get_attribute("aria-valuetext") == claims["hook"]["stops"][1]["label"]
     p.locator(".stop").nth(3).click()
+    assert not p.locator(".btn").first.is_disabled(), "lock still disabled after a stop is chosen"
     snap("02-hook-moved")
     p.click(".btn"); p.wait_for_selector(".reveal"); snap("03-reveal")
     p.click(".link"); snap("04-reveal-quote")
@@ -56,10 +57,15 @@ def play(browser, w, h, tag):
         if p.locator(".reveal").count():
             snap(f"{k:02}-reveal"); k += 1; p.click(".btn"); continue
         if p.locator(".choice").count():
+            # a choice round has no lock: nothing is chosen until a choice is tapped, and the tap is the guess
+            assert p.locator(".btn").count() == 0 and p.locator(".choice.on").count() == 0, "a choice round can lock early"
             snap(f"{k:02}-ask"); k += 1; p.locator(".choice").first.click(); continue
         if p.locator(".slider").count():
             assert p.locator(".stop.on").count() == 0, "a stop is preselected"
-            p.locator(".stop").nth(1).click(); snap(f"{k:02}-ask"); k += 1; p.click(".btn"); continue
+            assert p.locator(".btn").first.is_disabled(), "lock enabled before a stop is chosen"
+            p.locator(".stop").nth(1).click(); snap(f"{k:02}-ask"); k += 1
+            assert not p.locator(".btn").first.is_disabled(), "lock still disabled after a stop is chosen"
+            p.click(".btn"); continue
         raise AssertionError("an unknown screen")
     snap(f"{k:02}-next-step")
     hrefs = [p.locator("a.btn").nth(i).get_attribute("href") for i in (0, 1)]
