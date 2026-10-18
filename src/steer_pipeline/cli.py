@@ -63,6 +63,9 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--settings")
     v.add_argument("--engine", default="remotion", choices=["remotion", "playwright"],
                    help="remotion: kinetic type (code/reel); playwright: the fallback renderer")
+    v.add_argument("--v4", action="store_true", help="the v4 edit (b-roll, captions, evidence phone, checklist, pull-back)")
+    v.add_argument("--broll", nargs="*", default=[], metavar="NAME=CLIP", help="v4 b-roll clips, e.g. lane=lane.mp4 thali=thali.mp4")
+    v.add_argument("--pullback", help="v4: a screenshot of the studio claim page (PNG) for the pull-back")
     v.add_argument("--presenter", nargs="*", default=[], metavar="SCENE=CLIP",
                    help="D-026: a muted AI presenter placeholder clip for a scene (remotion), e.g. 0=hook.mp4")
     st = sub.add_parser("studio", help="the review studio: --serve (local, with actions) or --export (read-only copy)")
@@ -123,7 +126,9 @@ def main(argv: list[str] | None = None) -> int:
         settings = load_settings(args.settings)
         try:
             t = posts.reel_post(args.folder, store.connect(args.db), settings, engine=args.engine,
-                               presenter={int(k): v for k, v in (x.split("=", 1) for x in args.presenter)} or None)
+                               presenter={int(k): v for k, v in (x.split("=", 1) for x in args.presenter)} or None,
+                               v4={"broll": dict(x.split("=", 1) for x in args.broll), "pullback": args.pullback}
+                               if args.v4 else None)
         except posts.ReelRefused as e:
             print(f"refused: {json.dumps(e.reasons, ensure_ascii=False)[:2000]}", file=sys.stderr)
             return 2

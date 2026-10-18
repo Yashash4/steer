@@ -4,6 +4,7 @@ import {
   staticFile, useCurrentFrame,
 } from "remotion";
 import { DIM, buildsUp, cardsShown, onScreen } from "./beats";
+import { BrollBg, Captions, ChecklistView, PhoneEvidence, PullBack, zoomAt } from "./Fx";
 import { SANS, SERIF, SERIF_ITALIC, SERIF_VARS, fit } from "./fit";
 import L from "../layout.json";
 import type { Card, Ground, Line, Palette, Presenter, ReelProps, Scene } from "./types";
@@ -29,11 +30,11 @@ export const BrollLayer = (): null => null;
 
 // D-026: the presenter clip fills the frame (muted: the voice is always our checked TTS track) behind a soft bottom
 // gradient; its label is drawn on every frame the clip is on screen.
-const PresenterLayer = (p: { pr: Presenter; sceneStart: number; c: Colors }) => {
+const PresenterLayer = (p: { pr: Presenter; sceneStart: number; c: Colors; scale: number }) => {
   const from = Math.round((p.pr.start - p.sceneStart) * FPS);
   return (
     <Sequence from={from} durationInFrames={Math.max(1, Math.round((p.pr.end - p.pr.start) * FPS))} layout="none">
-      <AbsoluteFill>
+      <AbsoluteFill style={{ transform: `scale(${p.scale})`, transformOrigin: "50% 30%" }}>
         <OffthreadVideo src={staticFile(p.pr.video)} muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       </AbsoluteFill>
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1060,
@@ -230,32 +231,46 @@ const SourcesCard = (p: { s: NonNullable<Scene["sources"]>; c: Colors }) => {
   );
 };
 
-const SceneView = (p: { scene: Scene; from: number; wipe: boolean; props: ReelProps }) => {
+const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boolean; props: ReelProps; frozenAt?: number }) => {
   const { scene, props } = p;
   const frame = useCurrentFrame();
-  const t = (frame + p.from) / FPS;
+  const t = p.frozenAt ?? (frame + p.from) / FPS;
   const c = colorsFor(props.palette, scene.ground);
   const keyLine = scene.lines.find((l) => l.key !== null);
+  const media = scene.presenter !== null || scene.broll !== null;
   // with a presenter the text sits in the lower band, over the gradient; without, it uses the frame
   const box = scene.presenter ? (keyLine ? L.lines_presenter_key : L.lines_presenter) : (keyLine ? L.lines_key : L.lines);
   const keyBox = scene.presenter ? { ...L.keypair_presenter, numMax: 150 } : { ...L.keypair, numMax: 200 };
-  const wp = p.wipe ? ease(clamp01(frame / (WIPE_S * FPS))) : 1;
-  const sinceStart = t - scene.start;
-  const rule = ease(clamp01(sinceStart / 0.7));
+  const wp = p.wipe && p.frozenAt === undefined ? ease(clamp01(frame / (WIPE_S * FPS))) : 1;
+  const zin = p.zoomIn && p.frozenAt === undefined ? clamp01(frame / (WIPE_S * FPS)) : 1;   // zoom-through cut: 1.25 -> 1
+  const z = zoomAt(scene.zoom, t);
+  const rule = ease(clamp01((t - scene.start) / 0.7));
   const dark = scene.ground !== "cream";
   return (
-    <AbsoluteFill style={{ background: c.ground, clipPath: wp < 1 ? `inset(0 ${100 - wp * 100}% 0 0)` : undefined }}>
-      {scene.kind !== "point" && scene.kind !== "sources" ? <BrollLayer /> : null}
-      {scene.presenter ? <PresenterLayer pr={scene.presenter} sceneStart={scene.start} c={c} /> : null}
-      <div style={{
-        position: "absolute", right: -140, bottom: 240, width: 420, height: 420, borderRadius: "50%",
-        border: "3px solid " + (dark ? props.palette.blush : props.palette.rust), opacity: 0.35,
-        transform: `translate(${Math.sin(t / 3) * 24}px, ${Math.cos(t / 4) * 30}px)`,
-      }} />
+    <AbsoluteFill style={{ background: c.ground, clipPath: wp < 1 ? `inset(0 ${100 - wp * 100}% 0 0)` : undefined,
+      transform: zin < 1 ? `scale(${1.25 - 0.25 * ease(zin)})` : undefined, opacity: zin < 1 ? ease(zin) : undefined }}>
+      {scene.broll ? <BrollBg b={scene.broll} sceneStart={scene.start} scale={z} origin="50% 40%" /> : null}
+      {scene.presenter ? <PresenterLayer pr={scene.presenter} sceneStart={scene.start} c={c} scale={z} /> : null}
+      {media ? null : (
+        <div style={{
+          position: "absolute", right: -140, bottom: 240, width: 420, height: 420, borderRadius: "50%",
+          border: "3px solid " + (dark ? props.palette.blush : props.palette.rust), opacity: 0.35,
+          transform: `translate(${Math.sin(t / 3) * 24}px, ${Math.cos(t / 4) * 30}px)`,
+        }} />
+      )}
       <div style={{ position: "absolute", left: 60, top: L.wordmark.top - 14, height: 4, width: 960 * rule, background: props.palette.blush }} />
       {scene.lines.map((l, i) => l.cards ? (
-        <CardsView key={i} line={l} cards={l.cards} t={t} c={c} top={box.top} height={box.height}
-          heroInk={scene.ground === "cream" ? c.emph : c.ink} />
+        <div key={i}>
+          {media ? (   // glass card: a frosted panel behind the two cards
+            <div style={{ position: "absolute", left: 50, width: 980, top: box.top - 40, height: box.height + 80, borderRadius: 40,
+              background: "rgba(245, 235, 223, 0.16)", backdropFilter: "blur(18px)", border: "1px solid rgba(245, 235, 223, 0.35)" }} />
+          ) : null}
+          <CardsView line={l} cards={l.cards} t={t} c={c} top={box.top} height={box.height}
+            heroInk={scene.ground === "cream" && !media ? c.emph : c.ink} />
+          {l.evidence ? <PhoneEvidence e={l.evidence} t={t} ink={props.palette.ink} accent={props.palette.rust} /> : null}
+        </div>
+      ) : scene.captions ? (
+        <Captions key={i} line={l} t={t} accent={props.palette.blush} emph={emphasisFlags(l)} />
       ) : (
         <LineView key={i} line={l} t={t} c={c} top={box.top} height={box.height} appear={i === 0 ? scene.start : l.start}
           big={scene.kind === "hook" && i === 0} />
@@ -264,16 +279,29 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; props: ReelPr
         <KeyPair number={keyLine.key.number} label={keyLine.key.label} at={keyLine.key.at} t={t} frame={frame}
           fromFrame={p.from} c={c} ground={scene.ground} {...keyBox} />
       ) : null}
+      {scene.checklist ? <ChecklistView c={scene.checklist} t={t} ink={c.ink} accent={props.palette.rust} /> : null}
       {scene.sources ? <SourcesCard s={scene.sources} c={c} /> : null}
       <div style={{
         position: "absolute", top: L.pill.top, right: 48, height: L.pill.height, boxSizing: "border-box", padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
-        fontSize: 26, color: c.sub, border: "2px solid " + c.sub,
+        fontSize: 26, color: media ? "#FFFFFF" : c.sub, border: "2px solid " + (media ? "#FFFFFF" : c.sub),
+        background: media ? "rgba(0,0,0,0.25)" : undefined,
       }}>{props.chrome.draft_mark}</div>
       <div style={{
         position: "absolute", left: 60, top: L.wordmark.top, height: L.wordmark.height, lineHeight: 1, fontFamily: SERIF, fontVariationSettings: SERIF_VARS, fontWeight: 600,
-        fontSize: 44, color: c.ink,
+        fontSize: 44, color: media ? "#FFFFFF" : c.ink,
       }}>{props.chrome.wordmark}</div>
     </AbsoluteFill>
+  );
+};
+
+const PullBackScene = (p: { s: Scene; prev: Scene; from: number; props: ReelProps }) => {
+  const frame = useCurrentFrame();
+  const t = (frame + p.from) / FPS;
+  return (
+    <PullBack image={p.s.pullback as string} t={t} start={p.s.start} end={p.s.end}>
+      <SceneView scene={p.prev} from={Math.round(p.prev.start * FPS)} wipe={false} zoomIn={false} props={p.props}
+        frozenAt={p.prev.end - 0.04} />
+    </PullBack>
   );
 };
 
@@ -300,11 +328,17 @@ export const Reel = (props: ReelProps) => {
       {props.scenes.map((s, i) => {
         const from = Math.round(s.start * FPS);
         const next = props.scenes[i + 1];
-        const tail = next && next.transition_in === "wipe" ? Math.round(WIPE_S * FPS) : 0;
+        const tail = next && next.transition_in !== "none" ? Math.round(WIPE_S * FPS) : 0;
         const dur = Math.min(total - from, Math.round(s.end * FPS) - from + tail);
+        const prev = props.scenes[i - 1];
         return (
           <Sequence key={i} from={from} durationInFrames={Math.max(1, dur)}>
-            <SceneView scene={s} from={from} wipe={s.transition_in === "wipe"} props={props} />
+            {s.kind === "pullback" && s.pullback && prev ? (
+              // the previous scene's last frame shrinks into the real studio screen
+              <PullBackScene s={s} prev={prev} from={from} props={props} />
+            ) : (
+              <SceneView scene={s} from={from} wipe={s.transition_in === "wipe"} zoomIn={s.transition_in === "zoom"} props={props} />
+            )}
           </Sequence>
         );
       })}

@@ -1,5 +1,5 @@
 {
- "version": 2,
+ "version": 3,
  "fps": 30,
  "width": 1080,
  "height": 1920,
@@ -32,6 +32,10 @@
    "transition_in": "none",
    "broll": null,
    "presenter": null,
+   "captions": false,
+   "zoom": [],
+   "checklist": null,
+   "pullback": null,
    "lines": [
     {
      "kind": "framing",
@@ -96,6 +100,7 @@
       }
      ],
      "cards": null,
+     "evidence": null,
      "emphasis": "come back",
      "key": null,
      "source_label": null
@@ -111,6 +116,10 @@
    "transition_in": "wipe",
    "broll": null,
    "presenter": null,
+   "captions": false,
+   "zoom": [],
+   "checklist": null,
+   "pullback": null,
    "lines": [
     {
      "kind": "health",
@@ -221,6 +230,7 @@
       }
      ],
      "cards": null,
+     "evidence": null,
      "emphasis": null,
      "key": {
       "number": "1.4 years",
@@ -240,6 +250,10 @@
    "transition_in": "wipe",
    "broll": null,
    "presenter": null,
+   "captions": false,
+   "zoom": [],
+   "checklist": null,
+   "pullback": null,
    "lines": [
     {
      "kind": "health",
@@ -372,6 +386,7 @@
       }
      ],
      "cards": null,
+     "evidence": null,
      "emphasis": null,
      "key": null,
      "source_label": "West et al. 2026, section text, no page layout"
@@ -387,6 +402,10 @@
    "transition_in": "wipe",
    "broll": null,
    "presenter": null,
+   "captions": false,
+   "zoom": [],
+   "checklist": null,
+   "pullback": null,
    "lines": [
     {
      "kind": "brand",
@@ -483,6 +502,7 @@
       }
      ],
      "cards": null,
+     "evidence": null,
      "emphasis": null,
      "key": null,
      "source_label": null
@@ -498,6 +518,10 @@
    "transition_in": "wipe",
    "broll": null,
    "presenter": null,
+   "captions": false,
+   "zoom": [],
+   "checklist": null,
+   "pullback": null,
    "lines": [
     {
      "kind": "cta",
@@ -540,6 +564,7 @@
       }
      ],
      "cards": null,
+     "evidence": null,
      "emphasis": null,
      "key": null,
      "source_label": null
@@ -563,6 +588,7 @@
       }
      ],
      "cards": null,
+     "evidence": null,
      "emphasis": null,
      "key": null,
      "source_label": null
@@ -578,6 +604,10 @@
    "transition_in": "wipe",
    "broll": null,
    "presenter": null,
+   "captions": false,
+   "zoom": [],
+   "checklist": null,
+   "pullback": null,
    "lines": [],
    "sources": {
     "heading": "Sources",

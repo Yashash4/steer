@@ -320,3 +320,49 @@ def test_every_text_box_and_both_pills_sit_in_the_safe_area(tmp_path):
     assert reel.safe_area_problems(tmp_path / "l.json") == ["wordmark: 1840-1896 outside 210-1620"]
     x, y, w, h = reel.MARK_BOX                                              # the QA looks where the pill now is
     assert y <= lay["pill"]["top"] and lay["pill"]["top"] + lay["pill"]["height"] <= y + h
+
+
+def test_the_v4_edit_plan_keeps_food_away_from_numbers_and_puts_the_city_behind_the_cards():
+    record, script, scenes, keys = kinetic_scenes()   # hook (framing), health (0.4 kg), brand + cta
+    assets = {"presenter": {}, "broll": {"lane": "lane.mp4", "thali": "thali.mp4"}}
+    plan = reel.edit_plan(scenes, assets)
+    by = {p["scene"]: p for p in plan}
+    assert by[0]["broll"] == "thali" and by[0]["captions"]                  # a framing hook: the food clip is allowed
+    assert by[1]["broll"] == "lane" and by[1]["evidence"]                   # the health line: the city, never food
+    assert all(not (p["broll"] == "thali" and any(ln["kind"] == "health" or reel.number_values(ln["text"])
+               for ln in scenes[p["scene"]]["lines"])) for p in plan)
+    assert [p["transition_in"] for p in plan][:3] == ["none", "zoom", "zoom"]   # the background changes each time
+    withp = reel.edit_plan(scenes, {"presenter": {0: "h.mp4", 2: "b.mp4"}, "broll": {"lane": "lane.mp4"}})
+    assert withp[0]["presenter"] and withp[0]["zoom"] and withp[2]["presenter"] and not withp[1]["presenter"]
+    # a framing line holding a number never gets the food clip either (and edit_plan raises if a rule ever planned it)
+    numbered = [dict(scenes[1], lines=[dict(scenes[1]["lines"][0], kind="framing")])]
+    assert reel.edit_plan(numbered, {"broll": {"thali": "t.mp4"}})[0]["broll"] is None
+
+
+def test_v4_props_checklist_evidence_and_timing_are_checked():
+    record, script, scenes, keys = kinetic_scenes()
+    plan = reel.edit_plan(scenes, {"broll": {"lane": "lane.mp4"}})
+    quotes = {"c1": "Weight came back at 0.4 kg a month (95% CI 0.3 to 0.5)."}
+    props = reel.build_props(scenes, record, BRAND, "come back", keys, None, plan, quotes, checked=True)
+    assert reel.pool_check(props, script, record, "come back", keys, quotes) == []
+    assert reel.checklist_items(True) == list(reel.CHECK_LINES) and reel.checklist_items(False) == [reel.CHECK_DOCTOR]
+    import copy as cp
+    sc = next(s for s in props["scenes"] if s["broll"])
+    bad = cp.deepcopy(props)
+    next(s for s in bad["scenes"] if s["broll"])["broll"]["video"] = "https://example.com/x.mp4"
+    assert [f["code"] for f in reel.pool_check(bad, script, record, "come back", keys, quotes)] == ["TEXT_NOT_FROM_SCRIPT"]
+    # a line with cards gets the evidence phone with the claims' exact quote; another quote is refused
+    text = "Aged 45+ in Chennai: weight came back at 0.4 kg a month."
+    s2 = {"scenes": [{"lines": [{"kind": "health", "text": text, "claim_ids": ["c1"]}]}]}
+    sc2, _, _ = reel.build_timeline(s2, {"name": "x"}, fake_tts, reel.HEALTH_HOLD + reel.EVIDENCE_HOLD, reel.REMOTION_END_CARD)
+    p2 = reel.build_props(sc2, record, BRAND, None, [], None, reel.edit_plan(sc2, {}), quotes)
+    e = p2["scenes"][0]["lines"][0]["evidence"]
+    assert e["quote"] == quotes["c1"] and e["header"] == "The exact sentence · West et al. 2026, section text, no page layout"
+    assert reel.pool_check(p2, s2, record, None, [], quotes) == [] and reel.timing_problems(p2) == []
+    short = cp.deepcopy(p2)
+    ln = short["scenes"][0]["lines"][0]
+    ln["hold_end"] = ln["cards"][1]["start"] + 0.5
+    assert {f["code"] for f in reel.timing_problems(short)} == {"STATISTIC_TOO_SHORT"}
+    wrong = cp.deepcopy(p2)
+    wrong["scenes"][0]["lines"][0]["evidence"]["quote"] = "A sentence the paper does not have."
+    assert [f["code"] for f in reel.pool_check(wrong, s2, record, None, [], quotes)] == ["TEXT_NOT_FROM_SCRIPT"]

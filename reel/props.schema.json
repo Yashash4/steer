@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "steer/reel_props/2",
-  "title": "reel_props.json v2: everything the Remotion composition may draw or play. Written by `steer reel` (Python) after the post's checks; every string in it is a checked script line (or an exact substring of one) or a string built by code. The composition draws no other text.",
+  "$id": "steer/reel_props/3",
+  "title": "reel_props.json v3: everything the Remotion composition may draw or play. Written by `steer reel` (Python) after the post's checks; every string in it is a checked script line (or an exact substring of one) or a string built by code. The composition draws no other text.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,7 +18,7 @@
   ],
   "properties": {
     "version": {
-      "const": 2
+      "const": 3
     },
     "fps": {
       "const": 30
@@ -141,7 +141,11 @@
         "broll",
         "presenter",
         "lines",
-        "sources"
+        "sources",
+        "captions",
+        "zoom",
+        "checklist",
+        "pullback"
       ],
       "properties": {
         "kind": {
@@ -150,6 +154,8 @@
             "point",
             "brand",
             "cta",
+            "checklist",
+            "pullback",
             "sources"
           ]
         },
@@ -169,12 +175,38 @@
         "transition_in": {
           "enum": [
             "wipe",
-            "none"
+            "none",
+            "zoom"
           ]
         },
         "broll": {
-          "type": "null",
-          "description": "reserved: a background clip behind framing scenes (S7-full); always null in v1"
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "video",
+                "start",
+                "end"
+              ],
+              "properties": {
+                "video": {
+                  "type": "string",
+                  "description": "broll-<name>.mp4, muted, in the public folder"
+                },
+                "start": {
+                  "$ref": "#/$defs/seconds"
+                },
+                "end": {
+                  "$ref": "#/$defs/seconds"
+                }
+              }
+            }
+          ],
+          "description": "a b-roll clip behind the scene (edit_plan; never food behind a health or number line)"
         },
         "presenter": {
           "oneOf": [
@@ -227,6 +259,82 @@
             }
           ],
           "description": "the end card (kind sources only)"
+        },
+        "captions": {
+          "type": "boolean",
+          "description": "chunked captions (the beats) instead of the full-line layout"
+        },
+        "zoom": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "at",
+              "dur",
+              "scale"
+            ],
+            "properties": {
+              "at": {
+                "$ref": "#/$defs/seconds"
+              },
+              "dur": {
+                "type": "number",
+                "minimum": 0
+              },
+              "scale": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1.2
+              }
+            }
+          }
+        },
+        "checklist": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "items"
+              ],
+              "properties": {
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "text",
+                      "at"
+                    ],
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "$ref": "#/$defs/seconds"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "pullback": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "the studio screenshot file"
         }
       }
     },
@@ -243,7 +351,8 @@
         "emphasis",
         "key",
         "source_label",
-        "cards"
+        "cards",
+        "evidence"
       ],
       "properties": {
         "kind": {
@@ -416,6 +525,59 @@
             }
           ],
           "description": "a long health line as 2 cards split by code at its first colon (setting, then findings with hero numbers); null = phrase build-up"
+        },
+        "evidence": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "header",
+                "quote",
+                "image",
+                "boxes",
+                "start",
+                "end"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "page",
+                    "quote"
+                  ]
+                },
+                "header": {
+                  "type": "string"
+                },
+                "quote": {
+                  "type": "string"
+                },
+                "image": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "boxes": {
+                  "type": "array"
+                },
+                "start": {
+                  "$ref": "#/$defs/seconds"
+                },
+                "end": {
+                  "$ref": "#/$defs/seconds"
+                }
+              }
+            }
+          ]
         }
       }
     },

@@ -133,7 +133,7 @@ class ReelRefused(Exception):
 
 
 def reel_post(folder: str | Path, con, settings: dict, tts=None, transcribe=None, engine: str = "remotion",
-              presenter: dict | None = None) -> dict:
+              presenter: dict | None = None, v4: dict | None = None) -> dict:
     """Make the reel of a written post, after checking it may be voiced: a rendered draft whose code checks still
     pass against the current boundaries, and whose reel lines all have an independent supported cross-check."""
     from .checks import COUNTS
@@ -167,5 +167,7 @@ def reel_post(folder: str | Path, con, settings: dict, tts=None, transcribe=None
     post = record["post"]
     emphasis = (post.get("slides") or [{}])[0].get("emphasis") if post.get("slides") else (post.get("static") or {}).get("emphasis")
     script = json.loads((folder / "reel_script.json").read_text())
+    if v4 is not None:   # the v4 edit: the claims' exact quotes for the evidence phone; the checks above passed (checklist)
+        v4 = v4 | {"quotes": {i: c["quote"] for i, c in claims.items()}, "checked": True}
     return make_reel(record, script, load_brand(), folder, settings["voice"], tts=tts, transcribe=transcribe,
-                     post_emphasis=emphasis, engine=engine, keys=checked_keys(post), presenter=presenter)
+                     post_emphasis=emphasis, engine=engine, keys=checked_keys(post), presenter=presenter, v4=v4)

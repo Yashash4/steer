@@ -517,8 +517,8 @@ def scene_kind(scene_lines: list[dict], index: int) -> str:
     return "cta" if kinds & {"cta", "signoff"} else "point"
 
 
-def build_timeline(script: dict, voice: dict, tts, health_hold: float = 0.0, end_card: float = END_CARD
-                   ) -> tuple[list[dict], bytes, dict]:
+def build_timeline(script: dict, voice: dict, tts, health_hold: float = 0.0, end_card: float = END_CARD,
+                   silent: tuple = ()) -> tuple[list[dict], bytes, dict]:
     """Voice every line; return the scenes with line/caption/word times, the full PCM track and timing stats.
     health_hold: the pause after a health line is at least this long (the whole line holds on screen)."""
     scenes, pcm, t, tts_s = [], b"", 0.0, 0.0
@@ -547,13 +547,66 @@ def build_timeline(script: dict, voice: dict, tts, health_hold: float = 0.0, end
             t += dur + gap
         scene["end"] = t
         scenes.append(scene)
+    for kind, secs in silent:   # v4: code-built scenes with no voice (checklist, pull-back), before the sources card
+        scenes.append({"index": len(scenes), "kind": kind, "start": t, "end": t + secs, "lines": [], "captions": []})
+        pcm += silence(secs)
+        t += secs
     end = {"index": len(scenes), "kind": "sources", "start": t, "end": t + end_card, "lines": [], "captions": []}
     pcm += silence(end_card)
     scenes.append(end)
     return scenes, pcm, {"tts_seconds": round(tts_s, 2), "timeline_seconds": round(end["end"], 3)}
 
 
-# --- Remotion props (reel_props.json v2, code/reel/props.schema.json) ---
+# --- Reel v4 edit plan (docs/topics/reel-v4-edit-plan.md): derived by code from the script and the assets ---
+
+EVIDENCE_HOLD = 2.6        # the c004-style card line holds this much longer: the evidence phone appears in the hold
+CHECKLIST_S, PULLBACK_S = 3.0, 2.5
+CHECK_QUOTED = "Every number quoted word for word from the paper"
+CHECK_CROSS = "Checked by a second, independent model"
+CHECK_DOCTOR = "Pending review by a Steer doctor"
+CHECK_LINES = (CHECK_QUOTED, CHECK_CROSS, CHECK_DOCTOR)
+FOOD_BROLL = {"thali"}      # food clips: never behind a health or number line (food beside a number implies a cause)
+
+
+def checklist_items(checked: bool) -> list[str]:
+    """The status lines the trace proves: reel_post re-runs the code checks and requires an independent supported
+    cross-check before any reel is made (checked=True); the doctor line is always true (every reel is a draft)."""
+    return ([CHECK_QUOTED, CHECK_CROSS] if checked else []) + [CHECK_DOCTOR]
+
+
+def edit_plan(scenes: list[dict], assets: dict) -> list[dict]:
+    """One shot per scene, by fixed rules (the same script + assets always give the same plan):
+    - a scene with a health line: the city b-roll ("lane") behind glass cards, never a food clip;
+    - the hook, framing, brand and cta scenes: the presenter clip if one exists for that scene, else (hook / framing
+      only) the food b-roll ("thali"), else motion graphics;
+    - captions wherever a presenter or b-roll fills the frame; a punch-in on the hook's emphasis and the brand's first
+      word (presenter scenes, centred on the eyes); a zoom-through cut where the background changes, the wipe otherwise."""
+    presenter, broll = assets.get("presenter") or {}, assets.get("broll") or {}
+    plan, prev = [], None
+    for sc in scenes:
+        kinds = {ln["kind"] for ln in sc["lines"]}
+        numbers = any(number_values(ln["text"]) for ln in sc["lines"])
+        pres = sc["index"] in presenter and "health" not in kinds and sc["kind"] in ("hook", "point", "brand", "cta")
+        clip = None
+        if "health" in kinds and "lane" in broll:
+            clip = "lane"
+        elif not pres and kinds and kinds <= {"framing"} and not numbers and "thali" in broll:
+            clip = "thali"
+        if clip in FOOD_BROLL and ("health" in kinds or numbers):   # the rule, enforced here as well as tested
+            raise ValueError(f"food b-roll {clip!r} planned behind a health or number line (scene {sc['index']})")
+        bg = "presenter" if pres else clip or "graphics"
+        zoom = []
+        if pres and sc["kind"] in ("hook", "brand") and sc["lines"]:
+            ln = sc["lines"][0]
+            zoom = [{"at": round(ln["start"] + 0.15, 3), "dur": 0.6, "scale": 1.1}]
+        transition = "none" if prev is None else "zoom" if bg != prev else "wipe"
+        plan.append({"scene": sc["index"], "background": bg, "presenter": pres, "broll": clip, "captions": bg != "graphics",
+                     "zoom": zoom, "transition_in": transition, "evidence": "health" in kinds})
+        prev = bg
+    return plan
+
+
+# --- Remotion props (reel_props.json v3, code/reel/props.schema.json) ---
 
 REEL_DIR = rd.CODE / "reel"
 REMOTION_DURATION = (20.0, 45.0)
@@ -561,7 +614,7 @@ HOOK_MAX = 4.0   # the hook line is spoken within 4 s of the reel's start
 REMOTION_END_CARD, HEALTH_HOLD = 5.0, 0.8   # the sources card holds >= 5 s (its text >= 40 px)
 PRESENTER_LABEL = "AI-generated presenter · not a Steer clinician"   # D-026: on every frame a presenter clip is on screen
 LABEL_BOX = (60, 222, 220, 30)  # x, y, w, h inside the label pill (top left, layout.json "pill"; Reel.tsx LABEL_BG / LABEL_INK)
-GROUNDS = {"hook": "cream", "brand": "maroon", "cta": "cream", "sources": "cream"}
+GROUNDS = {"hook": "cream", "brand": "maroon", "cta": "cream", "sources": "cream", "checklist": "cream", "pullback": "cream"}
 
 
 def display(text: str) -> str:
@@ -600,6 +653,11 @@ def make_beats(tokens: list[tuple[str, float]]) -> list[dict]:
             beats.append(cur)
     return [{"text": " ".join(t for t, _ in b), "start": round(b[0][1], 3),
              "words": [{"text": t, "start": round(s0, 3)} for t, s0 in b]} for b in beats]
+
+
+def evidence_header(entries: list[dict]) -> str:
+    """The evidence phone's header, built by code: what it shows and where it is from."""
+    return "The exact sentence · " + "; ".join(rd.short_source(e) for e in entries)
 
 
 def times_x(tok: str) -> str:
@@ -654,14 +712,18 @@ def source_entry_parts(e: dict) -> dict:
 
 
 def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | None, keys: list[dict],
-                presenter: dict | None = None) -> dict:
-    """presenter: {scene index: clip path}; the clip fills that scene, muted, and carries the label (D-026)."""
+                presenter: dict | None = None, plan: list[dict] | None = None, quotes: dict | None = None,
+                checked: bool = False, pullback: str | None = None) -> dict:
+    """presenter: {scene index: clip path}; the clip fills that scene, muted, and carries the label (D-026).
+    plan (v4, edit_plan): per scene its b-roll, captions, punch-ins and transition; quotes {claim_id: quote} feed the
+    evidence phone; checked = reel_post's checks passed (the checklist); pullback = the studio screenshot file name."""
+    shots = {p["scene"]: p for p in (plan or [])}
     by_claim = {s["claim_id"]: s for s in record["sources"]}
     entries = rd.source_entries(record["sources"])
     out, point = [], 0
     for sc in scenes:
-        if sc["kind"] == "sources":
-            ground = GROUNDS["sources"]
+        if sc["kind"] in ("sources", "checklist", "pullback"):
+            ground = GROUNDS[sc["kind"]]
         elif any(ln["kind"] == "brand" for ln in sc["lines"]):   # the brand line is the bold maroon beat
             ground = "maroon"
         elif sc["kind"] == "point":
@@ -686,21 +748,60 @@ def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | N
             cards = make_cards(tokens) if ln["kind"] == "health" else None
             if cards:
                 key = None   # the hero numbers are the scene's large type
+            evidence = None
+            if cards and shots.get(sc["index"], {}).get("evidence") and quotes:
+                src = rd.source_entries([by_claim[i] for i in ln["claim_ids"] if i in by_claim])
+                evidence = {"kind": "quote", "header": evidence_header(src), "image": None, "boxes": [],
+                            "quote": "\n\n".join(quotes[i] for i in ln["claim_ids"] if i in quotes),
+                            "start": round(ln["end"] + 0.6, 3), "end": round(ln["hold_end"] - 0.1, 3)}
             lines.append({"kind": ln["kind"], "text": text, "start": round(ln["start"], 3), "end": round(ln["end"], 3),
-                          "cards": cards,
+                          "cards": cards, "evidence": evidence,
                           "hold_end": round(ln["hold_end"], 3), "beats": make_beats(tokens),
                           "emphasis": display(emphasis) if sc["kind"] == "hook" and emphasis and display(emphasis) in text
                           and ln is sc["lines"][0] else None,
                           "key": key, "source_label": "; ".join(labels) if ln["kind"] == "health" and labels else None})
+        shot = shots.get(sc["index"], {})
+        items = checklist_items(checked) if sc["kind"] == "checklist" else []
+        span = (sc["end"] - sc["start"]) * 0.7 / max(1, len(items))
         out.append({"kind": sc["kind"], "ground": ground, "start": round(sc["start"], 3), "end": round(sc["end"], 3),
-                    "transition_in": "none" if not out else "wipe", "broll": None,
+                    "transition_in": shot.get("transition_in", "none" if not out else "wipe"),
+                    "broll": {"video": f"broll-{shot['broll']}.mp4", "start": round(sc["start"], 3), "end": round(sc["end"], 3)}
+                    if shot.get("broll") else None,
+                    "captions": bool(shot.get("captions")), "zoom": shot.get("zoom", []),
+                    "checklist": {"items": [{"text": x, "at": round(sc["start"] + 0.3 + i * span, 3)} for i, x in enumerate(items)]}
+                    if sc["kind"] == "checklist" else None,
+                    "pullback": pullback if sc["kind"] == "pullback" else None,
                     "presenter": {"video": f"presenter-{sc['index']}.mp4", "start": round(sc["start"], 3), "end": round(sc["end"], 3),
                                   "label": PRESENTER_LABEL} if presenter and sc["index"] in presenter else None, "lines": lines,
                     "sources": {"heading": "Sources", "entries": [source_entry_parts(e) for e in entries],
                                 "footnote": rd.FOOTNOTE, "url": "steerclub.com"} if sc["kind"] == "sources" else None})
-    return {"version": 2, "fps": FPS, "width": W, "height": H, "durationInFrames": int(round(scenes[-1]["end"] * FPS)),
+    return {"version": 3, "fps": FPS, "width": W, "height": H, "durationInFrames": int(round(scenes[-1]["end"] * FPS)),
             "audio": "voice.wav", "fonts": {"serif": "Fraunces.ttf", "serif_italic": "Fraunces-Italic.ttf", "sans": "Inter.ttf"},
             "palette": brand["palette"], "chrome": {"draft_mark": rd.DRAFT, "wordmark": "steer"}, "scenes": out}
+
+
+def timing_problems(props: dict) -> list[dict]:
+    """A cut never shortens a statistic: every card stays on screen >= max(2.5 s, words / 2.5); a caption chunk is on
+    screen >= 0.45 s."""
+    out = []
+    for sc in props["scenes"]:
+        for ln in sc["lines"]:
+            if ln["cards"]:
+                for i, card in enumerate(ln["cards"]):
+                    until = ln["cards"][i + 1]["start"] if i + 1 < len(ln["cards"]) else ln["hold_end"]
+                    if i == 0:
+                        until = ln["hold_end"]   # card 1 stays as the strip
+                    words = sum(len(q["text"].split()) for q in card["parts"])
+                    need = max(2.5, words / 2.5)
+                    if until - card["start"] < need - 1e-6:
+                        out.append({"code": "STATISTIC_TOO_SHORT", "detail": {"line": ln["text"][:60], "card": i,
+                                    "shown": round(until - card["start"], 2), "need": round(need, 2)}})
+            if sc["captions"] and not ln["cards"]:
+                starts = [b["start"] for b in ln["beats"]] + [ln["end"]]
+                for i, b in enumerate(ln["beats"]):
+                    if starts[i + 1] - b["start"] < 0.45 - 1e-6:
+                        out.append({"code": "CAPTION_TOO_FAST", "detail": {"chunk": b["text"], "shown": round(starts[i + 1] - b["start"], 2)}})
+    return out
 
 
 def safe_area_problems(layout_path: Path | None = None) -> list[str]:
@@ -711,7 +812,8 @@ def safe_area_problems(layout_path: Path | None = None) -> list[str]:
             if isinstance(v, dict) and "height" in v and not (top <= v["top"] and v["top"] + v["height"] <= bottom)]
 
 
-def pool_check(props: dict, script: dict, record: dict, emphasis: str | None, keys: list[dict]) -> list[dict]:
+def pool_check(props: dict, script: dict, record: dict, emphasis: str | None, keys: list[dict],
+               quotes: dict | None = None) -> list[dict]:
     """Every string the composition can draw, checked against the post before render: a script line verbatim (after
     the display transforms), an exact substring of its own line, the post's checked key pair and emphasis, or a
     string built by code. Any other string fails the reel."""
@@ -754,6 +856,21 @@ def pool_check(props: dict, script: dict, record: dict, emphasis: str | None, ke
                 bad("key", k)
             if ln["source_label"] is not None and not set(ln["source_label"].split("; ")) <= labels_ok:
                 bad("source_label", ln["source_label"])
+        if sc["broll"] is not None and not re.fullmatch(r"broll-[a-z0-9_]+\.mp4", sc["broll"]["video"]):
+            bad("broll", sc["broll"])
+        if sc["checklist"] is not None and any(it["text"] not in CHECK_LINES for it in sc["checklist"]["items"]):
+            bad("checklist", sc["checklist"])
+        if sc["pullback"] is not None and not re.fullmatch(r"pullback\.png", sc["pullback"]):
+            bad("pullback", sc["pullback"])
+        for ln in sc["lines"]:
+            e = ln["evidence"]
+            if e is None:
+                continue
+            ids = next((s_["claim_ids"] for s_ in script["scenes"] for s_ in s_["lines"] if display(s_["text"]) == ln["text"]), [])
+            by = {x["claim_id"]: x for x in record["sources"]}
+            want_q = "\n\n".join((quotes or {}).get(i, "") for i in ids if i in (quotes or {}))
+            if e["quote"] != want_q or e["header"] != evidence_header(rd.source_entries([by[i] for i in ids if i in by])):
+                bad("evidence", {k: e[k] for k in ("header", "quote")})
         pr = sc["presenter"]
         if pr is not None and (pr["label"] != PRESENTER_LABEL or pr["video"] != f"presenter-{props['scenes'].index(sc)}.mp4"):
             bad("presenter", pr)
@@ -763,7 +880,8 @@ def pool_check(props: dict, script: dict, record: dict, emphasis: str | None, ke
     return fails
 
 
-def render_remotion(props: dict, pcm: bytes, out_dir: Path, presenter: dict | None = None) -> tuple[Path | None, list[dict], dict]:
+def render_remotion(props: dict, pcm: bytes, out_dir: Path, presenter: dict | None = None,
+                    extra: dict | None = None) -> tuple[Path | None, list[dict], dict]:
     """node code/reel/render.mjs -> H.264 + PCM in MKV, then AAC encoded once into reel.mp4."""
     timings, fails = {}, []
     with tempfile.TemporaryDirectory(prefix="steer-remotion-") as tmp:
@@ -774,6 +892,8 @@ def render_remotion(props: dict, pcm: bytes, out_dir: Path, presenter: dict | No
             (public / f).write_bytes((rd.FONTS / f).read_bytes())
         for i, clip in (presenter or {}).items():
             (public / f"presenter-{i}.mp4").write_bytes(Path(clip).read_bytes())
+        for name, path in (extra or {}).items():   # v4 assets: broll-<name>.mp4, pullback.png
+            (public / name).write_bytes(Path(path).read_bytes())
         _write_wav(public / props["audio"], pcm)
         (tmp / "props.json").write_text(json.dumps(props, ensure_ascii=False))
         mkv = tmp / "reel.mkv"
@@ -874,7 +994,7 @@ def render_playwright(scenes: list[dict], pcm: bytes, script: dict, record: dict
 
 def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dict, tts=None, transcribe=None,
               post_emphasis: str | None = None, engine: str = "playwright", keys: list[dict] | None = None,
-              presenter: dict | None = None) -> dict:
+              presenter: dict | None = None, v4: dict | None = None) -> dict:
     """Write reel.mp4, reel.srt, reel_transcript.md and reel_trace.json into out_dir; returns the trace (status passed |
     failed). engine: "remotion" (kinetic type, code/reel) or "playwright" (the fallback). presenter (remotion only):
     {scene index: muted clip} for the AI presenter placeholder (D-026)."""
@@ -885,8 +1005,13 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
     by_claim = {s["claim_id"]: s for s in record["sources"]}
     entries = rd.source_entries(record["sources"])
     remotion = engine == "remotion"
-    holds = (HEALTH_HOLD if remotion else 0.0, REMOTION_END_CARD if remotion else END_CARD)
-    fallback = None
+    # v4 (remotion): {"broll": {name: clip}, "pullback": png, "quotes": {claim_id: quote}, "checked": bool}
+    v4 = v4 if remotion else None
+    holds = (HEALTH_HOLD + (EVIDENCE_HOLD if v4 and v4.get("quotes") else 0.0) if remotion else 0.0,
+             REMOTION_END_CARD if remotion else END_CARD)
+    if v4:
+        holds = holds + (((("checklist", CHECKLIST_S),) + ((("pullback", PULLBACK_S),) if v4.get("pullback") else ())),)
+    fallback, v4_trace = None, None
     try:
         scenes, pcm, timings = build_timeline(script, voice, tts, *holds)
     except VoiceError as e:
@@ -905,11 +1030,21 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
     out_dir.mkdir(parents=True, exist_ok=True)
     fails, scene_qa = [], []
     if remotion:
-        props = build_props(scenes, record, brand, post_emphasis, keys or [], presenter)
-        fails = pool_check(props, script, record, post_emphasis, keys or [])
+        plan = edit_plan(scenes, {"presenter": presenter, "broll": (v4 or {}).get("broll")}) if v4 else None
+        props = build_props(scenes, record, brand, post_emphasis, keys or [], presenter, plan,
+                            (v4 or {}).get("quotes"), bool((v4 or {}).get("checked")),
+                            "pullback.png" if (v4 or {}).get("pullback") else None)
+        fails = pool_check(props, script, record, post_emphasis, keys or [], (v4 or {}).get("quotes")) + timing_problems(props)
+        extra = {f"broll-{n}.mp4": c for n, c in ((v4 or {}).get("broll") or {}).items()}
+        if (v4 or {}).get("pullback"):
+            extra["pullback.png"] = v4["pullback"]
+        if plan:
+            import hashlib
+            v4_trace = {"edit_plan": plan, "assets_sha256": {n: hashlib.sha256(Path(c).read_bytes()).hexdigest()
+                                                             for n, c in extra.items()}}
         mp4 = None
         if not fails:   # nothing is rendered from props that failed the check
-            mp4, more, t = render_remotion(props, pcm, out_dir, presenter)
+            mp4, more, t = render_remotion(props, pcm, out_dir, presenter, extra)
             fails += more
             timings |= t
         scene_qa = [{"scene": i, "kind": sc["kind"], "ground": sc["ground"], "start": sc["start"], "end": sc["end"],
@@ -995,7 +1130,7 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
                                "claims": [by_claim.get(i) for i in ln["claim_ids"]]} for ln in sc["lines"]]}
                    for sc in scenes],
         "captions": [{"text": c["text"], "start": round(c["start"], 3), "end": round(c["end"], 3)} for c in captions],
-        "scene_qa": scene_qa, "audio_round_trip": rounds, "scene_round_trip": scene_rounds, "failures": fails,
+        "scene_qa": scene_qa, "audio_round_trip": rounds, "scene_round_trip": scene_rounds, "v4": v4_trace, "failures": fails,
     }
     (out_dir / "reel_transcript.md").write_text(transcript_table(scene_rounds), encoding="utf-8")
     cap = out_dir / "caption.txt"
