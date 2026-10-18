@@ -85,6 +85,7 @@ body.bold .wordmark {{ color: {p['cream']}; }}
 .sources h2 {{ font-family: Fraunces; font-variation-settings: 'WONK' 0, 'SOFT' 50; font-weight: 500; font-size: 56px; }}
 .entry {{ line-height: 1.3; border-top: 2px solid {p['blush']}; padding-top: 20px; }}
 .foot-note {{ line-height: 1.3; color: {p['clay']}; }}
+.doi {{ white-space: nowrap; }}
 .srcline {{ line-height: 1.3; color: {p['clay']}; border-top: 2px solid {p['blush']}; padding-top: 18px; }}
 """
 
@@ -98,9 +99,13 @@ def _fit(kind: str, cls: str, inner: str, tag: str = "div") -> str:
 UNIT = re.compile(r"(\d) (?=\d{3}\b|(?:kg|g|cm|mg|mmol|µ|%|times|years|months|weeks)\b)")  # also "12 983"
 
 
+SQUARED = re.compile(r"/m2\b")
+
+
 def _esc(text: str) -> str:
-    """Escape for HTML, keeping a number and its unit on one line."""
-    return html.escape(UNIT.sub("\\1\u00a0", text))
+    """Escape for HTML. Display-only transforms (the checked text and the trace keep the original): a number stays on
+    the line of its unit, and "kg/m2" is shown as "kg/m²"."""
+    return html.escape(SQUARED.sub("/m²", UNIT.sub("\\1\u00a0", text)))
 
 
 def _emph(text: str, part: str | None) -> str:
@@ -115,6 +120,17 @@ def short_source(src: dict) -> str:
     return f"{surname} et al. {src.get('year', '')}, {src.get('location', '')}"
 
 
+def merge_locations(locations: list[str]) -> str:
+    """"page 2" + "page 5, 6" -> "pages 2, 5 and 6"; anything that is not a page list is kept as it is."""
+    pages = sorted({int(n) for loc in locations if loc.startswith("page ") for n in re.findall(r"\d+", loc)})
+    other = sorted({loc for loc in locations if not loc.startswith("page ")})
+    parts = []
+    if pages:
+        nums = [str(n) for n in pages]
+        parts.append(f"page {nums[0]}" if len(nums) == 1 else f"pages {', '.join(nums[:-1])} and {nums[-1]}")
+    return "; ".join(parts + other)
+
+
 def _lines_html(lines: list[dict], unit: dict, by_claim: dict, hook: bool) -> str:
     out = []
     if unit.get("key_number") and unit.get("key_label"):
@@ -124,7 +140,7 @@ def _lines_html(lines: list[dict], unit: dict, by_claim: dict, hook: bool) -> st
     for ln in lines:
         k, t = ln["kind"], ln["text"]
         if k == "health":
-            labels = sorted({short_source(by_claim[i]) for i in ln["claim_ids"] if i in by_claim})
+            labels = [short_source(e) for e in source_entries([by_claim[i] for i in ln["claim_ids"] if i in by_claim])]
             out.append('<div class="card">' + _fit("body", "body", _esc(t))
                        + "".join(f'<div class="label">{html.escape(x)}</div>' for x in labels) + "</div>")
         elif k == "framing":
@@ -151,17 +167,20 @@ def _page(p: dict, content: str, n: int, total: int, bold: bool = False, extra_c
 
 
 def source_entries(sources: list[dict]) -> list[dict]:
-    """One entry per (DOI, location); each lists the claims it covers."""
-    entries: dict[tuple, dict] = {}
+    """One entry per paper (DOI), its locations merged; each lists the claims it covers."""
+    entries: dict[str, dict] = {}
     for s in sources:
-        e = entries.setdefault((s.get("doi"), s.get("location")), s | {"claim_ids": []})
+        e = entries.setdefault(s.get("doi") or s.get("title"), s | {"claim_ids": [], "locations": []})
         e["claim_ids"].append(s["claim_id"])
+        e["locations"].append(s.get("location") or "")
+    for e in entries.values():
+        e["location"] = merge_locations(e["locations"])
     return list(entries.values())
 
 
 def _entry_html(e: dict) -> str:
     esc = lambda k: html.escape(str(e.get(k) or ""))
-    text = (f"{esc('authors')} {esc('title')}. <i>{esc('journal')}</i>, {esc('year')}. doi:{esc('doi')}. "
+    text = (f"{esc('authors')} {esc('title')}. <i>{esc('journal')}</i>, {esc('year')}. <span class=\"doi\">doi:{esc('doi')}</span>. "
             f"{html.escape(str(e.get('location') or '').capitalize())}.")
     return _fit("sources", "entry", text)
 
@@ -191,9 +210,10 @@ def build_pages(record: dict, brand: dict) -> list[dict]:
     if post.get("static"):
         st = post["static"]
         lines = [st["headline"], *st["supporting"]]
-        src = "; ".join(f"{short_source(e)}, doi:{e.get('doi', '')}" for e in entries)
+        src = "; ".join(f'{html.escape(short_source(e))}, <span class="doi">doi:{html.escape(str(e.get("doi", "")))}</span>'
+                        for e in entries)
         content = (_lines_html(lines, st, by_claim, hook=st["headline"]["kind"] == "framing")
-                   + _fit("sources", "srcline", "Source: " + html.escape(src)))
+                   + _fit("sources", "srcline", "Source: " + src))
         pages.append({"name": "static.png", "kind": "static", "words": sum(len(ln["text"].split()) for ln in lines),
                       "claim_ids": sorted({c for e in entries for c in e["claim_ids"]}),
                       "html": _page(p, content, 1, 1)})

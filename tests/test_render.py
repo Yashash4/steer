@@ -81,4 +81,21 @@ def test_static_carries_a_one_line_source(tmp_path):
 
 
 def test_a_number_stays_on_the_line_of_its_unit():
-    assert render._esc("under 25 kg/m2, 12 983 people, 45 and over") == "under 25 kg/m2, 12 983 people, 45 and over"
+    assert render._esc("under 25 kg/m2, 12 983 people, 45 and over") == "under 25\u00a0kg/m², 12\u00a0983 people, 45 and over"
+
+
+def test_one_sources_entry_per_paper_with_pages_merged():
+    two = copy.deepcopy(RECORD)
+    two["sources"] = [src("c1", location="page 5"), src("c2", location="page 2")]
+    pages = render.build_pages(two, BRAND)
+    assert pages[-1]["entries"] == 1 and "Pages 2 and 5." in pages[-1]["html"]
+    assert render.merge_locations(["section text, no page layout"] * 2) == "section text, no page layout"
+
+
+def test_squared_unit_is_a_display_transform_only():
+    sq = copy.deepcopy(RECORD)
+    sq["post"]["slides"][1]["lines"] = [L("health", "Body mass index under 25 kg/m2 on average.", ["c1"])]
+    sq["post"]["slides"][1].pop("key_number"), sq["post"]["slides"][1].pop("key_label")
+    html = render.build_pages(sq, BRAND)[1]["html"]
+    assert "kg/m²" in html and "kg/m2" not in html
+    assert sq["post"]["slides"][1]["lines"][0]["text"].endswith("kg/m2 on average.")   # the checked text is untouched

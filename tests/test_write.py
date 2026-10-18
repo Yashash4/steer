@@ -75,13 +75,19 @@ def test_hashtag_vocabulary_names_no_drug_or_promise():
         assert "loss" not in tag and "lose" not in tag  # no tag reads as a weight-loss promise
 
 
-def test_brief_picks_the_fullest_theme_doubt_cell():
-    claims = [{"claim_id": f"c{i}", "labels": {"theme": t, "doubts": d}} for i, (t, d) in enumerate([
-        ("weight_regain", ["will_weight_come_back"]), ("weight_regain", ["will_weight_come_back", "is_it_for_me"]),
-        ("weight_regain", ["will_weight_come_back"]), ("lean_mass_during_weight_loss", ["will_i_lose_muscle"]),
-        ("insulin_resistance", [])])]
+def test_brief_prefers_findings_that_answer_a_doubt():
+    rows = [("weight_regain", ["will_weight_come_back"], "finding"), ("weight_regain", ["will_weight_come_back", "is_it_for_me"], "number"),
+            ("weight_regain", ["will_weight_come_back"], "finding"), ("lean_mass_during_weight_loss", ["will_i_lose_muscle"], "finding"),
+            ("insulin_resistance", [], "finding"), ("insulin_resistance", [], "finding"), ("insulin_resistance", [], "finding"),
+            ("insulin_resistance", [], "finding")]
+    claims = [{"claim_id": f"c{i}", "claim_type": k, "labels": {"theme": t, "doubts": d}} for i, (t, d, k) in enumerate(rows)]
     b = write.pick_brief(claims, "carousel", n=2)
+    # 4 findings with no doubt label lose to 3 that answer "will the weight come back?"
     assert (b["theme"], b["doubt"], b["claim_ids"]) == ("weight_regain", "will_weight_come_back", ["c0", "c1"])
-    assert "3" in b["why"]
+    assert "3 writable finding/number claims" in b["why"]
+    # method/population claims: after the findings, and at most one
+    bg = [{"claim_id": f"m{i}", "claim_type": k, "labels": {"theme": "weight_regain", "doubts": ["will_weight_come_back"]}}
+          for i, k in enumerate(["population", "method"])]
+    assert write.pick_brief(bg + claims, "carousel", n=6)["claim_ids"] == ["c0", "c1", "c2", "m0"]
     with pytest.raises(ValueError):
         write.pick_brief([{"claim_id": "x", "labels": None}], "static")

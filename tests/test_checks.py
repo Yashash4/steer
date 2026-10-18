@@ -378,3 +378,56 @@ def test_a_context_quote_missing_from_the_paper_is_a_load_error(tmp_path):
     assert checks.study_context(ok, doc)[0]["sids"]
     with pytest.raises(ValueError, match="fails the gate"):
         checks.study_context({"context_quotes": ["South Asians in Mumbai were studied for ten years"]}, doc)
+
+
+def test_the_key_pair_is_cross_checked_read_alone():
+    keyed = copy.deepcopy(GOOD)
+    keyed["slides"][1] |= {"key_number": "0.4 kg a month", "key_label": "weight came back"}
+    seen = []
+
+    def answer(hp, fp):  # the fake checker: the pair alone drops "on average"
+        seen.extend(hp)
+        out = says()(hp, fp)
+        for v in out["health"]:
+            if v["line_id"].endswith("/key"):
+                v |= {"verdict": "qualifier_dropped", "reason": "read alone it drops 'on average'"}
+        return out
+    r = checks.check_post(keyed, CLAIMS, BRAND, RULES, WEST, fake_router(["opencode_glm"], {"glm-5.3": answer}), "claude_sonnet")
+    assert "slides/1/key" in seen and r["status"] == "blocked"
+    key = next(x for x in r["lines"] if x["path"] == "slides/1/key")
+    assert key["text"] == "0.4 kg a month / weight came back" and key["claim_ids"] == ["regain"]
+    assert [f["code"] for f in key["failures"]] == ["QUALIFIER_DROPPED"]
+    r = checks.check_post(keyed, CLAIMS, BRAND, RULES, WEST, fake_router(["opencode_glm"], {"glm-5.3": says()}), "claude_sonnet")
+    assert r["status"] == "draft_pending_review"
+    assert 'line_id ends in "/key"' in checks.LINE_SYSTEM
+
+
+def test_background_claims_never_stand_alone():
+    cl = {"pop": C("pop", "A total of 12 983 ARIC participants were included in the analysis.", claim_type="population"),
+          "meth": C("meth", "Median follow-up was 8.8 years.", claim_type="method"),
+          "find": C("find", REGAIN, claim_type="finding")}
+    pop = L("health", "A total of 12 983 ARIC participants were included.", ["pop"])
+    meth = L("health", "Median follow-up was 8.8 years.", ["meth"])
+    find = L("health", "On average weight came back at 0.4 kg a month, not a personal promise.", ["find"])
+    bg = lambda p: [f["code"] for f in checks.check_background(checks.post_lines(p), cl)]
+    assert bg(post([[find, pop]])) == []                                         # beside a finding: fine
+    assert bg(post([[find], [pop]])) == ["BACKGROUND_ONLY_SLIDE"]                # a slide of its own: not
+    assert bg(post([[find], [L("signoff", "steerclub.com")]], caption=(pop,))) == []  # in the caption: fine
+    assert bg(post([[find, pop, meth]])) == ["TOO_MANY_BACKGROUND_CLAIMS"]
+
+
+def test_the_cta_is_not_sent_to_the_checker_with_the_message():
+    m = copy.deepcopy(GOOD) | {"message": "Weight came back at 0.4 kg a month on average. See if the programme fits you."}
+    seen = []
+
+    def connector(ep, system, prompt, schema, **kw):
+        seen.append(prompt)
+        hp = schema["properties"]["health"]["items"]["properties"]["line_id"]["enum"]
+        fp = schema["properties"]["framing"]["items"]["properties"]["line_id"]["enum"]
+        return says()(hp, fp), None
+    r = Router({"endpoints": EP, "jobs": {"crosscheck": {"chain": ["opencode_glm"]}}},
+               connectors={"openai_compatible": connector}, env={"OPENCODE_GO_API_KEY": "k"})
+    out = checks.check_post(m, CLAIMS, BRAND, RULES, WEST, r, "claude_sonnet")
+    assert "line: Weight came back at 0.4 kg a month on average.\n" in seen[0] and "programme" not in seen[0].split("message")[1]
+    assert out["status"] == "draft_pending_review"
+    assert next(x for x in out["lines"] if x["path"] == "message")["text"].endswith("fits you.")   # trace keeps it

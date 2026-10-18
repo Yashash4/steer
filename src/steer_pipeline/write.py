@@ -71,24 +71,41 @@ def validate_post(post: dict, brief: dict, hashtags: list[str]) -> list[str]:
     return sorted(f"{'/'.join(map(str, e.absolute_path)) or '(post)'}: {e.message}" for e in v.iter_errors(post))
 
 
+FINDINGS = ("finding", "number")      # what a reader can take away
+BACKGROUND = ("method", "population")  # at most one per post, never a slide's only point
+
+
 def pick_brief(claims: list[dict], fmt: str, n: int = 4) -> dict:
-    """The theme x doubt cell with the most writable claims; the reason is recorded.
+    """The theme x doubt cell with the most writable finding/number claims, preferring cells that answer a reader
+    doubt; the reason is recorded. Findings come first in the brief, then at most one method/population claim.
 
     `claims` are writable (verified) claims with labels {theme, doubts}. Ties go to the cell named first
     in sorted order, so the choice is deterministic.
     """
-    cells: dict[tuple[str, str | None], list[str]] = {}
+    cells: dict[tuple[str, str | None], list[dict]] = {}
     for c in claims:
         lab = c.get("labels") or {}
         if not lab.get("theme"):
             continue
         for d in lab.get("doubts") or [None]:
-            cells.setdefault((lab["theme"], d), []).append(c["claim_id"])
+            cells.setdefault((lab["theme"], d), []).append(c)
     if not cells:
         raise ValueError("no writable claim has a theme label")
-    (theme, doubt), ids = sorted(cells.items(), key=lambda kv: (-len(kv[1]), kv[0][0], kv[0][1] or ""))[0]
+    found = lambda cs: [c for c in cs if c.get("claim_type") in FINDINGS]
+    (theme, doubt), cs = sorted(cells.items(), key=lambda kv: (kv[0][1] is None, -len(found(kv[1])), kv[0][0], kv[0][1] or ""))[0]
+    rank = lambda c: 0 if c.get("claim_type") in FINDINGS else 1 if c.get("claim_type") == "limitation" else 2
+    ordered = sorted(cs, key=rank)  # stable: findings and numbers keep their order
+    ids, background = [], 0
+    for c in ordered:
+        if c.get("claim_type") in BACKGROUND:
+            if background:
+                continue
+            background += 1
+        ids.append(c["claim_id"])
     return {"format": fmt, "theme": theme, "doubt": doubt, "claim_ids": ids[:n],
-            "why": f"most writable claims ({len(ids)}) in theme {theme!r} x doubt {doubt!r}; first {min(n, len(ids))} used"}
+            "why": f"{len(found(cs))} writable finding/number claims in theme {theme!r} x doubt {doubt!r} "
+                   f"({'answers a reader doubt' if doubt else 'no doubt label'}); findings first, at most one "
+                   f"method/population claim; first {min(n, len(ids))} used"}
 
 
 SYSTEM = """You write draft social media posts for steer, India's doctor-led metabolic health club, from verified
@@ -109,6 +126,8 @@ Every line has a kind:
 - cta: copy one of the call-to-action lines given, exactly.
 - signoff: copy the sign-off given, exactly.
 Never write sources: the sources slide is added by code.
+Method and population claims (study size, design, follow-up) are background: use at most one per post, put it in
+the caption or beside a finding on the same slide or scene, never as the only point of a slide or scene.
 Artwork budget: at most 35 words per slide (all its lines together) and on the static artwork. Confidence
 intervals, p values and other detail go in the caption, where length is fine; a health line may use only some
 of its quote's numbers.
@@ -129,7 +148,8 @@ def write_prompt(brief: dict, claims: list[dict], brand: dict, boundaries: dict)
     lines = [f"Format: {brief['format']}. Theme: {brief['theme']}. Reader doubt: {brief['doubt']}.", "", "Claims you may use:"]
     for c in claims:
         ctx = {k: c.get(k) for k in ("population", "comparison_group", "outcome", "time_point") if c.get(k)}
-        lines.append(f"- {c['claim_id']}: {c['claim_text']}\n  quote: {c['quote']}\n  context: {ctx or 'none'}")
+        lines.append(f"- {c['claim_id']} ({c.get('claim_type') or 'claim'}): {c['claim_text']}\n  quote: {c['quote']}\n"
+                     f"  context: {ctx or 'none'}")
     lines += ["", "Brand lines (copy exactly): " + " | ".join(brand["whitelist"]),
               "Call-to-action lines (copy exactly): " + " | ".join(brand["cta"]),
               "Sign-off: " + brand["signoff"][0], "", "Editorial requirements for this paper:"]

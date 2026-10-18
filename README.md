@@ -129,6 +129,9 @@ The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
     a vertical gap.
   - Known limit: a real compound split across lines ("follow-" / "up") reads as "followup" in `text`. The raw
     text keeps the true form, and claim checking ignores hyphens between letters.
+  - Known limit: a hyphen followed by a soft hyphen at a line end, then a space ("middle-­ income" in the Narayan
+    abstract), stays split in the canonical text ("middle- income"), so a quote written as "middle-income" is not
+    found by the gate. Fix planned in S1: join hyphen + soft hyphen at line ends.
 - **Sentences.**
   - A sentence ends at `.`, `?` or `!` followed by a space and an uppercase letter, a digit or an opening
     bracket or quote; also at every paragraph break.

@@ -142,8 +142,7 @@ def check_line(line: dict, claims: dict[str, dict], brand: dict, rules: dict, bo
     kind, text = line["kind"], line["text"]
     used = [claims[i] for i in line["claim_ids"] if i in claims]
     if kind in ("message", "reasoning"):  # an exact approved CTA line is allowed there; the rest is checked as usual
-        for cta in brand["cta"]:
-            text = re.sub(re.escape(cta), " ", text, flags=re.I)
+        text = without_cta(text, brand["cta"])
 
     # 1. structure
     if kind == "health":
@@ -262,6 +261,23 @@ def check_boundaries(lines: list[dict], claims: dict[str, dict], boundaries: dic
 WORD_BUDGET = 35  # body words per slide / static artwork (render QA checks the same on the PNG side)
 
 
+def key_lines(post: dict) -> list[dict]:
+    """The large key_number + key_label of each slide (and the static) as a line of its own, backed by the claims of
+    the health line it was copied from: read alone, it must still say only what the quotes say."""
+    units = [(f"slides/{i}", sl, sl["lines"]) for i, sl in enumerate(post.get("slides") or [])]
+    if post.get("static"):
+        st = post["static"]
+        units.append(("static", st, [st["headline"], *st["supporting"]]))
+    out = []
+    for path, unit, lns in units:
+        num, label = unit.get("key_number"), unit.get("key_label")
+        src = [ln for ln in lns if ln["kind"] == "health" and num and label and num in ln["text"] and label in ln["text"]]
+        if src:
+            out.append({"kind": "key", "text": f"{num} / {label}", "claim_ids": src[0]["claim_ids"], "path": f"{path}/key",
+                        "surface": "artwork", "unit": int(path.split("/")[1]) if "/" in path else 0})
+    return out
+
+
 def check_artwork(post: dict) -> list[dict]:
     """Per slide (and the static): the word budget, and emphasis that only repeats text of its own slide:
     key_number + key_label both exact substrings of one health line, emphasis an exact substring of a framing
@@ -291,6 +307,30 @@ def check_artwork(post: dict) -> list[dict]:
     return fails
 
 
+BACKGROUND = ("method", "population")
+
+
+def check_background(lines: list[dict], claims: dict[str, dict]) -> list[dict]:
+    """At most one method/population claim per post, and never as the only point of a slide or scene: a study's size
+    or design tells a reader nothing on its own."""
+    fails = []
+    kind = lambda i: claims[i].get("claim_type") if i in claims else None
+    used = sorted({i for ln in lines if ln["kind"] == "health" for i in ln["claim_ids"] if kind(i) in BACKGROUND})
+    if len(used) > 1:
+        fails.append({"check": "structure", "code": "TOO_MANY_BACKGROUND_CLAIMS",
+                      "detail": f"{used}: at most one method/population claim per post"})
+    units: dict[tuple, list[dict]] = {}
+    for ln in lines:
+        if ln["kind"] == "health" and ln["surface"] in ("artwork", "reel"):
+            units.setdefault((ln["surface"], ln["unit"]), []).append(ln)
+    for (surface, unit), hs in sorted(units.items()):
+        if all(kind(i) in BACKGROUND for ln in hs for i in ln["claim_ids"]):
+            fails.append({"check": "structure", "code": "BACKGROUND_ONLY_SLIDE", "path": hs[0]["path"],
+                          "detail": f"{surface} unit {unit} has only method/population claims; put them in the caption "
+                                    "or beside a finding"})
+    return fails
+
+
 LINE_VERDICTS = VERDICTS + ["pair_misleading"]
 LINE_SYSTEM = """You check the lines of a draft social media post for a doctor-led health club against the paper quotes they cite.
 
@@ -299,7 +339,10 @@ qualifier_dropped, population_generalised, wrong_number, lean_mass_vs_muscle, as
 wrong_comparison_group, unsupported, or pair_misleading when paired numbers are presented in a way a reader would
 misunderstand). The HEALTH line with line_id "message" is the post's takeaway, judged against all the quotes
 given with it: it may end with one call to talk to a doctor, but any other advice or recommendation the quotes do
-not state is unsupported. For each FRAMING line, decide whether it asserts a medical or health fact (asserts_medical_fact true
+not state is unsupported. A HEALTH line whose line_id ends in "/key" is a large number and its label shown together as
+a headline ("number / label"): judge it read on its own, without the rest of the slide; if it drops who or what the
+number is about (for example the group, sex or BMI range in the quote) it is population_generalised or
+qualifier_dropped. For each FRAMING line, decide whether it asserts a medical or health fact (asserts_medical_fact true
 or false); a question, a scene from daily life or a transition asserts nothing.
 When a STUDY CONTEXT is given (sentences from the same paper), a health line may also state population facts from it
 (who was studied, where, against which cohort) on top of its own quotes: that is not population_generalised. List
@@ -321,13 +364,20 @@ def line_schema(health_ids: list[str], framing_ids: list[str], context_ids: list
     }}
 
 
+def without_cta(text: str, cta: list[str]) -> str:
+    """The text without any exact approved call-to-action line (allowed at the end of the message)."""
+    for line in cta:
+        text = re.sub(re.escape(line) + r"[.!]?", " ", text, flags=re.I)
+    return " ".join(text.split())
+
+
 def crosscheck_lines(lines: list[dict], claims: dict[str, dict], router: Router, writer_endpoint: str,
-                     context: list[dict] = ()) -> dict:
+                     context: list[dict] = (), cta: list[str] = ()) -> dict:
     """{path: result} for health and framing lines; one call per post. Self-check endpoints are skipped."""
     endpoints = router.settings["endpoints"]
     writer = endpoints[writer_endpoint]
     skip = {n for n in router.settings["jobs"]["crosscheck"]["chain"] if independence(writer, endpoints[n]) == "same_model"}
-    health = [ln for ln in lines if ln["kind"] in ("health", "message")]  # the message is judged as a health line
+    health = [ln for ln in lines if ln["kind"] in ("health", "message", "key")]  # judged as health lines
     framing = [ln for ln in lines if ln["kind"] == "framing"]
     if not health and not framing:
         return {}
@@ -335,7 +385,8 @@ def crosscheck_lines(lines: list[dict], claims: dict[str, dict], router: Router,
     for ln in health:
         cs = [claims[i] for i in ln["claim_ids"] if i in claims]
         ctx = "; ".join(f"comparison_group={c.get('comparison_group')}, population={c.get('population')}" for c in cs)
-        parts.append(f"HEALTH line_id: {ln['path']}\nline: {ln['text']}\nquotes (data): "
+        text = without_cta(ln["text"], cta) if ln["kind"] == "message" else ln["text"]  # the CTA is checked in code
+        parts.append(f"HEALTH line_id: {ln['path']}\nline: {text}\nquotes (data): "
                      + " | ".join(c["quote"] for c in cs) + f"\ncontext: {ctx}")
     for ln in framing:
         parts.append(f"FRAMING line_id: {ln['path']}\nline: {ln['text']}")
@@ -372,18 +423,18 @@ def check_post(post: dict, claims: dict[str, dict], brand: dict, rules: dict, bo
     """Run every check; return {status, lines, post_failures, flags, needs_layout_check}."""
     lines = post_lines(post)
     used = sorted({i for ln in lines for i in ln["claim_ids"]})
-    post_fails = check_boundaries(lines, claims, boundaries) + check_artwork(post)
+    post_fails = check_boundaries(lines, claims, boundaries) + check_artwork(post) + check_background(lines, claims)
     # message and reasoning are shown in the studio and the submission: published text, checked against every claim used
     lines += [{"kind": k, "text": post[k], "claim_ids": used, "path": k, "surface": "studio", "unit": 0}
-              for k in ("message", "reasoning")]
+              for k in ("message", "reasoning")] + key_lines(post)
     for ln in lines:
         ln["failures"] = check_line(ln, claims, brand, rules, boundaries)
-    checks = crosscheck_lines(lines, claims, router, writer_endpoint, context) if router else {}
+    checks = crosscheck_lines(lines, claims, router, writer_endpoint, context, brand["cta"]) if router else {}
     unavailable = False
     for ln in lines:
         r = checks.get(ln["path"])
         ln["crosscheck"] = r
-        if ln["kind"] in ("health", "framing", "message"):
+        if ln["kind"] in ("health", "framing", "message", "key"):
             if r is None or r["verdict"] in ("crosscheck_unavailable", "not_checked") or r.get("independence") not in COUNTS:
                 unavailable = True  # a required check did not run (or was a self-check): never a draft
             elif r["verdict"] != "supported":
