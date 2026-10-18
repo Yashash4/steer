@@ -121,3 +121,22 @@ def test_the_public_pages_render_without_overflow_or_controls(bundle, width, hei
         txt = pg.inner_text("main")
         assert txt.index("check cleared") < txt.index("clearance revoked")
         b.close()
+
+
+def test_sources_one_md_and_csv_per_paper_with_true_status_and_posts(tmp_path, monkeypatch):
+    import csv
+    con, claims, posts = world(tmp_path)
+    claims["r1/c4"] = claim("c4", "rejected", gate={"reasons": [{"code": "QUOTE_NOT_FOUND"}]})
+    do(con, TEST, claims, posts, reviewer="Test editor", action="check_cleared", target="r1/c3",
+       clears="CONTEXT_NOT_IN_QUOTE", reason=OK_WHY)
+    claims["r1/c3"] = claims["r1/c3"] | {"status": "needs_check"}
+    con.close()
+    monkeypatch.setattr(studio, "load", lambda con, dirs: ({"r1": doc("PMC1", "CC BY")}, claims, posts))
+    out = tmp_path / "src"
+    assert studio.export_sources(tmp_path / "s.db", [], Path(__file__).parent.parent / "reviewers.toml", out) == ["PMC1"]
+    rows = {r["claim id"]: r for r in csv.DictReader(open(out / "PMC1.csv", encoding="utf-8"))}
+    assert rows["c2"]["status"] == "verified" and rows["c2"]["posts using it"] == "post-00000001"
+    assert rows["c3"]["status"] == "cleared in the studio" and rows["c3"]["posts using it"] == ""
+    assert rows["c4"]["status"] == "rejected (QUOTE_NOT_FOUND)"
+    assert rows["c1"]["location"] == "page 1" and rows["c2"]["exact quote"] == "quote c2"
+    assert "| c2 |" in (out / "PMC1.md").read_text(encoding="utf-8")

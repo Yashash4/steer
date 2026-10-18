@@ -81,6 +81,11 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("--public", help="write the PUBLIC read-only snapshot (static, no API) of real runs to this folder")
     st.add_argument("--merge-db", nargs="*", default=[], help="with --public: other stores whose runs join the copy (e.g. the safety run)")
     st.add_argument("--page-cache", help="with --public: a copy of studio-cache holding the source PDFs")
+    so = sub.add_parser("sources", help="one markdown and one CSV per paper: every claim, its quote, location, status and posts")
+    so.add_argument("--db", required=True)
+    so.add_argument("--out", required=True)
+    so.add_argument("--posts", nargs="*", default=[], help="folders holding written posts (out/...)")
+    so.add_argument("--reviewers", default=str(Path(__file__).resolve().parents[2] / "reviewers.toml"))
     q = sub.add_parser("ps1", help="build the 'Guess the number' quiz from verified or studio-cleared claims")
     q.add_argument("action", choices=["build"])
     q.add_argument("--db", required=True)
@@ -135,6 +140,12 @@ def main(argv: list[str] | None = None) -> int:
         r = learn.run(args.urls, args.db, args.out, args.posts, args.offline,
                       router=None if args.offline else Router(load_settings(args.settings)))
         print(f"learn: retrieval {r['tally']}, n={r['n']}; {r['why']} -> {args.out}", file=sys.stderr)
+        return 0
+
+    if args.cmd == "sources":
+        from . import studio
+        done = studio.export_sources(args.db, [Path(d) for d in args.posts], args.reviewers, Path(args.out))
+        print(f"sources for {', '.join(done)} in {args.out}", file=sys.stderr)
         return 0
 
     if args.cmd == "ps1":

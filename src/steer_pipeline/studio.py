@@ -769,3 +769,55 @@ def export_public(db: str | Path, post_dirs: list[Path], reviewers_path: str | P
                                  encoding="utf-8")
     return {"papers": sorted(pub["papers"]), "posts": [p["id"] for p in pub["posts"]], "claims": len(pub["claims"]),
             "page_images": sorted(pages), "reels": [p["id"] for p in pub["posts"] if p["reel"]]}
+
+
+def source_rows(snap: dict) -> dict[str, list[dict]]:
+    """Per paper, one row per claim: where it comes from, its true status and the posts that use it."""
+    rows: dict[str, list[dict]] = {}
+    for c in snap["claims"]:
+        paper = snap["papers"][c["paper"]]
+        if c["pages"]:
+            where = "page " + ", ".join(map(str, c["pages"]))
+        else:
+            where = "section text, no page layout; sentences " + ", ".join(c["sids"])
+        codes = ", ".join(c["reasons"])
+        if c["bucket"] == "rejected":
+            status = f"rejected ({codes})"
+        elif c["usable"]:
+            status = "cleared in the studio" if c["clearances"] else "verified"
+        else:
+            status = f"needs check ({', '.join(c['open']) or codes})"
+        rows.setdefault(c["paper"], []).append({
+            "claim id": c["claim_id"], "claim text": c["claim_text"], "exact quote": c["quote"], "location": where,
+            "status": status, "posts using it": " ".join(sorted({u["post"] for u in c["used_in"]}))})
+    return rows
+
+
+def export_sources(db: str | Path, post_dirs: list[Path], reviewers_path: str | Path, out: Path) -> list[str]:
+    """steer sources: one .md and one .csv per paper, written from a backup copy of the store (the original is only read)."""
+    import csv
+    import sqlite3
+    import tempfile
+
+    out.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="steer-sources-") as tmp:
+        src, dst = sqlite3.connect(f"file:{db}?mode=ro", uri=True), sqlite3.connect(Path(tmp) / "copy.db")
+        src.backup(dst)
+        src.close(), dst.close()
+        con = store.connect(Path(tmp) / "copy.db")
+        docs, claims, posts = load(con, post_dirs)
+        snap = data(con, docs, claims, posts, load_reviewers(reviewers_path), public=True)
+        con.close()
+    for pm, rows in source_rows(snap).items():
+        cit = snap["papers"][pm]["citation"]
+        with open(out / f"{pm}.csv", "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=list(rows[0]))
+            w.writeheader(), w.writerows(rows)
+        esc = lambda s: str(s).replace("|", "\\|").replace("\n", " ")
+        head = list(rows[0])
+        md = [f"# Sources: {cit.get('title') or pm}", "", f"{', '.join(cit.get('authors') or [])} ({cit.get('year')}), "
+              f"{cit.get('journal') or ''}. DOI {cit.get('doi') or 'n/a'}. Licence: {cit.get('license') or 'unknown'}.", "",
+              "| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
+        md += ["| " + " | ".join(esc(r[h]) for h in head) + " |" for r in rows]
+        (out / f"{pm}.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    return sorted(source_rows(snap))

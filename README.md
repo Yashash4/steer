@@ -1,30 +1,167 @@
-# Steer Content Intelligence Pipeline
+# Paper to post, every claim checked
 
-> **Hackathon prototype.** Built for the Steer Club hackathon (October 2026). This is not an official
-> Steer product.
+An open-source pipeline that turns a health research paper into a social post (Instagram carousel, static image and a
+short reel) and checks every claim in it against the paper. It also holds a small quiz game, "The Real Number", built
+from the claims that passed. This is an independent project: it is not official Steer code and not medical advice.
 
-The pipeline turns a research paper into a structured, traceable document. Every sentence gets a stable
-ID and can be traced back to the exact line and position in the source. Later steps use those IDs to
-check every claim against the paper before anything is published. No AI model is used in this stage.
+Contents: [What it is](#what-it-is) · [Run it](#run-it-from-a-fresh-clone) · [PS1, the quiz](#ps1-the-real-number-quiz) ·
+[PS2, the pipeline](#ps2-the-pipeline-s1-to-s8) · [Human time per paper](#human-time-per-paper) ·
+[Running it weekly](#running-it-weekly) · [Command reference](#reference)
 
-## Install
+## What it is
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+- **The pipeline (S1 to S8):** paper in, checked posts out. Every sentence of the paper gets a stable id and a position.
+  Every claim in a post must quote the paper exactly, with its numbers, and is judged by a second model from a different
+  provider. A person reviews what the code cannot settle.
+- **The quiz (PS1):** a one-minute "guess the number" game for a phone. Every number it shows comes from a claim that
+  passed the pipeline or was cleared by a named reviewer. The build fails otherwise.
+
+## Run it from a fresh clone
+
+Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js and npm.
 
 ```bash
 cd code
 uv sync
-PLAYWRIGHT_BROWSERS_PATH=.browsers uv run playwright install chromium-headless-shell  # renderer, kept in code/.browsers
-uv run pytest            # offline tests (the render tests need the browser above)
-uv run pytest -m network # also hit the live public APIs
+PLAYWRIGHT_BROWSERS_PATH=.browsers uv run playwright install chromium-headless-shell   # the renderer
+bash tools/setup-whisper.sh        # builds whisper.cpp into .tools/ and fetches its model into .models/
+(cd reel && npm ci)                # Remotion, for the reel
+uv run pytest -q -m "not network"  # offline tests
+uv run pytest -m network           # also hit the live public APIs
 ```
 
-The reel tests also need `bash tools/setup-whisper.sh` (into `.tools/` and `.models/`) and `cd reel && npm ci`. These four
-folders (`.browsers`, `.tools`, `.models`, `reel/node_modules`) are untracked: a fresh clone builds them as above, and an
-extra `git worktree` links them from the main checkout (`for d in .tools .browsers .models reel/node_modules; do ln -sfn
-<main>/code/$d $d; done`), else 14 render/reel tests fail with "Executable doesn't exist". Never commit the links.
+`.browsers`, `.tools`, `.models` and `reel/node_modules` are untracked. A fresh clone builds them as above. An extra
+`git worktree` must link them from the main checkout, or the render and reel tests fail with "Executable doesn't exist":
 
-## Use
+```bash
+for d in .tools .browsers .models reel/node_modules; do ln -sfn <main-checkout>/code/$d $d; done
+```
+
+Never commit those links.
+
+**Keys.** Names only; set them in your shell, never in a file in this repository:
+- `OPENCODE_GO_API_KEY`: the cross-check model (glm-5.3) and the line cross-check in the quiz build.
+- `ANTHROPIC_API_KEY`: only if you use the Anthropic API fallback; by default the writer runs through a logged-in
+  Claude Code (`claude -p`).
+
+Without the cross-check key, papers still ingest, extract and gate; nothing becomes "verified".
+
+## PS1: "The Real Number" quiz
+
+**Where it runs.** A single static page, built to work on a phone first: mobile Safari and Chrome, from 390 px wide,
+and on desktop. No login, no tracking, no network call at play time other than loading its own `claims.json`. Checked
+so far in headless Chromium at 390 x 844 and 1440 px wide, and by a scripted full playthrough. **Not yet tried on a
+physical iPhone or in Safari itself.**
+
+**What works.** A hook round with a slider and the real number revealed with its exact quote and source; a pick of the
+five common doubts; a round per doubt (weight regain, muscle, who it is for, safety); a score and streak; a readout
+built only from the revealed claims; three questions to take to a doctor per doubt; a share card drawn locally; a
+"what Steer's team would see" preview that is shown and never sent. Build: `uv run steer ps1 build --db steer.db --out ps1-out`.
+
+**What is not done.** The "is it safe" and "only for diabetics" doubts are honest "ask a doctor" cards, not data rounds:
+the papers in the store do not answer them well. No real lead capture or backend. No analytics. No Hinglish or Hindi.
+No test on physical devices. The line cross-check of the newest game strings needs the cross-check key; a build
+made with `--no-crosscheck` skips it and is not for release.
+
+**Draft one-liners (draft for review):**
+- TRIGGER: "Guess how much higher a slim South Asian woman's diabetes risk is than a slim white woman's, then see the real number from the study."
+- VALUE: "In about a minute you see where your guesses about weight regain, muscle and risk differ from what the studies measured, each with the exact sentence and source, and leave with three questions to ask a doctor."
+- NEXT STEP: "See if the programme fits you, or talk to a Steer doctor, with the doubts you picked carried over."
+
+## PS2: the pipeline (S1 to S8)
+
+What is real, stage by stage. "Built" means it exists and has tests; "demo" means it ran on a few papers only.
+
+| Stage | What it does | State |
+|---|---|---|
+| S1 ingest and gate | Reads a PDF, DOI, PubMed or PMC id; gives every sentence an id and page position. The gate rejects a claim whose quote is not in the paper, whose numbers are not in the quote, or that drops its hedge. | Built, tested on real papers |
+| S2 extract and label | A model proposes claims; only those the gate verifies are kept. Labels (theme, reader doubt), a rules check (promises, drug brands, hype), SQLite store. A second model from another provider cross-checks every claim; "verified" needs an independent "supported". | Built, ran on 4 papers |
+| S3 write and render | A model writes a carousel or static post as lines that each name their claims. Code checks every line (numbers must come from the claim, framing lines carry none), enforces per-paper boundaries (for example "average, not a promise"), then renders 1080 x 1350 PNGs with a sources slide. | Built; in the stored runs 4 of 9 written posts were blocked by the checks |
+| S4 review studio | Local web app for a reviewer: layout check, clearing a flagged claim with a written reason, editorial and clinical approval. Append-only action log enforced by database triggers; a clearance can be revoked, never edited. A read-only public snapshot is exported. | Built. No clinician has reviewed anything, so nothing is clinically approved |
+| S5 eval | `steer eval`: planted errors, known-good items and stored-run funnels as a report with counts (n always shown). In the first report, 0 of 14 planted unsupported items passed a gate and 15 of 15 planted errors were caught (14 in the expected category), with 1 false alarm among 15 known-good items. Many planted items are synthetic and n = 3 gold claims is a smoke test, not a rate. | Built; not in this tree yet |
+| S6 learning loop | `steer learn`: weekly ledger of public benchmark posts, labels, own output, a score and one proposed brief rule. | Built as a demo; not in this tree yet |
+| S7 reel | Remotion kinetic-type reel from a checked post: voice, burned-in captions, line art, an optional AI presenter. QA transcribes the audio locally and fails the reel if a spoken number differs from the shown one. | Built |
+| S8 batch week | Several papers in, a week of posts out. | Design only, not built |
+
+**Tools and models.**
+- Cross-check: glm-5.3 through an OpenCode endpoint, deliberately a different provider from the writer. Fallback chains
+  are in `steer.toml`.
+- Writer and extractor: Claude Sonnet (labels: Claude Haiku) through Claude Code.
+- Voice: edge-tts, voice en-IN-NeerjaNeural (calls Microsoft's online service; the reel text is sent to it).
+- AI presenter: LTX-2.5 (Lightricks) run locally through ComfyUI. Every presenter clip is labelled as AI-generated
+  and carries a placeholder mark. Its weights are under the LTX-2.x Community License, which has its own commercial
+  conditions.
+- Reel: Remotion, Playwright (Chromium headless shell), ffmpeg via imageio-ffmpeg, whisper.cpp for the local
+  transcript check.
+- Line art: p5.brush (MIT), vendored unchanged in `vendor/p5brush/`.
+- Fonts: Fraunces and Inter (SIL OFL). Licences of every dependency: `THIRD_PARTY_NOTICES.md`.
+
+**The review gate.** Nothing publishes unless the code checks pass, every claim is verified or cleared by a named
+reviewer, and the editorial and clinical stages are done. Reviewers are named in `reviewers.toml`; the server decides a
+reviewer's role, not the browser. The demo file has no clinician. Every action is a new row in `review_action`;
+triggers refuse updates and deletes. Rejections by the gate can never be cleared. Run it with
+`uv run steer studio --db steer.db --posts out/ --serve`.
+
+**Sources per paper.** `uv run steer sources --db steer.db --out sources/ --posts out/` writes one markdown file and one
+CSV per paper: claim id, claim text, exact quote, page or section location, status (verified, needs check with its
+code, cleared in the studio, rejected) and the posts that use the claim.
+
+**Not claimed.** The pipeline checks that a post says what the paper says. It does not judge whether the paper is
+good, does not replace a clinician, and the cross-check model can be wrong in both directions.
+
+## Human time per paper
+
+Measured and estimated numbers are kept apart on purpose.
+
+**Measured (from the stored review actions in the first eval report, timestamps with gaps over 10 minutes excluded; this is not measured attention):**
+
+| Paper | Review actions | Time |
+|---|---|---|
+| West 2026 | 3 | 0.5 min |
+| Laverde 2026 | 1 | no gap to measure with one action |
+| Narayan 2021 | 0 | not measured |
+
+Three papers, a handful of actions: this shows the tooling works, not what a paper costs.
+
+**Estimate (not measured).** Basis: the number of claims that land in "needs check" in the same stored runs (Narayan 13,
+Laverde 23, West 23). Assumption: a reviewer spends 1 to 3 minutes per such claim, reading the quote in its page and
+writing a reason of at least 40 characters. The 2-minute figure is a round guess, not a timing.
+
+| Paper | Claims needing a check | Estimated reviewer time (1 / 2 / 3 min per claim) |
+|---|---|---|
+| Narayan 2021 | 13 | 13 / 26 / 39 min |
+| Laverde 2026 | 23 | 23 / 46 / 69 min |
+| West 2026 | 23 | 23 / 46 / 69 min |
+
+This leaves out editorial and clinical review of the posts, and assumes every flagged claim is reviewed rather than
+dropped. Many claims never need review: only claims a post actually uses must be cleared.
+
+## Running it weekly
+
+Per paper, in order. Each command is in `steer --help`.
+
+```bash
+uv run steer run 10.1136/bmj-2025-085304 --role evidence --db steer.db      # ingest, extract, gate, label, cross-check, store
+uv run steer write --db steer.db --run <run_id> --format carousel --out out  # write, check every line, render PNGs
+uv run steer reel out/<run_id>/<post_id> --db steer.db --v5                  # reel (MP4, SRT, trace); refused if checks fail
+uv run steer studio --db steer.db --posts out --serve                        # a person reviews and clears
+uv run steer sources --db steer.db --out sources --posts out                 # source tables per paper
+```
+
+Not in this tree yet (built, not merged), so check `steer --help` before relying on them:
+
+```bash
+uv run steer eval --db steer.db --out eval [--live]                                  # S5 report
+uv run steer learn --urls benchmark-posts.txt --db steer.db --out learn [--offline]  # S6 weekly loop
+```
+
+`steer batch` (S8) does not exist yet; loop over your papers in a shell.
+
+## Reference
+
+The sections below describe each part in detail.
+
+### Ingest and verify from the command line
 
 ```bash
 uv run steer ingest paper.pdf --role evidence -o paper.json
