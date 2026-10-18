@@ -144,10 +144,14 @@ def number_values(text: str) -> list[Decimal]:
     return sorted(vals)
 
 
+SPOKEN_GLP1 = re.compile(r"\bGLP[\s-]?(?:1|one)\b(?![.\d])", re.IGNORECASE)
+
+
 def audio_numbers_match(line_text: str, transcript: str | None) -> dict:
     if not transcript or not transcript.strip():
         return {"ok": False, "code": "AUDIO_TRANSCRIPT_MISSING", "detail": "no transcript to compare: the reel fails"}
-    want, heard = number_values(line_text), number_values(words_to_digits(transcript))
+    # the class name "GLP-1" is a name, not a number, on screen (checks.no_class_name) and so in the heard text ("GLP 1")
+    want, heard = number_values(line_text), number_values(words_to_digits(SPOKEN_GLP1.sub(" ", transcript)))
     ok = want == heard
     return {"ok": ok, "code": None if ok else "AUDIO_NUMBER_MISMATCH", "screen": [str(v) for v in want],
             "heard": [str(v) for v in heard], "transcript": transcript.strip()}

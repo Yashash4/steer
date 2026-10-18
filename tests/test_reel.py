@@ -522,3 +522,10 @@ def test_a_setting_line_is_shown_for_the_scene_and_never_voiced():
     t = "Adults 45: women had 5.27 times higher risk and men 2.99 times higher."
     cards = reel.make_hero_cards(reel.display_tokens(t, [i * 0.3 for i in range(len(t.split()))]))
     assert cards[1]["parts"][0]["text"] == "and men" and cards[1]["parts"][1]["show"] == "2.99×"
+
+
+def test_the_spoken_class_name_glp_1_is_not_a_heard_number():
+    line = "On average 0.4 kg a month after stopping; not only GLP-1, not a prediction for you."
+    assert reel.audio_numbers_match(line, "on average 0.4 kilograms a month after stopping, not only GLP 1, not a prediction")["ok"]
+    assert reel.audio_numbers_match(line, "on average 0.4 kilograms a month, not only GLP one")["ok"]
+    assert not reel.audio_numbers_match(line, "on average 1.4 kilograms a month, not only GLP 1")["ok"]
