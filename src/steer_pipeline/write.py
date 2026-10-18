@@ -8,6 +8,8 @@ voice can only say what the screen says.
 
 import jsonschema
 
+from .checks import split_rule, frags
+
 KINDS = ["health", "framing", "brand", "cta", "signoff"]
 SLIDE_ROLES = ["hook", "point", "meaning", "brand", "cta"]
 
@@ -98,14 +100,17 @@ Every line has a kind:
 - health: states a fact. It may ONLY restate what its claims say, with their exact numbers, units, signs and
   comparison groups, and must list those claim_ids. Never add a number, a group, a cause or a promise. Expand
   abbreviations for the public.
-- framing: the reader's doubt as a question, a transition, or a scene from Indian daily life. No numbers or
-  digits at all, and no health assertion.
+- framing: the reader's doubt as a question, a transition, or a scene from Indian daily life. No numbers at
+  all: no digits and no number words ("one", "four o'clock", "a dozen"), and no health assertion. Every framing line must make sense on its own: no "it", "this" or
+  "that" whose meaning sits on another line or slide.
 - brand: copy one of the brand lines given, exactly.
 - cta: copy one of the call-to-action lines given, exactly.
 - signoff: copy the sign-off given, exactly.
 Never write sources: the sources slide is added by code.
 State the message (the one thing the audience should take away) and the reasoning (why this post, for whom,
-which doubt it answers). Follow every editorial requirement given for the paper."""
+which doubt it answers). Both are published with the post and checked like health lines: the message may only
+say what the claims used say, and neither may hold a number that is not in those claims: no claim ids, no
+slide numbers, no counts, no number words such as "one study" or "three cities". Follow every editorial requirement given for the paper."""
 
 
 def write_prompt(brief: dict, claims: list[dict], brand: dict, boundaries: dict) -> str:
@@ -122,10 +127,20 @@ def write_prompt(brief: dict, claims: list[dict], brand: dict, boundaries: dict)
         where = {"same_slide": "on the same slide/scene as", "post": "somewhere in the post with",
                  "caption": "in the caption with"}[r.get("placement", "post")]
         scope = f"claims whose quote mentions {r['when_claim_quote_contains']}" if r.get("when_claim_quote_contains") else "any claim of this paper"
-        lines.append(f"- include {how} {words} {where} {scope} ({r.get('why', '')})")
+        lines.append(f"- include {how} {words} {where} {scope}, inside a health line that states one of those claims, "
+                     f"never as a line of its own ({r.get('why', '')})")
     for r in boundaries.get("require_with", []):
-        pair = [f"{c['quote_contains']!r} labelled as one of {c['label_any_of']}" for c in r["claims"]]
-        lines.append(f"- if you use one of these numbers, use all of them, each with its label beside it: {pair} ({r.get('why', '')})")
+        trig, need = split_rule(r)
+        label = lambda e: f", with one of {e['label_any_of']} beside it" if e.get("label_any_of") else ""
+        where = (" on the same slide/scene or the next one, in each part (slides, caption, reel script) where the "
+                 "first claim appears") if r.get("placement") == "same_or_next_unit" else ""
+        if trig is need:
+            pair = [f"a claim whose quote has one of {frags(e)}{label(e)}" for e in need]
+            lines.append(f"- if you use one of these, use all of them: {pair} ({r.get('why', '')})")
+        else:
+            lines.append(f"- if you use a claim whose quote has one of {[f for e in trig for f in frags(e)]}, also use "
+                         + " and ".join(f"a claim whose quote has one of {frags(e)}{label(e)}" for e in need)
+                         + f"{where} ({r.get('why', '')})")
     for r in boundaries.get("avoid_phrase", []):
         lines.append(f"- never write {r['text']!r} in {r.get('kinds', ['health'])} lines ({r.get('why', '')})")
     return "\n".join(lines)

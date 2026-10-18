@@ -11,7 +11,7 @@ import uuid
 from pathlib import Path
 
 from . import store
-from .checks import check_post, load_boundaries, writable
+from .checks import check_post, load_boundaries, required_claims, writable
 from .router import Router
 from .write import pick_brief, write_post
 
@@ -65,6 +65,9 @@ def write_and_check(con, run_id: str, fmt: str, settings: dict, router: Router |
     brief = brief or pick_brief(usable, fmt, settings["writer"].get("brief_claims", 4))
     brand = load_brand()
     boundaries = load_boundaries(doc["citation"].get("pmcid") or "")
+    extra = required_claims(brief["claim_ids"], {c["claim_id"]: c for c in usable}, boundaries)
+    if extra:  # a claim the paper's require_with rules make compulsory with the brief's claims
+        brief = brief | {"claim_ids": brief["claim_ids"] + extra, "why": f"{brief['why']}; added {extra} for require_with"}
     hashtags = settings["writer"]["hashtags"]
     written = write_post(brief, usable, brand, boundaries, hashtags, router)
     result = check_post(written["post"], claims, brand, settings["rules"], boundaries, router, written["endpoint"])

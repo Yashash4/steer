@@ -137,6 +137,35 @@ def test_narayan_qualifiers_same_slide_only_for_incidence():
     assert codes(where) == []
 
 
+IR = ("South Asians were less insulin resistant than blacks and whites (age-BMI-adjusted HOMA-IR, µIU/mL/mmol/L: "
+      "2.30 vs 3.45 vs 2.59, South Asian vs blacks p<0.001; South Asian vs whites p<0.001)")
+INC = ("However, we found that across all ages from 45 years up, South Asians had a higher diabetes incidence than "
+       "whites, and this was especially marked at lower BMIs.")
+BOTH = ("South Asian adults have lower BMI and are less insulin resistant than US blacks and whites, but have higher "
+        "diabetes incidence.")
+IR_CLAIMS = {c["claim_id"]: c for c in [C("ir", IR), C("inc", INC), C("both", BOTH)]}
+
+
+def test_narayan_lower_insulin_resistance_needs_higher_incidence_beside_it():
+    ir = L("health", "South Asians were less insulin resistant than US blacks and US whites.", ["ir"])
+    inc = L("health", "But higher diabetes incidence: South Asians had a higher diabetes incidence than whites.", ["inc"])
+    gap = L("framing", "What does that mean at the dinner table?")
+    pair = lambda p: [f["code"] for f in checks.check_boundaries(checks.post_lines(p), IR_CLAIMS, NARAYAN)
+                      if f["code"] in ("REQUIRE_WITH_MISSING", "PAIR_LABEL_MISSING")]
+    assert pair(post([[ir]])) == ["REQUIRE_WITH_MISSING"]                       # the reassuring half alone
+    assert pair(post([[ir], [inc]])) == []                                       # next slide is close enough
+    assert pair(post([[ir, inc]])) == []
+    assert pair(post([[ir], [gap], [inc]])) == ["REQUIRE_WITH_MISSING"]          # two slides away is not
+    assert pair(post([[ir], [inc]], caption=(ir,))) == ["REQUIRE_WITH_MISSING"]  # every surface needs its own
+    bare = L("health", "South Asians had more diabetes than whites across all ages from 45 years up.", ["inc"])
+    assert pair(post([[ir], [bare]])) == ["PAIR_LABEL_MISSING"]
+    assert pair(post([[L("health", BOTH, ["both"])]])) == []                     # one claim carrying both halves
+    assert pair(post([[inc]])) == []                                             # incidence alone needs nothing
+    # the brief gets the incidence claim added when it holds the insulin resistance one
+    assert checks.required_claims(["ir"], IR_CLAIMS, NARAYAN) == ["both"]        # lowest matching id
+    assert checks.required_claims(["inc"], IR_CLAIMS, NARAYAN) == []
+
+
 def test_laverde_pair_and_heterogeneity_caveat():
     abs_line = L("health", "Absolute lean mass fell by −1.74 kg on average; results vary a lot between studies.", ["lean_abs"])
     share = L("health", "Lean mass as a share of total weight rose by 1.81%.", ["lean_share"])
@@ -224,3 +253,31 @@ def test_sources_never_invent_a_page():
     assert s["location"] == "section text, no page layout" and s["authors"] == "West S, Scragg J, Aveyard P et al."
     paged = sources(["c1"], {"c1": {"sids": ["p0003-s0002", "p0004-s0001"]}}, doc | {"warnings": []})[0]
     assert paged["location"] == "page 3, 4"
+
+
+def test_message_and_reasoning_are_checked_as_published_text():
+    bad = copy.deepcopy(GOOD) | {"message": "Weight comes back at 0.9 kg a month on average."}
+    r = checks.check_post(bad, CLAIMS, BRAND, RULES, WEST, fake_router(["opencode_glm"], {"glm-5.3": says()}), "claude_sonnet")
+    assert r["status"] == "blocked"
+    msg = next(x for x in r["lines"] if x["path"] == "message")
+    assert [f["code"] for f in msg["failures"]] == ["NUMBER_NOT_IN_CLAIM"]
+    ids = {"c002-01": C("c002-01", REGAIN)}  # a claim id named in the reasoning is a reference, not a number
+    assert codes({"kind": "reasoning", "text": "Uses c002-01 for the regain rate.", "claim_ids": ["c002-01"]}, WEST, ids) == []
+    assert codes({"kind": "reasoning", "text": "Uses c002-01 for the regain rate.", "claim_ids": []}, WEST, ids) != []
+    bad = copy.deepcopy(GOOD) | {"reasoning": "Slide 2 answers the doubt."}  # no slide numbers either
+    r = checks.check_post(bad, CLAIMS, BRAND, RULES, WEST, fake_router(["opencode_glm"], {"glm-5.3": says()}), "claude_sonnet")
+    assert r["status"] == "blocked"
+    # the message is cross-checked as a health line against every quote of the post; the reasoning is not
+    seen = []
+
+    def answer(hp, fp):
+        seen.extend(hp)
+        out = says()(hp, fp)
+        for v in out["health"]:
+            if v["line_id"] == "message":
+                v["verdict"] = "overstated"
+        return out
+    r = checks.check_post(GOOD, CLAIMS, BRAND, RULES, WEST, fake_router(["opencode_glm"], {"glm-5.3": answer}), "claude_sonnet")
+    assert "message" in seen and "reasoning" not in seen
+    assert r["status"] == "blocked"
+    assert [f["code"] for f in next(x for x in r["lines"] if x["path"] == "message")["failures"]] == ["OVERSTATED"]

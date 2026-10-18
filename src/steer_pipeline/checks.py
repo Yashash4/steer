@@ -5,9 +5,12 @@
 2. numbers     every number in a health line matches a number in the quote of one of its claims
 3. wording     publication-profile rules (brand lines checked as Steer's own), lean mass vs muscle, causal
                wording, the paper's scoped avoid_phrase list, and the comparison-group rule
-4. boundaries  require_with (with labels next to the numbers) and require_qualifier (with placement)
+4. boundaries  require_with (with labels next to the numbers; a trigger claim can require others on the same or
+               next slide) and require_qualifier (with placement)
 5. cross-check a different model judges every health line against its quotes, and every framing line for
                medical assertions; independence per call; a self-check never passes
+The post's message and reasoning are published too: both get the numbers and publication-wording checks
+against all the post's claims, and the message is cross-checked like a health line.
 Post status: blocked (any failed check) | crosscheck_unavailable | draft_pending_review. Never approved here.
 """
 
@@ -38,6 +41,33 @@ def _norm(text: str) -> str:
 
 def _has(text: str, phrase: str) -> bool:
     return canonical(phrase)[0] in canonical(text)[0]
+
+
+def frags(entry: dict) -> list[str]:
+    """The quote fragments of a require_with entry (any one matches)."""
+    return entry.get("quote_any_of") or [entry["quote_contains"]]
+
+
+def split_rule(rule: dict) -> tuple[list[dict], list[dict]]:
+    """(triggers, required) of a require_with rule. Without a trigger every entry is both: using any one
+    requires all the others."""
+    trig = [e for e in rule["claims"] if e.get("role") == "trigger"]
+    return (trig, [e for e in rule["claims"] if e.get("role") != "trigger"]) if trig else (rule["claims"], rule["claims"])
+
+
+def required_claims(ids: list[str], claims: dict[str, dict], boundaries: dict) -> list[str]:
+    """Claim ids (from `claims`) to add to a brief so that every require_with rule its claims trigger can be met;
+    the lowest matching claim id is taken."""
+    added: list[str] = []
+    uses = lambda e, pool: sorted(i for i in pool if any(_has(claims[i]["quote"], f) for f in frags(e)))
+    for rule in boundaries.get("require_with", []):
+        trig, need = split_rule(rule)
+        if not any(uses(e, ids + added) for e in trig):
+            continue
+        for e in need:
+            if not uses(e, ids + added) and uses(e, claims):
+                added.append(uses(e, claims)[0])
+    return added
 
 
 def writable(claim: dict) -> bool:
@@ -114,17 +144,21 @@ def check_line(line: dict, claims: dict[str, dict], brand: dict, rules: dict, bo
         # no numbers in framing, no exceptions: digits glued to words ("3pm") count too
         fails.append({"check": "structure", "code": "FRAMING_HAS_NUMBER", "detail": text})
 
-    # 2. numbers (a qualifier phrase from the paper's boundaries file, such as "aged 45 and over", is editorial
+    # 2. numbers (the message and reasoning are checked against all the post's claims; a qualifier phrase from the paper's boundaries file, such as "aged 45 and over", is editorial
     # input about who was studied: its numbers are not claim numbers and are left out of this check)
-    if kind == "health":
+    if kind in ("health", "message", "reasoning"):
         have = _quote_keys(used)
-        for n in find_numbers(_without_qualifiers(text, boundaries)):
+        bare = _without_qualifiers(text, boundaries)
+        if kind != "health":  # a claim id named in the message or reasoning is a reference, not a number
+            bare = re.sub("|".join(map(re.escape, line["claim_ids"])) or r"(?!)", " ", bare)
+        for n in find_numbers(bare):
             if not n.keys() & have:
                 fails.append({"check": "numbers", "code": "NUMBER_NOT_IN_CLAIM", "detail": n.text})
 
     # 3. wording
     quotes = " ".join(c["quote"] for c in used)
-    flags = rules_mod.check(text, "publication", rules, source_quote=quotes if kind == "health" else None,
+    flags = rules_mod.check(text, "publication", rules,
+                            source_quote=quotes if kind in ("health", "message", "reasoning") else None,
                             steer_source=kind in ("brand", "cta", "signoff"))
     for f in flags:
         if f["action"] == "block":
@@ -152,21 +186,32 @@ def check_boundaries(lines: list[dict], claims: dict[str, dict], boundaries: dic
     fails = []
     health = [ln for ln in lines if ln["kind"] == "health"]
 
-    def lines_backed_by(fragment):
-        return [ln for ln in health if any(_has(claims[i]["quote"], fragment) for i in ln["claim_ids"] if i in claims)]
+    def backed_by(entry):
+        return [ln for ln in health
+                if any(_has(claims[i]["quote"], f) for i in ln["claim_ids"] if i in claims for f in frags(entry))]
 
     for rule in boundaries.get("require_with", []):
-        backed = {c["quote_contains"]: lines_backed_by(c["quote_contains"]) for c in rule["claims"]}
-        if any(backed.values()):
-            for c in rule["claims"]:
-                if not backed[c["quote_contains"]]:
-                    fails.append({"check": "boundaries", "code": "REQUIRE_WITH_MISSING",
-                                  "detail": f"{c['quote_contains']!r} must appear too: {rule.get('why', '')}"})
-                for ln in backed[c["quote_contains"]]:
-                    unit = [x["text"] for x in lines if x["surface"] == ln["surface"] and x["unit"] == ln["unit"]]
-                    if not any(_has(" ".join(unit), lab) for lab in c["label_any_of"]):
-                        fails.append({"check": "boundaries", "code": "PAIR_LABEL_MISSING", "path": ln["path"],
-                                      "detail": f"{c['quote_contains']!r} needs one of {c['label_any_of']} beside it"})
+        trig, need = split_rule(rule)
+        trig_lines = [ln for e in trig for ln in backed_by(e)]
+        if not trig_lines:
+            continue
+        for e in need:
+            got = backed_by(e)
+            if not got:
+                fails.append({"check": "boundaries", "code": "REQUIRE_WITH_MISSING",
+                              "detail": f"one of {frags(e)} must appear too: {rule.get('why', '')}"})
+                continue
+            if rule.get("placement") == "same_or_next_unit":  # beside every trigger line, on its own surface
+                for t in trig_lines:
+                    if not any(g["surface"] == t["surface"] and g["unit"] in (t["unit"], t["unit"] + 1) for g in got):
+                        fails.append({"check": "boundaries", "code": "REQUIRE_WITH_MISSING", "path": t["path"],
+                                      "detail": f"one of {frags(e)} must be on the same or next slide/scene: "
+                                                f"{rule.get('why', '')}"})
+            for ln in got:
+                unit = [x["text"] for x in lines if x["surface"] == ln["surface"] and x["unit"] == ln["unit"]]
+                if e.get("label_any_of") and not any(_has(" ".join(unit), lab) for lab in e["label_any_of"]):
+                    fails.append({"check": "boundaries", "code": "PAIR_LABEL_MISSING", "path": ln["path"],
+                                  "detail": f"{frags(e)} needs one of {e['label_any_of']} beside it"})
     for rule in boundaries.get("require_qualifier", []):
         scope = rule.get("when_claim_quote_contains") or []
         backed = [ln for ln in health if any(i in claims and (not scope or any(_has(claims[i]["quote"], s) for s in scope))
@@ -222,7 +267,7 @@ def crosscheck_lines(lines: list[dict], claims: dict[str, dict], router: Router,
     endpoints = router.settings["endpoints"]
     writer = endpoints[writer_endpoint]
     skip = {n for n in router.settings["jobs"]["crosscheck"]["chain"] if independence(writer, endpoints[n]) == "same_model"}
-    health = [ln for ln in lines if ln["kind"] == "health"]
+    health = [ln for ln in lines if ln["kind"] in ("health", "message")]  # the message is judged as a health line
     framing = [ln for ln in lines if ln["kind"] == "framing"]
     if not health and not framing:
         return {}
@@ -260,22 +305,25 @@ def check_post(post: dict, claims: dict[str, dict], brand: dict, rules: dict, bo
                router: Router | None, writer_endpoint: str) -> dict:
     """Run every check; return {status, lines, post_failures, flags, needs_layout_check}."""
     lines = post_lines(post)
+    used = sorted({i for ln in lines for i in ln["claim_ids"]})
+    post_fails = check_boundaries(lines, claims, boundaries)
+    # message and reasoning are shown in the studio and the submission: published text, checked against every claim used
+    lines += [{"kind": k, "text": post[k], "claim_ids": used, "path": k, "surface": "studio", "unit": 0}
+              for k in ("message", "reasoning")]
     for ln in lines:
         ln["failures"] = check_line(ln, claims, brand, rules, boundaries)
-    post_fails = check_boundaries(lines, claims, boundaries)
     checks = crosscheck_lines(lines, claims, router, writer_endpoint) if router else {}
     unavailable = False
     for ln in lines:
         r = checks.get(ln["path"])
         ln["crosscheck"] = r
-        if ln["kind"] in ("health", "framing"):
+        if ln["kind"] in ("health", "framing", "message"):
             if r is None or r["verdict"] in ("crosscheck_unavailable", "not_checked") or r.get("independence") not in COUNTS:
                 unavailable = True  # a required check did not run (or was a self-check): never a draft
             elif r["verdict"] != "supported":
                 ln["failures"].append({"check": "crosscheck", "code": r["verdict"].upper(), "detail": r["reason"]})
     failed = any(ln["failures"] for ln in lines) or post_fails
     status = "blocked" if failed else ("crosscheck_unavailable" if unavailable else "draft_pending_review")
-    used = sorted({i for ln in lines for i in ln["claim_ids"]})
     return {
         "status": status,
         "lines": lines,

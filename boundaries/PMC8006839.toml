@@ -1,7 +1,7 @@
 # Content boundaries for Narayan KMV et al., BMJ Open Diabetes Res Care 2021 (DOI 10.1136/bmjdrc-2020-001927).
 # Editorial input (written from the project's paper decisions), versioned. Claims are matched by text in their
 # QUOTE (canonical form), never by run-specific claim ids.
-version = 1
+version = 2
 pmcid = "PMC8006839"
 doi = "10.1136/bmjdrc-2020-001927"
 licence_note = "CC BY-NC: facts with attribution only; no reuse of the paper's figures or substantial text."
@@ -36,6 +36,20 @@ when_claim_quote_contains = []
 placement = "post"
 any_of = ["US cohort", "US adults", "US whites", "US blacks", "white women", "in the US"]
 why = "the comparison is with US cohorts"
+
+# Lower insulin resistance (and lower insulin secretion) alone reads as lower risk. The paper's conclusion is the
+# opposite: higher diabetes incidence despite it. So a post using either must carry the incidence finding beside it.
+[[require_with]]
+why = "lower insulin resistance alone reads as lower risk; the paper's finding is higher incidence despite it"
+placement = "same_or_next_unit"
+  [[require_with.claims]]
+  role = "trigger"
+  quote_any_of = ["less insulin resistant", "secreting less insulin"]
+  [[require_with.claims]]
+  quote_any_of = ["higher diabetes incidence", "incidence of diabetes among South Asian adults is higher",
+                  "2.9 times higher", "5.3 times", "2.99", "3 times higher"]
+  label_any_of = ["higher diabetes incidence", "diabetes incidence was higher", "higher incidence of diabetes",
+                  "incidence of diabetes was higher", "incidence of diabetes is higher"]
 
 [[avoid_phrase]]
 text = "every Indian"
