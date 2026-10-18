@@ -46,12 +46,12 @@ def test_first_endpoint_ok():
 
 
 def test_retry_once_then_next_endpoint_in_order():
-    r, f = router({"m-a": [ConnectorError("timeout", "slow"), ConnectorError("error", "down")], "m-b": [{"n": 2}]})
+    r, f = router({"m-a": [ConnectorError("error", "down"), ConnectorError("invalid_json", "bad")], "m-b": [{"n": 2}]})
     out = r.call("extract", "sys", "prompt", SCHEMA)
     assert out["endpoint"] == "b"
     assert f.calls == ["m-a", "m-a", "m-b"]
     assert [(e["endpoint"], e["attempt"], e["outcome"]) for e in r.log] == [
-        ("a", 1, "timeout"), ("a", 2, "error"), ("b", 1, "ok")]
+        ("a", 1, "error"), ("a", 2, "invalid_json"), ("b", 1, "ok")]
 
 
 def test_retry_succeeds_on_same_endpoint():

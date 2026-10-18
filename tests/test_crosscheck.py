@@ -84,8 +84,34 @@ def test_missing_verdict_is_not_checked_and_batches_are_per_chunk():
         calls.append(ids)
         return {"verdicts": [{"claim_id": ids[0], "verdict": "supported", "reason": "r"}]}
     res = {x["claim_id"]: x for x in cc.crosscheck_library(cs, CHUNKS_SONNET * 2, router(["opencode_glm"], {"glm-5.3": answer}))}
-    assert calls == [["a", "b"], ["c"]]
+    assert sorted(calls) == [["a", "b"], ["c"]]  # two calls run at a time, so they may finish in any order
     assert res["b"]["verdict"] == "not_checked" and not cc.verified(cs[1], res["b"])
+
+
+def test_a_chunk_with_more_than_8_claims_is_split_into_calls_of_8():
+    cs = [claim(f"c{i:02}", "x", ABSTRACT) for i in range(19)]
+    calls = []
+
+    def answer(ids):
+        calls.append(ids)
+        return all_say("supported")(ids)
+    res = cc.crosscheck_library(cs, CHUNKS_SONNET, router(["opencode_glm"], {"glm-5.3": answer}))
+    assert sorted(len(c) for c in calls) == [3, 8, 8] and len(res) == 19
+    assert [x["claim_id"] for x in res] == [c["claim_id"] for c in cs]  # results keep the claim order
+
+
+def test_a_timeout_falls_back_at_once_without_a_retry():
+    def connector(ep, system, prompt, schema, **kw):
+        if ep["model"] == "glm-5.3":
+            raise ConnectorError("timeout", "timed out")
+        ids = schema["properties"]["verdicts"]["items"]["properties"]["claim_id"]["enum"]
+        return all_say("supported")(ids), None
+    r = Router({"endpoints": EP, "jobs": {"crosscheck": {"chain": ["opencode_glm", "opencode_deepseek"]}}},
+               connectors={"openai_compatible": connector}, env={"OPENCODE_GO_API_KEY": "k"})
+    res = cc.crosscheck_library([claim("c1", "x", ABSTRACT)], CHUNKS_SONNET, r)
+    assert res[0]["model"] == "deepseek-v4-pro"
+    assert [(a["endpoint"], a["outcome"]) for a in r.log] == [("opencode_glm", "timeout"), ("opencode_deepseek", "ok")]
+    assert EP["opencode_glm"]["timeout"] == 90
 
 
 def test_unknown_verdict_fails_the_schema_and_falls_back():

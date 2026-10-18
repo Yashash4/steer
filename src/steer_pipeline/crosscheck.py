@@ -11,11 +11,15 @@ crosscheck_unavailable. A claim the checker does not return is not_checked, neve
 
 from urllib.parse import urlparse
 
+from concurrent.futures import ThreadPoolExecutor
+
 from .router import Router, RouterError
 
 VERDICTS = ["supported", "overstated", "qualifier_dropped", "population_generalised", "wrong_number",
             "lean_mass_vs_muscle", "association_as_cause", "wrong_comparison_group", "unsupported"]
 COUNTS = ("different_provider", "different_model_same_provider")  # a self-check never passes
+BATCH = 8         # claims per cross-check call (a chunk with more is split)
+CONCURRENCY = 2   # cross-check calls at a time (shared provider limits)
 
 SYSTEM = """You check claims written for a doctor-reviewed health library against the exact quote from the paper.
 
@@ -84,25 +88,30 @@ def crosscheck_library(claims: list[dict], chunks: list[dict], router: Router) -
     by_chunk: dict[int, list[dict]] = {}
     for c in claims:
         by_chunk.setdefault(c["chunk"], []).append(c)
+    batches = [(idx, cs[i:i + BATCH]) for idx, cs in sorted(by_chunk.items()) for i in range(0, len(cs), BATCH)]
+    with ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:  # the provider limits are shared: at most 2 at a time
+        parts = list(pool.map(lambda b: _check_batch(b[0], b[1], chunks, router, endpoints), batches))
+    return [r for part in parts for r in part]
+
+
+def _check_batch(idx: int, batch: list[dict], chunks: list[dict], router: Router, endpoints: dict) -> list[dict]:
     results = []
-    for idx, batch in sorted(by_chunk.items()):
-        writer = endpoints[chunks[idx]["endpoint"]]
-        skip = {n for n in router.settings["jobs"]["crosscheck"]["chain"]
-                if independence(writer, endpoints[n]) == "same_model"}
-        ids = [c["claim_id"] for c in batch]
-        try:
-            out = router.call("crosscheck", SYSTEM, _prompt(batch), schema(ids), skip=skip)
-        except RouterError as e:
-            results += [{"claim_id": i, "verdict": "crosscheck_unavailable", "reason": str(e)[:300], "endpoint": None,
-                         "model": None, "provider": None, "independence": None} for i in ids]
-            continue
-        checker = endpoints[out["endpoint"]]
-        ind = independence(writer, checker)
-        got = {v["claim_id"]: v for v in out["output"]["verdicts"]}
-        for i in ids:
-            v = got.get(i, {"verdict": "not_checked", "reason": "the checker returned no verdict for this claim"})
-            results.append({"claim_id": i, "verdict": v["verdict"], "reason": v["reason"], "endpoint": out["endpoint"],
-                            "model": checker.get("model"), "provider": provider(checker), "independence": ind})
+    writer = endpoints[chunks[idx]["endpoint"]]
+    skip = {n for n in router.settings["jobs"]["crosscheck"]["chain"]
+            if independence(writer, endpoints[n]) == "same_model"}
+    ids = [c["claim_id"] for c in batch]
+    try:
+        out = router.call("crosscheck", SYSTEM, _prompt(batch), schema(ids), skip=skip)
+    except RouterError as e:
+        return [{"claim_id": i, "verdict": "crosscheck_unavailable", "reason": str(e)[:300], "endpoint": None,
+                 "model": None, "provider": None, "independence": None} for i in ids]
+    checker = endpoints[out["endpoint"]]
+    ind = independence(writer, checker)
+    got = {v["claim_id"]: v for v in out["output"]["verdicts"]}
+    for i in ids:
+        v = got.get(i, {"verdict": "not_checked", "reason": "the checker returned no verdict for this claim"})
+        results.append({"claim_id": i, "verdict": v["verdict"], "reason": v["reason"], "endpoint": out["endpoint"],
+                        "model": checker.get("model"), "provider": provider(checker), "independence": ind})
     return results
 
 

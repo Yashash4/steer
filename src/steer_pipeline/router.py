@@ -135,7 +135,7 @@ def openai_compatible(endpoint: dict, system: str, prompt: str, schema: dict, *,
                  {"Authorization": f"Bearer {key}", "x-opencode-session": run_id},
                  {"model": endpoint["model"],
                   "messages": [{"role": "system", "content": _schema_instruction(system, schema)},
-                               {"role": "user", "content": prompt}]},
+                               {"role": "user", "content": prompt}]} | endpoint.get("extra_body", {}),
                  endpoint.get("timeout", 300))
     try:
         text = data["choices"][0]["message"]["content"] or ""
@@ -180,7 +180,7 @@ class Router:
                     attempts.append(base | {"attempt": 0, "outcome": "skipped_no_key", "latency_ms": 0,
                                             "tokens": None, "detail": f"{ep['key_env']} is not set"})
                     continue
-            for attempt in (1, 2):  # one call, one retry on the same endpoint
+            for attempt in (1, 2):  # one call, one retry on the same endpoint (none after a timeout)
                 t0 = time.perf_counter()
                 entry = base | {"attempt": attempt, "tokens": None}
                 try:
@@ -201,6 +201,8 @@ class Router:
                     entry |= {"outcome": "error", "detail": self._clean(f"{type(e).__name__}: {e}", key)}
                 entry["latency_ms"] = round((time.perf_counter() - t0) * 1000)
                 attempts.append(entry)
+                if entry["outcome"] == "timeout":
+                    break  # a retry would double the wait: the next link in the chain is asked instead
         self.log += attempts
         raise RouterError(job, attempts)
 

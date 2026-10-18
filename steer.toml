@@ -52,7 +52,9 @@ connector = "openai_compatible"
 base_url = "https://opencode.ai/inference/go/openai/v1"
 model = "glm-5.3"
 key_env = "OPENCODE_GO_API_KEY"
-timeout = 300
+timeout = 90                                # on timeout the router falls back to the next link
+# GLM-5.3 always thinks; low effort cut hidden reasoning from 164 to 9 tokens on a probe (2026-10-18)
+extra_body = {reasoning_effort = "low"}
 
 [endpoints.opencode_deepseek]
 connector = "openai_compatible"
