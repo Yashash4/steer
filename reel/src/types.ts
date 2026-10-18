@@ -11,12 +11,13 @@ export type Line = {
 export type Sources = {
   heading: string; entries: { before: string; journal: string; after: string }[]; footnote: string; url: string;
 };
+export type Presenter = { video: string; start: number; end: number; label: string };
 export type Scene = {
   kind: "hook" | "point" | "brand" | "cta" | "sources"; ground: Ground; start: number; end: number;
-  transition_in: "wipe" | "none"; broll: null; lines: Line[]; sources: Sources | null;
+  transition_in: "wipe" | "none"; broll: null; presenter: Presenter | null; lines: Line[]; sources: Sources | null;
 };
 export type ReelProps = {
-  version: 1; fps: 30; width: 1080; height: 1920; durationInFrames: number; audio: string;
+  version: 2; fps: 30; width: 1080; height: 1920; durationInFrames: number; audio: string;
   fonts: { serif: string; serif_italic: string; sans: string };
   palette: Palette; chrome: { draft_mark: string; wordmark: string }; scenes: Scene[];
 };

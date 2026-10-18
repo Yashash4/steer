@@ -101,13 +101,18 @@ def test_a_short_reel_encodes_with_captions_and_the_draft_mark(tmp_path):
                                      "claim_ids": ["c1"]}]}]}
     said = []
     tts = lambda t, v: (said.append(t), fake_tts(t, v))[1]
-    t = reel.make_reel(record, script, BRAND, tmp_path, {"provider": "fake", "name": "fake"}, tts=tts,
-                       transcribe=lambda wav: said.pop(0))
+    heard = lambda wav: said.pop(0) if wav.name.startswith("line") else \
+        " ".join(reel.spoken(ln["text"])[0] for ln in script["scenes"][int(wav.stem.split("-")[1])]["lines"])
+    t = reel.make_reel(record, script, BRAND, tmp_path, {"provider": "fake", "name": "fake"}, tts=tts, transcribe=heard)
     assert t["probe"]["width"] == 1080 and t["probe"]["height"] == 1920 and t["probe"]["fps"] == 30.0
     assert t["probe"]["audio"]
     # the only failure of this 2-scene test reel is its length (under the 20 s floor)
     assert [f["code"] for f in t["failures"]] == ["DURATION_OUT_OF_RANGE"]
     assert all(r["ok"] for r in t["audio_round_trip"])
+    # the scene-level round trip runs on the audio decoded from reel.mp4, and its table sits next to the reel
+    assert [r["scene"] for r in t["scene_round_trip"]] == [0, 1] and all(r["ok"] for r in t["scene_round_trip"])
+    assert "| 1 | On average 0.4 kg a month, not a personal promise. | On average 0.4 kilograms" in \
+        (tmp_path / "reel_transcript.md").read_text()
     cap = t["captions"][1]
     assert reel.box_has_content(tmp_path / "reel.mp4", (cap["start"] + cap["end"]) / 2, reel.SUBS_BOX)
     assert (tmp_path / "reel.srt").read_text().count("-->") == len(t["captions"])
@@ -166,6 +171,15 @@ def test_props_carry_only_checked_text_and_the_pool_check_catches_anything_else(
     bad = cp.deepcopy(props)
     bad["scenes"][1]["lines"][0]["beats"][0]["text"] = "Doctors agree"                 # a beat not in its line
     assert reel.pool_check(bad, script, record, "come back", keys)
+    # the presenter slot (D-026): a muted clip per scene, always with the fixed label; the sources card holds >= 5 s
+    withp = reel.build_props(scenes, record, BRAND, "come back", keys, {0: "clip.mp4"})
+    assert withp["scenes"][0]["presenter"] == {"video": "presenter-0.mp4", "start": withp["scenes"][0]["start"],
+                                               "end": withp["scenes"][0]["end"], "label": "AI presenter · placeholder"}
+    assert withp["scenes"][1]["presenter"] is None and reel.pool_check(withp, script, record, "come back", keys) == []
+    bad = cp.deepcopy(withp)
+    bad["scenes"][0]["presenter"]["label"] = "Dr Steer"
+    assert [f["code"] for f in reel.pool_check(bad, script, record, "come back", keys)] == ["PROPS_SCHEMA"]
+    assert end["end"] - end["start"] >= 5.0
     bad = cp.deepcopy(props)
     bad["scenes"][1]["extra"] = "x"                                                    # anything outside the schema
     assert [f["code"] for f in reel.pool_check(bad, script, record, "come back", keys)] == ["PROPS_SCHEMA"]

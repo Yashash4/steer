@@ -63,6 +63,8 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--settings")
     v.add_argument("--engine", default="remotion", choices=["remotion", "playwright"],
                    help="remotion: kinetic type (code/reel); playwright: the fallback renderer")
+    v.add_argument("--presenter", nargs="*", default=[], metavar="SCENE=CLIP",
+                   help="D-026: a muted AI presenter placeholder clip for a scene (remotion), e.g. 0=hook.mp4")
     st = sub.add_parser("studio", help="the review studio: --serve (local, with actions) or --export (read-only copy)")
     st.add_argument("--db", required=True)
     st.add_argument("--posts", nargs="*", default=[], help="folders holding written posts (out/...)")
@@ -112,7 +114,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "reel":
         settings = load_settings(args.settings)
         try:
-            t = posts.reel_post(args.folder, store.connect(args.db), settings, engine=args.engine)
+            t = posts.reel_post(args.folder, store.connect(args.db), settings, engine=args.engine,
+                               presenter={int(k): v for k, v in (x.split("=", 1) for x in args.presenter)} or None)
         except posts.ReelRefused as e:
             print(f"refused: {json.dumps(e.reasons, ensure_ascii=False)[:2000]}", file=sys.stderr)
             return 2

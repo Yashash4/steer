@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AbsoluteFill, Audio, Easing, Sequence, cancelRender, continueRender, delayRender, spring,
+  AbsoluteFill, Audio, Easing, OffthreadVideo, Sequence, cancelRender, continueRender, delayRender, spring,
   staticFile, useCurrentFrame,
 } from "remotion";
-import { ENTER_DELAY, EXIT_S, onScreen, pinnedSet } from "./beats";
+import { DIM, buildsUp, onScreen } from "./beats";
 import { SANS, SERIF, SERIF_ITALIC, SERIF_VARS, fit } from "./fit";
-import type { Beat, Ground, Line, Palette, ReelProps, Scene } from "./types";
+import type { Ground, Line, Palette, Presenter, ReelProps, Scene } from "./types";
 
 const FPS = 30;
 const WIPE_S = 0.35;
@@ -13,22 +13,38 @@ const BOX = 900;
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const ease = Easing.out(Easing.cubic);
 
-type Colors = { ink: string; sub: string; ground: string; emph: string };
+type Colors = { ink: string; sub: string; ground: string; emph: string; hi: string };
 const colorsFor = (p: Palette, g: Ground): Colors => ({
   ink: g === "cream" ? p.ink : p.cream,
   sub: g === "cream" ? p.clay : p.blush,
   ground: p[g],
   emph: p.rust,
+  hi: g === "cream" ? p.rust : p.blush,   // the word being spoken
 });
 
-// Fraunces for framing/brand/cta, Inter 800 for health beats.
-const beatStyle = (line: Line) =>
-  line.kind === "health" ? { family: SANS, weight: 800 } : { family: SERIF, weight: 600 };
-const holdStyle = (line: Line) =>
-  line.kind === "health" ? { family: SANS, weight: 700 } : { family: SERIF, weight: 500 };
 const fam = (family: string) => (family === SANS ? { fontFamily: family } : { fontFamily: family, fontVariationSettings: SERIF_VARS });
 
 export const BrollLayer = (): null => null;
+
+// D-026: the presenter clip fills the frame (muted: the voice is always our checked TTS track) behind a soft bottom
+// gradient; its label is drawn on every frame the clip is on screen.
+const PresenterLayer = (p: { pr: Presenter; sceneStart: number; c: Colors }) => {
+  const from = Math.round((p.pr.start - p.sceneStart) * FPS);
+  return (
+    <Sequence from={from} durationInFrames={Math.max(1, Math.round((p.pr.end - p.pr.start) * FPS))} layout="none">
+      <AbsoluteFill>
+        <OffthreadVideo src={staticFile(p.pr.video)} muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      </AbsoluteFill>
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1060,
+        background: `linear-gradient(to bottom, transparent 0%, ${p.c.ground}d9 38%, ${p.c.ground} 70%)` }} />
+      <div style={{
+        position: "absolute", top: 64, left: 48, padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
+        fontSize: 26, color: LABEL_INK, background: LABEL_BG,
+      }}>{p.pr.label}</div>
+    </Sequence>
+  );
+};
+export const LABEL_BG = "#FFFFFF", LABEL_INK = "#111111";   // fixed so the QA can find the pill on decoded frames
 
 // Which words of the line sit inside line.emphasis (matched by exact substring).
 const emphasisFlags = (line: Line): boolean[][] => {
@@ -45,116 +61,58 @@ const emphasisFlags = (line: Line): boolean[][] => {
   );
 };
 
-const BeatView = (p: { line: Line; beat: Beat; flags: boolean[]; t: number; exitAge: number | null; c: Colors; top: number; height: number }) => {
-  const { line, beat, flags, t, exitAge, c } = p;
-  const st = beatStyle(line);
-  const fitted = useMemo(() => fit(beat.text, st.family, st.weight, 2, BOX - 20, 150, 56), [beat, st.family, st.weight]);
-  // the next beat starts to appear only after the leaving one is gone: never two beats on screen
-  const enter = ease(clamp01((t - beat.start - ENTER_DELAY) / 0.22));
-  let y = (1 - enter) * 60;
-  let opacity = enter;
-  if (exitAge !== null) {
-    y = -120 * ease(clamp01(exitAge / EXIT_S));
-    opacity = 1 - clamp01(exitAge / EXIT_S);
+const LH = 1.14;
+
+// One font size for the WHOLE line, chosen before the first phrase appears, and the whole line laid out once: phrases
+// not yet spoken take their place invisibly, so the build-up never reflows or shrinks. Too long a line fails the
+// render (the writer keeps reel lines to 22 words).
+const lineFit = (text: string, family: string, weight: number, height: number, max: number, min: number) => {
+  for (let size = max; ;) {
+    const r = fit(text, family, weight, 12, BOX - 20, size, 1);
+    if (r.fontSize < min) throw new Error("line does not fit at " + min + "px: " + text);
+    if (r.lines.length * r.fontSize * LH <= height) return r.fontSize;
+    size = r.fontSize - 3;
   }
-  const activeIdx = exitAge !== null ? -1 : beat.words.reduce((a, w, i) => (w.start <= t ? i : a), 0);
-  return (
-    <div style={{
-      position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: p.top, height: p.height, display: "flex",
-      alignItems: "center", justifyContent: "center", transform: `translateY(${y}px)`, opacity,
-    }}>
-      <div style={{
-        display: "flex", flexWrap: "wrap", justifyContent: "center", columnGap: fitted.fontSize * 0.28,
-        fontSize: fitted.fontSize, lineHeight: 1.1, color: c.ink, textAlign: "center", ...fam(st.family), fontWeight: st.weight,
-      }}>
-        {beat.words.map((w, i) => {
-          const next = beat.words[i + 1];
-          const on = exitAge !== null ? 0 : clamp01((t - w.start) / 0.1) * (next ? 1 - clamp01((t - next.start) / 0.1) : 1);
-          const said = exitAge !== null || i <= activeIdx;
-          const em = flags[i];
-          return (
-            <span key={i} style={{
-              display: "inline-block", opacity: said ? 1 : 0.4, color: em ? c.emph : c.ink,
-              transform: `translateY(${-10 * on}px) scale(${1 + 0.06 * on})`,
-              ...(em ? { fontFamily: SERIF_ITALIC, fontWeight: st.weight } : {}),
-            }}>{w.text}</span>
-          );
-        })}
-      </div>
-    </div>
-  );
 };
 
-const HoldView = (p: { line: Line; c: Colors; top: number; height: number; t: number }) => {
-  const { line, c } = p;
-  const st = holdStyle(line);
-  const fitted = useMemo(() => {
-    let max = 84;
-    for (;;) {
-      const r = fit(line.text, st.family, st.weight, 8, BOX - 40, max, 28);
-      if (r.lines.length * r.fontSize * 1.2 <= p.height) return r;
-      max = r.fontSize - 2;
-      if (max < 28) throw new Error("full line does not fit at 28px: " + line.text);
-    }
-  }, [line, st.family, st.weight, p.height]);
-  const at = line.emphasis ? line.text.indexOf(line.emphasis) : -1;
-  const emLen = line.emphasis ? line.emphasis.length : 0;
-  const parts = at < 0 ? [line.text, "", ""] : [line.text.slice(0, at), line.text.slice(at, at + emLen), line.text.slice(at + emLen)];
-  return (
-    <div style={{
-      position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: p.top, height: p.height, display: "flex",
-      alignItems: "center", justifyContent: "center", opacity: clamp01((p.t - line.end) / 0.15),
-    }}>
-      <div style={{
-        fontSize: fitted.fontSize, lineHeight: 1.2, textAlign: "center", color: c.ink, ...fam(st.family), fontWeight: st.weight,
-      }}>
-        <span>{parts[0]}</span>
-        <span style={{ color: c.emph, fontFamily: SERIF_ITALIC, fontStyle: "normal" }}>{parts[1]}</span>
-        <span>{parts[2]}</span>
-      </div>
-    </div>
-  );
-};
-
-// The opening beat of a health line, and every beat with a negation or qualifier, stay pinned at the top (dimmed)
-// until the hold: a still frame never loses "No evidence was found that ..." (beats.ts).
-const PIN_MAX = 64, PIN_MIN = 32, PIN_GAP = 12;
-
-const LineView = (p: { line: Line; t: number; c: Colors; hasKey: boolean; keyAt: number | null }) => {
+// A health line builds up phrase by phrase (earlier phrases stay, dimmed; nothing leaves before the hold ends); any
+// other line is complete from its first frame with the spoken word highlighted (beats.ts).
+const LineView = (p: { line: Line; t: number; c: Colors; top: number; height: number; appear: number; big: boolean }) => {
   const { line, t, c } = p;
   const flags = useMemo(() => emphasisFlags(line), [line]);
-  const st = beatStyle(line);
-  const pinFits = useMemo(() => {
-    const pins = pinnedSet(line);
-    return line.beats.map((b, k) => (pins.has(k) ? fit(b.text, st.family, st.weight, 2, BOX, PIN_MAX, PIN_MIN) : null));
-  }, [line, st.family, st.weight]);
-  const s = onScreen(line, t, p.keyAt !== null && t >= p.keyAt);   // a key pair on screen counts as a pinned block
+  const health = line.kind === "health";
+  const st = health ? { family: SANS, weight: 800 } : { family: SERIF, weight: 600 };
+  const font = useMemo(() => lineFit(line.text, st.family, st.weight, p.height, health ? 92 : p.big ? 120 : 92, health ? 48 : 44),
+    [line, st.family, st.weight, p.height, health, p.big]);
+  const s = onScreen(line, t, p.appear);
   if (!s) return null;
-  const top = p.hasKey ? 700 : 240;
-  const pinH = s.pinned.reduce((a, k) => a + (pinFits[k]?.lines.length ?? 1) * (pinFits[k]?.fontSize ?? PIN_MAX) * 1.12 + PIN_GAP, 0);
-  const beatTop = top + pinH + (s.pinned.length ? 24 : 0);
-  const height = 1640 - beatTop;
-  const age = s.current !== null ? t - line.beats[s.current].start : 0;
   return (
     <>
-      {s.pinned.length ? (
-        <div style={{ position: "absolute", left: (1080 - BOX) / 2, width: BOX, top, display: "flex", flexDirection: "column",
-          gap: PIN_GAP, alignItems: "center", opacity: 0.55 }}>
-          {s.pinned.map((k) => (
-            <div key={k} style={{ fontSize: pinFits[k]?.fontSize ?? PIN_MAX, lineHeight: 1.12, textAlign: "center", color: c.ink,
-              ...fam(st.family), fontWeight: st.weight }}>{line.beats[k].text}</div>
-          ))}
+      <div style={{
+        position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: p.top, height: p.height, display: "flex",
+        alignItems: "center", justifyContent: "center",
+      }}>
+        <div style={{
+          display: "flex", flexWrap: "wrap", justifyContent: "center", columnGap: font * 0.26, fontSize: font, lineHeight: LH,
+          textAlign: "center", color: c.ink, ...fam(st.family), fontWeight: st.weight,
+        }}>
+          {line.beats.flatMap((b, k) => b.words.map((w, i) => {
+            const shown = k < s.shown;
+            const live = s.current === k;
+            const active = live ? b.words.reduce((a, x, j) => (x.start <= t ? j : a), -1) : -1;
+            const enter = buildsUp(line) ? ease(clamp01((t - b.start) / 0.22)) : 1;
+            const opacity = !shown ? 0 : (buildsUp(line) && s.current !== null && k < s.current ? DIM : live && i > active && health ? 0.45 : 1) * enter;
+            const on = live && i === active ? clamp01((t - w.start) / 0.1) : 0;
+            return (
+              <span key={k + "-" + i} style={{
+                display: "inline-block", opacity, color: live && i === active ? c.hi : flags[k][i] ? c.emph : c.ink,
+                transform: `translateY(${(1 - enter) * 30 - 6 * on}px)`,
+                ...(flags[k][i] ? { fontFamily: SERIF_ITALIC, fontWeight: st.weight } : {}),
+              }}>{w.text}</span>
+            );
+          }))}
         </div>
-      ) : null}
-      {s.exiting !== null ? (
-        <BeatView key={s.exiting} line={line} beat={line.beats[s.exiting]} flags={flags[s.exiting]} t={t} exitAge={age} c={c}
-          top={beatTop} height={height} />
-      ) : null}
-      {s.current !== null ? (
-        <BeatView key={s.current} line={line} beat={line.beats[s.current]} flags={flags[s.current]} t={t} exitAge={null} c={c}
-          top={beatTop} height={height} />
-      ) : null}
-      {s.hold ? <HoldView line={line} c={c} top={top} height={1640 - top} t={t} /> : null}
+      </div>
       {line.source_label ? (
         <div style={{
           position: "absolute", left: (1080 - BOX) / 2, width: BOX, bottom: 200, textAlign: "center", fontFamily: SANS,
@@ -165,14 +123,15 @@ const LineView = (p: { line: Line; t: number; c: Colors; hasKey: boolean; keyAt:
   );
 };
 
-const KeyPair = (p: { number: string; label: string; at: number; t: number; frame: number; fromFrame: number; c: Colors; ground: Ground }) => {
-  const num = useMemo(() => fit(p.number, SERIF, 700, 1, BOX, 200, 56), [p.number]);
+const KeyPair = (p: { number: string; label: string; at: number; t: number; frame: number; fromFrame: number; c: Colors; ground: Ground;
+  top: number; height: number; numMax: number }) => {
+  const num = useMemo(() => fit(p.number, SERIF, 700, 1, BOX, p.numMax, 56), [p.number, p.numMax]);
   const lab = useMemo(() => fit(p.label, SANS, 600, 3, BOX - 40, 44, 28), [p.label]);
   if (p.t < p.at) return null;
   const sp = spring({ frame: p.frame - Math.round(p.at * FPS) + p.fromFrame, fps: FPS, config: { damping: 9, stiffness: 150 } });
   return (
     <div style={{
-      position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: 170, height: 500, display: "flex", flexDirection: "column",
+      position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: p.top, height: p.height, display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center", gap: 24, transform: `scale(${0.85 + 0.15 * sp})`,
       opacity: clamp01((p.t - p.at) / 0.12),
     }}>
@@ -190,26 +149,27 @@ const KeyPair = (p: { number: string; label: string; at: number; t: number; fram
 const SourcesCard = (p: { s: NonNullable<Scene["sources"]>; c: Colors }) => {
   const { s, c } = p;
   const m = useMemo(() => {
-    let max = 30;
+    // every string on the card at least 40 px (1080 wide), so the DOI and location read on a phone
+    let max = 44;
     for (;;) {
-      const fits = s.entries.map((e) => fit(e.before + e.journal + e.after, SANS, 500, 14, BOX - 20, max, 24));
+      const fits = s.entries.map((e) => fit(e.before + e.journal + e.after, SANS, 500, 16, BOX - 20, max, 1));
       const size = Math.min(...fits.map((f) => f.fontSize));
-      const h = fits.reduce((a, f) => a + f.lines.length * size * 1.4 + 36, 0);
-      if (h <= 900) return size;
+      const h = fits.reduce((a, f) => a + f.lines.length * size * 1.3 + 30, 0);
+      if (size < 40) throw new Error("sources do not fit at 40px");
+      if (h <= 1060) return size;
       max = size - 1;
-      if (max < 24) throw new Error("sources do not fit at 24px");
     }
   }, [s]);
-  const foot = useMemo(() => fit(s.footnote, SANS, 500, 5, BOX - 20, 28, 24), [s]);
+  const foot = useMemo(() => fit(s.footnote, SANS, 500, 6, BOX - 20, 40, 40), [s]);
   const url = useMemo(() => fit(s.url, SERIF, 600, 1, BOX, 56, 40), [s]);
   return (
     <div style={{
-      position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: 230, bottom: 260, display: "flex", flexDirection: "column",
-      gap: 36, justifyContent: "center", color: c.ink,
+      position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: 150, bottom: 140, display: "flex", flexDirection: "column",
+      gap: 28, justifyContent: "center", color: c.ink,
     }}>
       <div style={{ fontFamily: SERIF, fontVariationSettings: SERIF_VARS, fontWeight: 600, fontSize: 64 }}>{s.heading}</div>
       {s.entries.map((e, i) => (
-        <div key={i} style={{ fontFamily: SANS, fontWeight: 500, fontSize: m, lineHeight: 1.4 }}>
+        <div key={i} style={{ fontFamily: SANS, fontWeight: 500, fontSize: m, lineHeight: 1.3 }}>
           <span>{e.before}</span><span style={{ fontStyle: "italic", marginLeft: "0.3em" }}>{e.journal}</span><span>{e.after}</span>
         </div>
       ))}
@@ -224,8 +184,11 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; props: ReelPr
   const frame = useCurrentFrame();
   const t = (frame + p.from) / FPS;
   const c = colorsFor(props.palette, scene.ground);
-  const hasKey = scene.lines.some((l) => l.key !== null);
   const keyLine = scene.lines.find((l) => l.key !== null);
+  // with a presenter the text sits in the lower band, over the gradient; without, it uses the frame
+  const box = scene.presenter ? { top: keyLine ? 1240 : 1120, height: keyLine ? 400 : 520 }
+    : { top: keyLine ? 700 : 240, height: keyLine ? 940 : 1400 };
+  const keyBox = scene.presenter ? { top: 980, height: 250, numMax: 150 } : { top: 170, height: 500, numMax: 200 };
   const wp = p.wipe ? ease(clamp01(frame / (WIPE_S * FPS))) : 1;
   const sinceStart = t - scene.start;
   const rule = ease(clamp01(sinceStart / 0.7));
@@ -233,16 +196,20 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; props: ReelPr
   return (
     <AbsoluteFill style={{ background: c.ground, clipPath: wp < 1 ? `inset(0 ${100 - wp * 100}% 0 0)` : undefined }}>
       {scene.kind !== "point" && scene.kind !== "sources" ? <BrollLayer /> : null}
+      {scene.presenter ? <PresenterLayer pr={scene.presenter} sceneStart={scene.start} c={c} /> : null}
       <div style={{
         position: "absolute", right: -140, bottom: 240, width: 420, height: 420, borderRadius: "50%",
         border: "3px solid " + (dark ? props.palette.blush : props.palette.rust), opacity: 0.35,
         transform: `translate(${Math.sin(t / 3) * 24}px, ${Math.cos(t / 4) * 30}px)`,
       }} />
       <div style={{ position: "absolute", left: 60, bottom: 150, height: 4, width: 960 * rule, background: props.palette.blush }} />
-      {scene.lines.map((l, i) => <LineView key={i} line={l} t={t} c={c} hasKey={hasKey} keyAt={keyLine?.key?.at ?? null} />)}
+      {scene.lines.map((l, i) => (
+        <LineView key={i} line={l} t={t} c={c} top={box.top} height={box.height} appear={i === 0 ? scene.start : l.start}
+          big={scene.kind === "hook" && i === 0} />
+      ))}
       {keyLine && keyLine.key ? (
         <KeyPair number={keyLine.key.number} label={keyLine.key.label} at={keyLine.key.at} t={t} frame={frame}
-          fromFrame={p.from} c={c} ground={scene.ground} />
+          fromFrame={p.from} c={c} ground={scene.ground} {...keyBox} />
       ) : null}
       {scene.sources ? <SourcesCard s={scene.sources} c={c} /> : null}
       <div style={{

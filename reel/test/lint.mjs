@@ -53,6 +53,7 @@ const keys = new Set([
   ...Object.keys(d.line.properties.key.oneOf[1].properties), ...Object.keys(d.sources.properties),
   ...Object.keys(d.sources.properties.entries.items.properties), ...Object.keys(d.line.properties.beats.items.properties),
   ...Object.keys(d.line.properties.beats.items.properties.words.items.properties),
+  ...Object.keys(d.scene.properties.presenter.oneOf[1].properties),
 ]);
 const all = srcFiles.filter((f) => /\.tsx?$/.test(f) && !f.endsWith("types.ts")).map((f) => strip(fs.readFileSync(f, "utf8"))).join("\n");
 for (const k of keys) if (!new RegExp(`\\.${k}\\b`).test(all)) problems.push(`schema key never used in src: ${k}`);

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "steer/reel_props/1",
-  "title": "reel_props.json v1: everything the Remotion composition may draw or play. Written by `steer reel` (Python) after the post's checks; every string in it is a checked script line (or an exact substring of one) or a string built by code. The composition draws no other text.",
+  "$id": "steer/reel_props/2",
+  "title": "reel_props.json v2: everything the Remotion composition may draw or play. Written by `steer reel` (Python) after the post's checks; every string in it is a checked script line (or an exact substring of one) or a string built by code. The composition draws no other text.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,7 +18,7 @@
   ],
   "properties": {
     "version": {
-      "const": 1
+      "const": 2
     },
     "fps": {
       "const": 30
@@ -139,6 +139,7 @@
         "end",
         "transition_in",
         "broll",
+        "presenter",
         "lines",
         "sources"
       ],
@@ -174,6 +175,40 @@
         "broll": {
           "type": "null",
           "description": "reserved: a background clip behind framing scenes (S7-full); always null in v1"
+        },
+        "presenter": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "video",
+                "start",
+                "end",
+                "label"
+              ],
+              "properties": {
+                "video": {
+                  "type": "string",
+                  "description": "a muted MP4 in the render's public folder (the voice is always our checked TTS track)"
+                },
+                "start": {
+                  "$ref": "#/$defs/seconds"
+                },
+                "end": {
+                  "$ref": "#/$defs/seconds"
+                },
+                "label": {
+                  "const": "AI presenter · placeholder",
+                  "description": "drawn whenever the presenter is on screen (D-026)"
+                }
+              }
+            }
+          ],
+          "description": "D-026: a talking presenter clip filling the frame behind the scene's text; null = motion graphics only"
         },
         "lines": {
           "type": "array",

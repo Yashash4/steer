@@ -42,7 +42,7 @@ scenes = []
 def scene(kind, ground, lines, trans="wipe"):
     s0 = max(0.0, lines[0]["start"] - 0.3) if scenes else 0.0
     scenes.append({"kind": kind, "ground": ground, "start": round(s0, 3), "end": round(t, 3), "transition_in": trans,
-                   "broll": None, "lines": lines, "sources": None})
+                   "broll": None, "presenter": None, "lines": lines, "sources": None})
 
 
 SRC = "West et al. 2026, section text, no page layout"
@@ -54,16 +54,16 @@ scene("point", "cream", [line("health", "Improvements in weight and cardiometabo
 scene("brand", "maroon", [line("brand", "A planned exit. We help you build habits that last after the medicine stops.", hold=0.35)])
 scene("cta", "cream", [line("cta", "Talk to a Steer doctor", hold=0.3), line("signoff", "steerclub.com", hold=0.5)])
 start = t
-t += 3.0
+t += 5.0
 scenes.append({"kind": "sources", "ground": "cream", "start": round(start, 3), "end": round(t, 3), "transition_in": "wipe",
-               "broll": None, "lines": [], "sources": {
+               "broll": None, "presenter": None, "lines": [], "sources": {
                    "heading": "Sources",
                    "entries": [{"before": "West S, Scragg J, Aveyard P et al. Weight regain after cessation of medication for "
                                           "weight management: systematic review and meta-analysis.",
                                 "journal": "BMJ", "after": ", 2026. doi:10.1136/bmj-2025-085304. Section text, no page layout."}],
                    "footnote": "Every claim on these slides is linked to the paper. Pending review by a Steer doctor before publishing.",
                    "url": "steerclub.com"}})
-props = {"version": 1, "fps": 30, "width": 1080, "height": 1920, "durationInFrames": int(round(t * 30)), "audio": "voice.wav",
+props = {"version": 2, "fps": 30, "width": 1080, "height": 1920, "durationInFrames": int(round(t * 30)), "audio": "voice.wav",
          "fonts": {"serif": "Fraunces.ttf", "serif_italic": "Fraunces-Italic.ttf", "sans": "Inter.ttf"}, "palette": PAL,
          "chrome": {"draft_mark": "draft · pending doctor review", "wordmark": "steer"}, "scenes": scenes}
 jsonschema.validate(props, json.loads((HERE.parent / "props.schema.json").read_text()))
