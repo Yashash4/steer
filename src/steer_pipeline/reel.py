@@ -48,6 +48,7 @@ TOKEN_RULES = [
     (re.compile(r"^CI$"), "confidence interval"), (re.compile(r"^I²$"), "I squared"),
     (re.compile(r"^Hg$"), ""), (re.compile(r"^mm$"), "millimetres of mercury"),
     (re.compile(r"^steerclub\.com$"), "steer club dot com"),
+    (re.compile(r"^US$"), "U.S."),                       # not the word "us" (display stays "US")
 ]
 PREFIX = [("≥", "at least "), ("≤", "at most "), ("±", "plus or minus "), ("<", "less than "), (">", "more than "),
           ("−", "minus "), ("-", "minus ")]

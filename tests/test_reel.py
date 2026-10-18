@@ -22,6 +22,7 @@ def test_spoken_form_expands_units_and_symbols_by_code_only():
     assert say("I² = 98%") == "I squared = 98 per cent"
     assert say("120 mm Hg") == "120 millimetres of mercury"
     assert say("steerclub.com") == "steer club dot com"
+    assert say("than US whites.") == "than U.S. whites." and say("tell us more") == "tell us more"
     assert say("Talk to a Steer doctor") == "Talk to a Steer doctor"          # words are never reworded
     # shorter speech, same numbers (WIN, reel v3): no BMI unit voiced right after "BMI"; 45+ is "45 and over"
     assert say("BMI under 25 kg/m2, aged 45+ in Chennai") == "BMI under 25, aged 45 and over in Chennai"
