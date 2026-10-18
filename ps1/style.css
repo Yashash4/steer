@@ -7,7 +7,7 @@
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--cream);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.5;min-height:100vh;display:flex;flex-direction:column}
 header,main,footer{width:100%;max-width:560px;margin:0 auto;padding-left:20px;padding-right:20px}
-header{padding-top:20px;padding-bottom:4px;font-family:var(--serif);font-style:italic;font-variation-settings:'WONK' 0,'SOFT' 50;font-size:30px;font-weight:600;color:var(--maroon);letter-spacing:-.01em}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-top:20px;padding-bottom:4px;font-family:var(--serif);font-style:italic;font-variation-settings:'WONK' 0,'SOFT' 50;font-size:30px;font-weight:600;color:var(--maroon);letter-spacing:-.01em}
 main{flex:1;padding-top:12px;padding-bottom:28px}
 footer{padding-top:18px;padding-bottom:28px;border-top:1px solid var(--blush);font-size:13px;color:var(--clay);display:flex;flex-wrap:wrap;gap:4px 14px}
 footer span+span{position:relative}
@@ -31,23 +31,6 @@ p{margin:0}
 .btn.alt{background:transparent;color:var(--maroon);border:2px solid var(--maroon)}
 .btn.alt:hover{background:var(--blush)}
 :focus-visible{outline:3px solid var(--maroon);outline-offset:3px}
-/* slider */
-.current{font-family:var(--serif);font-style:italic;font-size:34px;color:var(--rust);min-height:44px;font-variation-settings:'WONK' 0,'SOFT' 50}
-.slider{position:relative;display:flex;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:pointer;border-radius:16px;padding:8px 0}
-.slider.horiz{flex-direction:row}
-.slider.vert{flex-direction:column}
-.stop{position:relative;display:flex;align-items:center;justify-content:center}
-.horiz .stop{flex:1;flex-direction:column;min-height:88px;justify-content:flex-start;padding-top:8px;gap:12px}
-.vert .stop{min-height:56px;justify-content:flex-start;gap:16px;padding-left:12px}
-.horiz::before{content:"";position:absolute;left:5%;right:5%;top:40px;height:4px;border-radius:2px;background:var(--blush)}
-.vert::before{content:"";position:absolute;left:20px;top:36px;bottom:36px;width:4px;border-radius:2px;background:var(--blush)}
-.dot{position:relative;z-index:1;width:20px;height:20px;border-radius:50%;background:var(--paper);border:3px solid var(--clay);transition:transform .18s,background .18s,border-color .18s;flex:none;margin-top:6px}
-.vert .dot{margin-top:0}
-.slabel{font-size:13px;color:var(--ink)}
-.vert .slabel{font-size:17px}
-.stop.on .dot{transform:scale(2);background:var(--rust);border-color:var(--maroon);box-shadow:0 2px 10px rgba(102,20,20,.35)}
-.stop.on .slabel{font-weight:700;color:var(--maroon)}
-.horiz .stop.on .slabel{transform:translateY(10px)}
 /* choices */
 .choices{display:flex;flex-direction:column;gap:12px}
 .choice{appearance:none;cursor:pointer;min-height:64px;padding:14px 20px;border-radius:18px;border:2px solid var(--blush);background:var(--paper);color:var(--ink);font:600 18px/1.3 var(--sans);text-align:left;transition:transform .15s,border-color .15s,background .15s}
@@ -59,8 +42,6 @@ p{margin:0}
 .num{font-family:var(--serif);font-variation-settings:'WONK' 0,'SOFT' 50;font-weight:600;font-size:clamp(46px,15vw,76px);line-height:1;color:var(--rust);letter-spacing:-.02em}
 .rlabel{font-family:var(--serif);font-style:italic;font-size:21px;color:var(--maroon);line-height:1.2}
 .sentence{font-size:17px}
-.guess{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;color:var(--clay);font-size:15px}
-.guess b{font-family:var(--serif);font-style:italic;font-size:22px;color:var(--maroon);font-weight:600}
 .quals{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .quals li{padding-left:14px;border-left:3px solid var(--rust);font-size:15px}
 .src{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:13px;color:var(--clay)}
@@ -100,6 +81,34 @@ p{margin:0}
 .demo{font-weight:600;color:var(--maroon)}
 .preview{background:var(--paper);border:1px solid var(--blush);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px;font-size:15px}
 .preview[hidden]{display:none}
+.progress{display:flex;align-items:center;gap:10px}
+/* 10 s ring: starts only when .go is added (after the question, context and choices are drawn); at zero it just dims */
+.ring{width:26px;height:26px;transform:rotate(-90deg);flex:none}
+.ring circle{fill:none;stroke-width:4.5}
+.ring .bg{stroke:var(--blush)}
+.ring .fg{stroke:var(--rust);stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:0;animation:ring 10s linear forwards;animation-play-state:paused}
+.ring.go .fg{animation-play-state:running}
+.ring.done{opacity:.3;transition:opacity .4s}
+@keyframes ring{to{stroke-dashoffset:100}}
+.hud{font:600 14px var(--sans);font-style:normal;letter-spacing:0;color:var(--clay);white-space:nowrap}
+.hud[hidden]{display:none}
+/* reveal: panel, labels, result, then the whole verified number (no count-up, no text change) */
+.verdict{display:flex;align-items:baseline;justify-content:space-between;gap:12px;background:var(--paper);border:1px solid var(--blush);border-radius:20px;padding:18px 20px;animation:enter .35s ease-out both}
+.rres{font-family:var(--serif);font-style:italic;font-weight:600;font-size:clamp(26px,7vw,34px);line-height:1.1;color:var(--maroon);font-variation-settings:'WONK' 0,'SOFT' 50}
+.verdict .rres{animation:pop .4s .65s ease-out both}
+.r-closest .rres,.rres.r-closest{color:var(--rust)}
+.r-different .rres,.rres.r-different{color:var(--maroon)}
+.pts{font:700 16px var(--sans);color:var(--clay);animation:pop .4s .75s ease-out both}
+.cmp{display:flex;flex-direction:column;gap:6px}
+.crow{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;color:var(--clay);font-size:15px;animation:enter .35s both}
+.crow:nth-child(1){animation-delay:.2s}
+.crow:nth-child(2){animation-delay:.4s}
+.crow b{font-family:var(--serif);font-style:italic;font-size:21px;color:var(--maroon);font-weight:600}
+.final{display:flex;flex-direction:column;gap:20px;animation:pop .5s .95s ease-out both}
+@keyframes pop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+.ghead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.sharebox:empty{display:none}
+.sharecard{width:100%;height:auto;border-radius:16px;border:1px solid var(--blush)}
 @media(min-width:760px){
 body{font-size:19px}
 header,main,footer{max-width:640px}

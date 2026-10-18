@@ -61,7 +61,7 @@ def rounds_file(tmp_path, extra=(), **override):
             return "[" + ", ".join(toml(x) for x in v) + "]"
         return "{" + ", ".join(f"{k} = {toml(x)}" for k, x in v.items() if x is not None) + "}"
     lines = [f"{k} = {toml(v)}" for k, v in spec.items() if not isinstance(v, (dict, list)) or k == "x"]
-    for k in ("ui", "readout", "cta", "warm_lead", "doctor_questions"):
+    for k in ("ui", "points", "readout", "cta", "warm_lead", "doctor_questions"):
         lines.append(f"[{k}]")
         lines += [f"{kk} = {toml(vv)}" for kk, vv in spec[k].items()]
     for k in ("opener", "doubt", "round", "gap"):
@@ -315,3 +315,59 @@ def test_the_one_study_note_is_only_for_single_studies(stored, tmp_path):
     assert all(note not in r["qualifiers"] for r in [out["hook"], *out["rounds"]])      # a review never carries it
     with pytest.raises(ps1.BuildError, match="design must be"):
         ps1.build(stored, tmp_path / "c", SETTINGS, rounds_file(tmp_path, design="cohort"), playable=False, fonts=False)
+
+
+# ---- "Real Number" game layer ----
+def test_the_result_labels_and_points_are_fixed():
+    ui = ROUNDS["ui"]
+    assert (ui["result_closest"], ui["result_close"], ui["result_different"]) == (
+        "Closest range", "Close estimate", "Different from the study estimate")
+    assert ROUNDS["points"] == {"closest": 3, "close": 1, "different": 0}
+    assert not re.search(r"spot on|way off|wrong", json.dumps(ROUNDS, ensure_ascii=False), re.I)
+    assert "lock" not in ui and "copied" not in ROUNDS["warm_lead"]
+
+
+def test_the_share_card_copy_is_fixed_and_checked():
+    ui = ROUNDS["ui"]
+    assert ui["share_line"] == "I matched the study range in {n} of {m} guesses. Try it."
+    assert ui["share_note"] == "Your score reflects quiz guesses, not your health."
+    # drawn from claims.json only: no doubt, guess or contact data is read by the card
+    js = (ps1.PS1 / "app.js").read_text()
+    card = js.split("async function shareCard(", 1)[1].split("\nfunction ", 1)[0]
+    assert "S.picked" not in card and "stops[" not in card and "input" not in card
+    # every ui line (labels, share text) goes through the build's checks
+    assert 'for k, v in spec["ui"].items()' in (ps1.__file__ and open(ps1.__file__, encoding="utf8").read())
+
+
+def test_every_numeric_bin_scale_has_the_answer_in_exactly_one_bin_with_no_gaps():
+    for r in ROUNDS["round"]:
+        vals = [s[1] for s in r["stops"]]
+        if not isinstance(vals[0], (int, float)):
+            continue
+        ps1.check_bins(r)   # raises on overlap, gap, or an answer outside the scale
+        assert vals == sorted(set(vals)) and vals[0] <= r["answer"]
+        assert sum(1 for i, v in enumerate(vals) if v <= r["answer"] < (vals[i + 1] if i + 1 < len(vals) else 1e9)) == 1
+    reg = ROUND["regain"]
+    assert reg["kind"] == "choice" and [s[0] for s in reg["stops"]] == [
+        "Under 0.2 kg", "0.2 to under 0.7 kg", "0.7 to under 1.5 kg", "1.5 kg or more"]
+
+
+def test_a_bin_scale_with_a_gap_or_an_overlap_fails():
+    base = {"id": "x", "answer": 0.4}
+    ps1.check_bins(base | {"stops": [["Under 0.2 kg", 0], ["0.2 to under 0.7 kg", 0.2], ["0.7 kg or more", 0.7]]})
+    for stops in ([["Under 0.2 kg", 0], ["0.3 to under 0.7 kg", 0.2], ["0.7 kg or more", 0.7]],   # gap: the edge is not on both sides
+                  [["0.5 kg or more", 0.5], ["Under 0.5 kg", 0]]):                                  # not increasing
+        with pytest.raises(ps1.BuildError):
+            ps1.check_bins(base | {"stops": stops})
+    with pytest.raises(ps1.BuildError):   # the answer below the first bin
+        ps1.check_bins(base | {"stops": [["From 1 kg", 1], ["2 kg or more", 2]]})
+
+
+def test_the_game_layer_is_one_tap_with_a_silent_ring_and_a_local_share_card():
+    js = (ps1.PS1 / "app.js").read_text()
+    css = (ps1.PS1 / "style.css").read_text()
+    assert "slider" not in js and "C.ui.lock" not in js and "setTimeout" not in js   # no lock, no auto-pick at zero
+    assert 'setAttribute("aria-hidden", "true")' in js and "aria-live" not in js.split("function ring(", 1)[1].split("\n}\n", 1)[0]
+    assert "animation-play-state:paused" in css and "10s linear" in css
+    assert "&& navigator.vibrate)" in js        # feature-detected
+    assert "toBlob" in js and "fetch(" not in js.replace('fetch("./claims.json")', "")

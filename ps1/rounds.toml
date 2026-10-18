@@ -10,7 +10,6 @@ single_study_note = "A comparison between groups in one study, not a prediction 
 footer = "Educational hackathon prototype · content pending review by a Steer doctor · not a medical assessment"
 
 [ui]
-lock = "Lock my guess"
 you_guessed = "You guessed"
 see_quote = "See the exact sentence"
 hide_quote = "Hide the sentence"
@@ -24,12 +23,27 @@ questions_title = "Questions to take to a doctor"
 restart = "Play again"
 progress = "Question {n} of {m}"
 progress_first = "Question {n}"
+study_range = "The study range"
+result_closest = "Closest range"
+result_close = "Close estimate"
+result_different = "Different from the study estimate"
+score_label = "Score"
+streak_label = "Streak"
+worth_a_chat = "Worth a chat"
+unscored = "Not scored"
+share_make = "Make a share card"
+share_line = "I matched the study range in {n} of {m} guesses. Try it."
+share_note = "Your score reflects quiz guesses, not your health."
+
+# points per result, fixed and deterministic (numbers, not copy)
+[points]
+closest = 3
+close = 1
+different = 0
 
 [readout]
-under = "You guessed below the study on {n} of {m}"
-over = "You guessed above the study on {n} of {m}"
-close = "You were close on {n} of {m}"
-direction = "You got the direction right on {n} of {m}"
+numbers = "Closest range on {n} of {m} number guesses"
+direction = "Closest range on {n} of {m} direction guesses"
 meaning_title = "What these studies tell us — and what they don't"
 
 [cta]
@@ -49,7 +63,6 @@ show_label = "Show what Steer would receive"
 preview_title = "What Steer would receive"
 copy_label = "Copy my questions"
 share_label = "Share my questions"
-copied = "Copied"
 consent_short = "Consent"
 yes_label = "yes"
 your_guess = "Your guess"
@@ -109,9 +122,10 @@ opener = "bus"
 doubt = "will_weight_come_back"
 pmcid = "PMC12776922"
 quote_contains = "The average monthly rate of weight regain was 0.4 kg"
-kind = "slider"
+kind = "choice"
 question = "After stopping a weight management medicine, how fast does weight come back each month?"
-stops = [["None", 0], ["0.1 kg", 0.1], ["0.4 kg", 0.4], ["1 kg", 1], ["2 kg", 2]]
+# answer OPTIONS (UI text, not claims): contiguous bins, each lower edge is the previous bin's upper edge; the answer falls in exactly one
+stops = [["Under 0.2 kg", 0], ["0.2 to under 0.7 kg", 0.2], ["0.7 to under 1.5 kg", 0.7], ["1.5 kg or more", 1.5]]
 answer = 0.4
 sentence = "On average, the monthly rate of weight regain was 0.4 kg (95% CI 0.3 to 0.5)."
 reveal_number = "0.4 kg"

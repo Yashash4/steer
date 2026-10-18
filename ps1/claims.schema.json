@@ -16,7 +16,8 @@
     "readout",
     "doctor_questions",
     "cta",
-    "warm_lead"
+    "warm_lead",
+    "points"
   ],
   "properties": {
     "version": {
@@ -82,7 +83,6 @@
         "type": "string"
       },
       "required": [
-        "lock",
         "you_guessed",
         "see_quote",
         "hide_quote",
@@ -95,7 +95,18 @@
         "questions_title",
         "restart",
         "progress",
-        "progress_first"
+        "progress_first",
+        "study_range",
+        "result_closest",
+        "result_close",
+        "result_different",
+        "score_label",
+        "streak_label",
+        "worth_a_chat",
+        "unscored",
+        "share_make",
+        "share_line",
+        "share_note"
       ],
       "description": "fixed button and heading words, checked as framing copy (no numbers, no health assertion)"
     },
@@ -184,32 +195,22 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "under",
-        "over",
-        "close",
+        "numbers",
         "direction",
         "meaning_title"
       ],
       "properties": {
-        "under": {
+        "numbers": {
           "type": "string",
-          "description": "number rounds only, template with {n} and {m}; no count line when no number round was played"
-        },
-        "over": {
-          "type": "string",
-          "description": "template with {n} and {m}"
-        },
-        "close": {
-          "type": "string",
-          "description": "template with {n} and {m}"
-        },
-        "meaning_title": {
-          "type": "string",
-          "description": "'What these studies tell us — and what they don't' (then the revealed sentences with their qualifiers and short cites)"
+          "description": "number rounds only, template with {n} and {m}: count of \"Closest range\" results; no count line when no number round was answered"
         },
         "direction": {
           "type": "string",
           "description": "template with {n} and {m}: direction rounds (choices), scored separately"
+        },
+        "meaning_title": {
+          "type": "string",
+          "description": "'What these studies tell us — and what they don't' (then the revealed sentences with their qualifiers and short cites)"
         }
       }
     },
@@ -256,7 +257,6 @@
         "preview_title",
         "copy_label",
         "share_label",
-        "copied",
         "share_title",
         "consent_short",
         "yes_label",
@@ -299,9 +299,6 @@
         "share_label": {
           "type": "string"
         },
-        "copied": {
-          "type": "string"
-        },
         "share_title": {
           "type": "string"
         },
@@ -318,6 +315,30 @@
           "type": "string"
         }
       }
+    },
+    "points": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "closest",
+        "close",
+        "different"
+      ],
+      "properties": {
+        "closest": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "close": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "different": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "description": "points per result, deterministic; numbers, never drawn as copy"
     }
   },
   "$defs": {
@@ -393,7 +414,7 @@
             "slider",
             "choice"
           ],
-          "description": "slider: a number round (scored below / above / close); choice: a direction round (scored right / wrong, separately)"
+          "description": "every round is one tap on a bin/choice; \"slider\" is legacy and drawn the same way. A numeric-valued stops list is a bin scale (value = lower end), scored closest / close (one bin off) / different"
         },
         "question": {
           "type": "string",

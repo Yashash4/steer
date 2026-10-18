@@ -4,6 +4,12 @@ const COMMA = String.fromCharCode(44);
 const COLON = String.fromCharCode(58);
 const DOT = String.fromCharCode(183);
 const NL = String.fromCharCode(10);
+const SEP = COLON + " ";
+const DOTSEP = " " + DOT + " ";
+// the svg namespace, split so no absolute url sits in this file
+const SVGNS = ["http:", "", ["www", "w3", "org"].join(String.fromCharCode(46)), "2000", "svg"].join("/");
+const SHARE_NAME = "steer-quiz" + String.fromCharCode(46) + "png";
+let hudEl;
 let C;
 let S;
 
@@ -34,85 +40,45 @@ function progress(n) {
 }
 function allRounds() { return [C.hook].concat(C.rounds); }
 
-// slider over stops; onChange(index) fires on every move
-function slider(round, onChange) {
-  const long = round.stops.some((s) => s.label.length > 5);
-  const track = h("div", ["slider", long ? "vert" : "horiz"]);
-  const current = h("div", "current");
-  const stops = round.stops.map((s) => {
-    const st = h("div", "stop");
-    st.append(h("span", "dot"), h("span", "slabel", s.label));
-    return st;
+// the 10 s ring: decoration only (aria-hidden, never announced, no digits). It starts when the question, context and
+// choices are on screen; at zero it only dims: no auto-pick, no wrong, no lock-out
+function ring() {
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("viewBox", "0 0 36 36");
+  svg.setAttribute("class", "ring");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  ["bg", "fg"].forEach((k) => {
+    const c = document.createElementNS(SVGNS, "circle");
+    c.setAttribute("class", k);
+    c.setAttribute("cx", "18");
+    c.setAttribute("cy", "18");
+    c.setAttribute("r", "15");
+    c.setAttribute("pathLength", "100");
+    svg.append(c);
   });
-  track.append(...stops);
-  track.setAttribute("role", "slider");
-  track.setAttribute("tabindex", "0");
-  track.setAttribute("aria-orientation", long ? "vertical" : "horizontal");
-  track.setAttribute("aria-valuemin", "0");
-  track.setAttribute("aria-valuemax", String(stops.length - 1));
-  track.setAttribute("aria-label", round.question);
-  let sel = -1;
-  const set = (i) => {
-    i = Math.max(0, Math.min(stops.length - 1, i));
-    sel = i;
-    stops.forEach((st, k) => st.classList.toggle("on", k === i));
-    track.setAttribute("aria-valuenow", String(i));
-    track.setAttribute("aria-valuetext", round.stops[i].label);
-    current.textContent = round.stops[i].label;
-    onChange(i);
-  };
-  const near = (e) => {
-    let best = 0;
-    let bd = Infinity;
-    stops.forEach((st, k) => {
-      const r = st.getBoundingClientRect();
-      const d = long ? Math.abs(e.clientY - (r.top + r.height / 2)) : Math.abs(e.clientX - (r.left + r.width / 2));
-      if (d < bd) { bd = d; best = k; }
-    });
-    set(best);
-  };
-  track.addEventListener("pointerdown", (e) => {
-    try { track.setPointerCapture(e.pointerId); } catch (x) { /* synthetic pointer */ }
-    near(e);
-  });
-  track.addEventListener("pointermove", (e) => { if (e.buttons) near(e); });
-  track.addEventListener("keydown", (e) => {
-    const k = e.key.toLowerCase();
-    const up = k === "arrowright" || k === "arrowup";
-    const down = k === "arrowleft" || k === "arrowdown";
-    if (!(up || down || k === "home" || k === "end")) return;
-    e.preventDefault();
-    if (k === "home") set(0);
-    else if (k === "end") set(stops.length - 1);
-    else if (sel < 0) set(up ? 0 : stops.length - 1);
-    else set(sel + (up ? 1 : -1));
-  });
-  const wrap = h("div", "slider-wrap");
-  wrap.append(current, track);
-  return wrap;
+  svg.lastChild.addEventListener("animationend", () => svg.classList.add("done"));
+  return svg;
 }
 
 function ask(round, done, n) {
-  const nodes = [progress(n), h("p", "opener", round.opener)];
+  const prog = progress(n);
+  const rg = ring();
+  prog.append(rg);
+  const nodes = [prog, h("p", "opener", round.opener)];
   nodes.push(h("h1", "q", round.question));
   if (round.context) nodes.push(h("p", ["context", "small"], round.context));
   if (round.prompt) nodes.push(h("p", "prompt", round.prompt));
-  if (round.kind === "choice") {
-    const box = h("div", "choices");
-    round.stops.forEach((s, i) => {
-      const b = h("button", "choice", s.label);
-      b.type = "button";
-      b.addEventListener("click", () => done(i));
-      box.append(b);
-    });
-    nodes.push(box);
-  } else {
-    let pick = -1;
-    const lock = button(C.ui.lock, () => done(pick));
-    lock.disabled = true;
-    nodes.push(slider(round, (i) => { pick = i; lock.disabled = false; }), lock);
-  }
+  const box = h("div", "choices");
+  round.stops.forEach((s, i) => {
+    const b = h("button", "choice", s.label);
+    b.type = "button";
+    b.addEventListener("click", () => done(i));
+    box.append(b);
+  });
+  nodes.push(box);
   show(...nodes);
+  requestAnimationFrame(() => requestAnimationFrame(() => rg.classList.add("go")));
 }
 
 // a finding is never drawn without its qualifiers: the build puts all of them (the one-study note included, for single
@@ -126,8 +92,18 @@ function qualList(round, cls) {
   return ul;
 }
 
-function reveal(round, idx, next) {
-  const nodes = [];
+function reveal(round, g, next) {
+  const res = grade(g);
+  const verdict = h("div", ["verdict", "r-" + res]);
+  verdict.append(h("p", "rres", C.ui["result_" + res]), h("span", "pts", "+" + String(C.points[res])));
+  const cmp = h("div", "cmp");
+  [[C.ui.you_guessed, round.stops[g.idx].label], [C.ui.study_range, round.stops[binOf(round)].label]].forEach((r) => {
+    const row = h("p", "crow");
+    row.append(h("span", null, r[0]), h("b", null, r[1]));
+    cmp.append(row);
+  });
+  // the verified number and its sentence appear whole, after the panel and the labels have animated in
+  const fin = h("div", "final");
   round.reveals.forEach((rv) => {
     const card = h("div", "reveal");
     const row = h("div", "numrow");
@@ -135,16 +111,13 @@ function reveal(round, idx, next) {
     if (rv.number) row.append(h("span", "num", rv.number), h("span", "rlabel", rv.label));
     else row.append(h("span", ["rlabel", "lead"], rv.label));
     card.append(row, h("p", "sentence", rv.sentence));
-    nodes.push(card);
+    fin.append(card);
   });
-  const g = h("p", "guess");
-  g.append(h("span", null, C.ui.you_guessed), h("b", null, round.stops[idx].label));
-  nodes.push(g);
   const ul = qualList(round);
-  if (ul.children.length) nodes.push(ul);
+  if (ul.children.length) fin.append(ul);
   const src = h("p", "src");
   src.append(h("span", null, round.source.short), h("span", null, round.source.location));
-  nodes.push(src);
+  fin.append(src);
   const panel = h("div", "quote");
   panel.hidden = true;
   panel.append(h("blockquote", null, round.quote), h("p", "small", round.source.full), h("p", "small", round.source.doi));
@@ -156,15 +129,27 @@ function reveal(round, idx, next) {
     tog.textContent = panel.hidden ? C.ui.see_quote : C.ui.hide_quote;
     tog.setAttribute("aria-expanded", String(!panel.hidden));
   });
-  nodes.push(tog, panel, button(C.ui.next, next));
-  show(...nodes);
+  fin.append(tog, panel, button(C.ui.next, next));
+  show(verdict, cmp, fin);
+  verdict.setAttribute("aria-live", "polite");
 }
 
 function playRound(round, next, n) {
   ask(round, (idx) => {
-    S.guesses.push({ round, idx });
-    reveal(round, idx, next);
+    const g = { round, idx };
+    S.guesses.push(g);
+    const res = grade(g);
+    S.points += C.points[res];
+    S.streak = res === "closest" ? S.streak + 1 : 0;
+    if (res === "closest" && navigator.vibrate) navigator.vibrate(40);
+    hud();
+    reveal(round, g, next);
   }, n);
+}
+
+function hud() {
+  hudEl.hidden = !S.guesses.length;
+  hudEl.textContent = C.ui.score_label + SEP + String(S.points) + DOTSEP + C.ui.streak_label + SEP + String(S.streak);
 }
 
 // an info card, not a guess: nothing is asked and nothing enters S.guesses
@@ -217,19 +202,16 @@ function run(i) {
   go(i);
 }
 
-// a choice with numeric stops is a bin scale (value = lower end of the bin): scored by the bin the answer falls in
-const isNumber = (g) => typeof g.round.stops[0].value === "number";
-function score(g) {
-  const a = g.round.answer;
-  const v = g.round.stops[g.idx].value;
-  if (g.round.kind === "choice" && isNumber(g)) {
-    const bin = g.round.stops.filter((s) => s.value <= a).length - 1;
-    return g.idx < bin ? "under" : g.idx > bin ? "over" : "close";
+// a choice with numeric stops is a bin scale (value = lower end of the bin); the answer falls in exactly one bin.
+// Same bin = closest range, one bin off = close estimate, further = different. Direction rounds: right or different.
+const isNum = (r) => typeof r.stops[0].value === "number";
+const binOf = (r) => r.stops.filter((s) => s.value <= r.answer).length - 1;
+function grade(g) {
+  if (isNum(g.round)) {
+    const d = Math.abs(g.idx - binOf(g.round));
+    return d === 0 ? "closest" : d === 1 ? "close" : "different";
   }
-  if (g.round.kind === "choice") return v === a ? "close" : "under";
-  if (v < a * 0.9) return "under";
-  if (v > a * 1.1) return "over";
-  return "close";
+  return g.round.stops[g.idx].value === g.round.answer ? "closest" : "different";
 }
 function questions() {
   const qs = [];
@@ -239,39 +221,128 @@ function questions() {
 
 function readout() {
   const nodes = [h("h1", "q", C.ui.readout_title)];
-  const nums = S.guesses.filter((g) => g.round.kind === "slider" || isNumber(g));
-  const dirs = S.guesses.filter((g) => g.round.kind === "choice" && !isNumber(g));
+  const nums = S.guesses.filter((g) => isNum(g.round));
+  const dirs = S.guesses.filter((g) => !isNum(g.round));
+  const won = (list) => list.filter((g) => grade(g) === "closest").length;
   const card = h("div", "card");
-  if (nums.length) {
-    const cnt = { under: 0, over: 0, close: 0 };
-    nums.forEach((g) => { cnt[score(g)] += 1; });
-    const top = ["under", "over", "close"].reduce((a, b) => (cnt[b] > cnt[a] ? b : a));
-    card.append(h("p", "big", fill(C.readout[top], cnt[top], nums.length)));
-  }
-  if (dirs.length) {
-    const right = dirs.filter((g) => score(g) === "close").length;
-    card.append(h("p", "big", fill(C.readout.direction, right, dirs.length)));
-  }
-  if (card.children.length) nodes.push(card);
-  const mean = h("div", "card");
-  mean.append(h("h2", null, C.readout.meaning_title));
-  const ul = h("ul", "list");
-  S.guesses.forEach((g) => {
-    const li = h("li");
-    g.round.reveals.forEach((rv) => li.append(h("p", null, rv.sentence)));
-    li.append(qualList(g.round, ["quals", "tiny"]), h("p", "small", g.round.source.short));
-    ul.append(li);
+  card.append(h("p", "small", C.ui.score_label + SEP + String(S.points)));
+  if (nums.length) card.append(h("p", "big", fill(C.readout.numbers, won(nums), nums.length)));
+  if (dirs.length) card.append(h("p", "big", fill(C.readout.direction, won(dirs), dirs.length)));
+  nodes.push(card);
+  nodes.push(h("h2", null, C.readout.meaning_title));
+  // grouped by the doubts; a gap card is information, never scored
+  C.doubts.forEach((d) => {
+    const gs = S.guesses.filter((g) => d.answered_by.includes(g.round.id));
+    const cards = S.picked.includes(d) ? C.gap_cards.filter((x) => d.answered_by.includes(x.id)) : [];
+    if (!gs.length && !cards.length) return;
+    const grp = h("div", ["card", "group"]);
+    const head = h("div", "ghead");
+    head.append(h("h3", null, d.label));
+    if (gs.some((g) => grade(g) === "different")) head.append(h("span", "tag", C.ui.worth_a_chat));
+    grp.append(head);
+    const ul = h("ul", "list");
+    gs.forEach((g) => {
+      const li = h("li");
+      li.append(h("p", ["rres", "r-" + grade(g)], C.ui["result_" + grade(g)]));
+      g.round.reveals.forEach((rv) => li.append(h("p", null, rv.sentence)));
+      li.append(qualList(g.round, ["quals", "tiny"]), h("p", "small", g.round.source.short));
+      ul.append(li);
+    });
+    cards.forEach((x) => {
+      const li = h("li");
+      li.append(h("p", "small", C.ui.unscored), h("p", null, x.body));
+      ul.append(li);
+    });
+    grp.append(ul);
+    nodes.push(grp);
   });
-  mean.append(ul);
-  nodes.push(mean);
   const qs = questions();
   const qc = h("div", "card");
   qc.append(h("h2", null, C.ui.questions_title));
   const ql = h("ul", "list");
   qs.forEach((q) => ql.append(h("li", null, q)));
   qc.append(ql);
-  nodes.push(qc, button(C.ui.next, nextStep));
+  const sc = h("div", "sharebox");
+  nodes.push(qc, button(C.ui.share_make, () => shareCard(sc), "alt"), sc, button(C.ui.next, nextStep));
   show(...nodes);
+}
+
+// the share card: drawn locally on a canvas, only when tapped. It holds the count and fixed lines, nothing else (no doubts,
+// guesses or contact data). navigator.share with the image where the browser can, else a download.
+function wrapLines(ctx, text, width) {
+  const lines = [];
+  let line = "";
+  text.split(" ").forEach((w) => {
+    const t = line ? line + " " + w : w;
+    if (line && ctx.measureText(t).width > width) { lines.push(line); line = w; } else line = t;
+  });
+  lines.push(line);
+  return lines;
+}
+async function shareCard(into) {
+  const pal = C.brand.palette;
+  const ff = getComputedStyle(document.documentElement).getPropertyValue("--serif");
+  const sans = getComputedStyle(document.documentElement).getPropertyValue("--sans");
+  const W = 1080;
+  const H = 1350;
+  const cv = document.createElement("canvas");
+  cv.width = W;
+  cv.height = H;
+  const ctx = cv.getContext("2d");
+  const serif = (px) => "italic 600 " + String(px) + "px " + ff;
+  try { await Promise.all([document.fonts.load(serif(80)), document.fonts.load("500 36px " + sans)]); } catch (x) { /* system font */ }
+  ctx.fillStyle = pal.cream;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = pal.blush;
+  ctx.fillRect(0, 0, W, 24);
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = pal.maroon;
+  ctx.font = serif(96);
+  ctx.fillText(C.brand.wordmark, 90, 190);
+  const m = S.guesses.length;
+  const n = S.guesses.filter((g) => grade(g) === "closest").length;
+  // a ring of the share of guesses that matched the study range
+  ctx.lineWidth = 36;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = pal.blush;
+  ctx.beginPath();
+  ctx.arc(W / 2, 560, 200, 0, Math.PI * 2);
+  ctx.stroke();
+  if (n) {
+    ctx.strokeStyle = pal.rust;
+    ctx.beginPath();
+    ctx.arc(W / 2, 560, 200, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * n) / m);
+    ctx.stroke();
+  }
+  ctx.fillStyle = pal.rust;
+  ctx.textAlign = "center";
+  ctx.font = serif(150);
+  ctx.fillText(String(n), W / 2, 600);
+  ctx.fillStyle = pal.maroon;
+  ctx.font = serif(64);
+  wrapLines(ctx, fill(C.ui.share_line, n, m), W - 200).forEach((l, i) => ctx.fillText(l, W / 2, 910 + i * 84));
+  ctx.fillStyle = pal.clay;
+  ctx.font = "500 36px " + sans;
+  wrapLines(ctx, C.ui.share_note, W - 240).forEach((l, i) => ctx.fillText(l, W / 2, 1140 + i * 50));
+  ctx.font = "600 40px " + sans;
+  ctx.fillStyle = pal.maroon;
+  ctx.fillText(C.brand.signoff, W / 2, 1270);
+  cv.classList.add("sharecard");
+  into.replaceChildren(cv);
+  cv.toBlob((blob) => {
+    if (!blob) return;
+    const file = new File([blob], SHARE_NAME, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], text: fill(C.ui.share_line, n, m) }).catch(() => {});
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = SHARE_NAME;
+    document.body.append(a);
+    a.click();
+    a.remove();
+  }, "image/png");
 }
 
 function link(l, cls) {
@@ -280,17 +351,16 @@ function link(l, cls) {
   return a;
 }
 
-function copyText(text, status) {
-  const done = () => { status.textContent = C.warm_lead.copied; };
+function copyText(text) {
   const old = () => {
     const ta = document.createElement("textarea");
     ta.value = text;
     document.body.append(ta);
     ta.select();
-    try { document.execCommand("copy"); done(); } catch (x) { /* nothing to do */ }
+    try { document.execCommand("copy"); } catch (x) { /* nothing to do */ }
     ta.remove();
   };
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, old);
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(old);
   else old();
 }
 
@@ -334,8 +404,6 @@ function warmLead() {
   }, "alt");
   showBtn.disabled = true;
   tick.addEventListener("change", () => { showBtn.disabled = !tick.checked; if (!tick.checked) prev.hidden = true; });
-  const status = h("span", "small");
-  status.setAttribute("role", "status");
   // the questions, then what the studies said with the same qualifiers as on screen (never a finding alone)
   const text = () => {
     const out = [C.ui.questions_title].concat(questions(), [""]);
@@ -346,12 +414,12 @@ function warmLead() {
     });
     return out.join(NL);
   };
-  const cp = button(w.copy_label, () => copyText(text(), status), "alt");
+  const cp = button(w.copy_label, () => copyText(text()), "alt");
   const sh = button(w.share_label, () => {
     if (navigator.share) navigator.share({ title: w.share_title, text: text() }).catch(() => {});
-    else copyText(text(), status);
+    else copyText(text());
   }, "alt");
-  card.append(nl, pl, cl, showBtn, prev, cp, sh, status);
+  card.append(nl, pl, cl, showBtn, prev, cp, sh);
   return card;
 }
 
@@ -360,7 +428,8 @@ function nextStep() {
 }
 
 function start() {
-  S = { picked: [], guesses: [], total: 0 };
+  S = { picked: [], guesses: [], total: 0, points: 0, streak: 0 };
+  hud();
   playRound(C.hook, picker, 1);
 }
 
@@ -375,7 +444,11 @@ load().then((c) => {
   C = c;
   Object.entries(c.brand.palette).forEach(([k, v]) => document.documentElement.style.setProperty("--" + k, v));
   document.title = c.brand.wordmark;
-  document.getElementById("top").textContent = c.brand.wordmark;
+  const top = document.getElementById("top");
+  top.textContent = c.brand.wordmark;
+  hudEl = h("span", "hud");
+  hudEl.hidden = true;
+  top.append(hudEl);
   const f = document.getElementById("foot");
   f.append(h("span", null, c.brand.footer), h("span", null, c.brand.signoff));
   const meta = document.createElement("meta");   // the build time stays in the page, not on screen

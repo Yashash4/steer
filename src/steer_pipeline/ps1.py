@@ -105,6 +105,24 @@ def boundary_failures(rounds: list[dict], claims: dict, boundaries: dict) -> lis
     return check_boundaries(lines, claims, boundaries)
 
 
+def check_bins(r: dict) -> None:
+    """A numeric choice round is a set of bins (value = lower end): strictly increasing, the answer in exactly one, and each
+    bin's lower edge printed in its own label and, for a range label, in the label before it (no gap, no overlap)."""
+    vals = [s[1] for s in r["stops"]]
+    if not all(isinstance(v, (int, float)) for v in vals):
+        return
+    if vals != sorted(set(vals)) or sum(1 for i, v in enumerate(vals) if v <= r["answer"] < (vals[i + 1] if i + 1 < len(vals) else float("inf"))) != 1:
+        raise BuildError(f"round {r['id']}: the answer must fall in exactly one bin of an increasing scale")
+    if vals[0] > r["answer"]:
+        raise BuildError(f"round {r['id']}: the first bin starts above the answer")
+    labels = [s[0] for s in r["stops"]]
+    if any(" to " in x for x in labels):   # a range scale: every edge is printed on both sides of it
+        for i in range(1, len(vals)):
+            e = f"{vals[i]:g}"
+            if e not in labels[i] or e not in labels[i - 1]:
+                raise BuildError(f"round {r['id']}: the bin edge {e} must be in the labels on both sides of it")
+
+
 def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Path = PS1 / "rounds.toml",
           router=None, playable: bool = True, fonts: bool = True) -> dict:
     """Write the quiz into `out`; returns a report. router=None skips the line cross-check (offline tests only)."""
@@ -169,6 +187,7 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
         if r["kind"] == "choice" and (any(r["reveal_number"] and r["reveal_number"] in s[0] for s in r["stops"]) or \
                 (isinstance(r["answer"], (int, float)) and any(str(r["answer"]) in s[0] for s in r["stops"]))):
             raise BuildError(f"round {r['id']}: a choice label must never be the answer itself")
+        check_bins(r)
         lines.append(("health", r["sentence"], [c["claim_id"]], f"{r['id']}/sentence", r["pmcid"]))
         lines.append(("framing", r["question"], [], f"{r['id']}/question", r["pmcid"]))
         if r.get("prompt"):
@@ -231,7 +250,7 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
     for k, v in spec["ui"].items():
         v = v.replace("{n}", "").replace("{m}", "")
         lines.append(("qualifier" if v in FIXED_QUALIFIERS else "framing", v, [], f"ui/{k}", None))
-    for k in ("under", "over", "close", "direction", "meaning_title"):
+    for k in ("numbers", "direction", "meaning_title"):
         lines.append(("framing", spec["readout"][k].replace("{n}", "").replace("{m}", ""), [], f"readout/{k}", None))
     for d in spec["doubt"]:
         lines.append(("framing", d["label"], [], f"doubt/{d['id']}", None))
@@ -302,7 +321,7 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
         "rounds": [r for r in out_rounds if r["id"] != "hook"],
         "gap_cards": [{"id": g["id"], "title": g["title"], "body": g["body"], "opener": openers[g["opener"]],
                        "context": g.get("context")} for g in gaps_used.values()],
-        "readout": spec["readout"], "doctor_questions": spec["doctor_questions"],
+        "readout": spec["readout"], "points": spec["points"], "doctor_questions": spec["doctor_questions"],
         "cta": {"primary": {"label": spec["cta"]["primary"], "url": spec["cta"]["url"]},
                 "secondary": {"label": spec["cta"]["secondary"], "url": spec["cta"]["url"]}},
         "warm_lead": spec["warm_lead"]}
