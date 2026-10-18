@@ -478,3 +478,9 @@ def test_a_framing_line_adds_no_lifestyle_attribute_the_claims_do_not_state():
     assert framing_attributes("Slim, eating home food. Does this apply to me?", quote) == ["home food"]
     assert framing_attributes("Lean, and still wondering?", quote) == []                   # body size: the BMI claims
     assert framing_attributes("Active every day?", "participants who were physically active daily") == []   # stated
+
+
+def test_safety_boundaries_exclude_named_drugs_only():
+    b = checks.load_boundaries("PMC12532569")
+    assert checks.excluded({"quote": "Only semaglutide (RR 1.42) was associated with increased risk."}, b)
+    assert not checks.excluded({"quote": "Nausea, vomiting, diarrhea, and constipation were the most common gastrointestinal adverse effects."}, b)

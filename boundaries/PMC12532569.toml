@@ -1,0 +1,37 @@
+# Content boundaries for the systematic review and network meta-analysis of gastrointestinal adverse events with GLP-1 RA
+# in non-diabetic people with overweight or obesity, Int J Obes 2025;49:1946-57 (DOI 10.1038/s41366-025-01859-6, CC BY).
+# Editorial input, versioned. Claims are matched by text in their quote (canonical form).
+version = 1
+pmcid = "PMC12532569"
+doi = "10.1038/s41366-025-01859-6"
+licence_note = "CC BY: reuse with attribution."
+
+# Who was studied. No extracted claim states it, so it enters as a context quote (checked by the S1 gate against the paper).
+context_quotes = [
+  "This systematic review and dose-response network meta-analysis addresses this gap, analyzing gastrointestinal adverse events from GLP-1 RAs in non-diabetic subjects with overweight or obesity.",
+]
+
+# Drug promotion is banned: any claim that names or compares a specific medicine stays in the library, never in a post.
+# "cagrilinitide" is the paper's own spelling of cagrilintide.
+[[exclude_from_posts]]
+quote_any_of = ["orforglipron", "exenatide", "tirzepatide", "semaglutide", "liraglutide", "cagrilinitide", "cagrilintide", "Ozempic", "Wegovy", "Mounjaro", "Zepbound", "Saxenda", "Victoza", "mg"]
+why = "names or compares specific medicines or doses; posts talk about the class, never one drug"
+
+# Whatever a post takes from this paper: as a class, in trials, and the doctor weighs benefits against side effects.
+[[require_qualifier]]
+when_claim_quote_contains = []
+placement = "post"
+any_of = ["as a class", "this class of medicines", "class of medicines", "these medicines as a group", "GLP-1 medicines as a group"]
+why = "the findings are about these medicines as a class, not one product"
+
+[[require_qualifier]]
+when_claim_quote_contains = []
+placement = "post"
+any_of = ["in trials", "in clinical trials", "in studies", "across trials", "in the trials"]
+why = "the evidence comes from trials, not from everyday use"
+
+[[require_qualifier]]
+when_claim_quote_contains = []
+placement = "post"
+any_of = ["weighs the benefits", "weigh the benefits", "benefits and side effects", "benefits against side effects", "benefits against the side effects"]
+why = "a doctor weighs the benefits against the side effects for each person"
