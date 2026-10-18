@@ -55,8 +55,10 @@ The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
 ## How PDFs are read
 
 - Text lines come from PyMuPDF with their coordinates. Fragments on one baseline are merged left to right
-  (justified words, table cells), except across a gap wider than a quarter of the text width. That keeps
-  side-by-side columns apart even when the PDF stores them in one block.
+  (justified words, table cells). They are never merged across a detected text-column gutter, or across a
+  gap wider than a quarter of the text width. That keeps side-by-side columns apart even when the PDF
+  stores them in one block. A gutter counts only for justified text columns: most lines end at one x
+  with no table-like hole inside. Tables are not split into columns.
 - **Columns.** A page has two columns when a group of lines starts 20–75% of the way across the text, and the
   lines starting at the left edge end before it. Lines that cross the gutter (titles, abstracts, wide
   figures) split the page into bands. Bands are read top to bottom; inside a band the left column comes

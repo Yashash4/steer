@@ -45,7 +45,34 @@ def _upright(bbox: list[float], direction: tuple[float, float]) -> list[float]:
     return list(bbox)
 
 
-def join_fragments(frags: list[dict], text_width: float) -> list[dict]:
+def text_gutter(frags: list[dict]) -> float | None:
+    """A column gutter among a page's unmerged fragments, accepted only for justified text columns.
+
+    find_gutter() also fires on tables (label column vs value columns). Text columns are told
+    apart by shape: on most baselines the text left of the gutter ends at one x (justified) and has
+    no hole wider than 1.5 line heights inside it; table rows have holes between cells.
+    """
+    gx, _ = find_gutter(frags)
+    if gx is None:
+        return None
+    left: dict[int, list[dict]] = {}
+    for f in frags:
+        if f["bbox"][2] <= gx:
+            left.setdefault(round((f["bbox"][1] + f["bbox"][3]) / 2 / SAME_ROW), []).append(f)
+    if len(left) < 6:
+        return None
+    edge = max(f["bbox"][2] for fs in left.values() for f in fs)
+    text_like = 0
+    for fs in left.values():
+        fs.sort(key=lambda f: f["bbox"][0])
+        height = max(f["bbox"][3] - f["bbox"][1] for f in fs)
+        gaps = [b["bbox"][0] - a["bbox"][2] for a, b in zip(fs, fs[1:])]
+        # a text line: ends at the column edge and has no table-like hole inside
+        text_like += edge - fs[-1]["bbox"][2] <= EDGE and all(g <= 1.5 * height for g in gaps)
+    return gx if text_like >= 0.6 * len(left) else None
+
+
+def join_fragments(frags: list[dict], text_width: float, gutter: float | None = None) -> list[dict]:
     """Merge fragments of one baseline (same direction) into rows, left to right.
 
     Two neighbours further apart than ROW_GAP x the text width stay separate rows, so a block that
@@ -65,7 +92,8 @@ def join_fragments(frags: list[dict], text_width: float) -> list[dict]:
         g.sort(key=lambda f: f["bbox"][0])
         row = None
         for f in g:
-            if row is None or f["bbox"][0] - row["bbox"][2] > ROW_GAP * text_width:
+            across = gutter is not None and row is not None and row["bbox"][2] <= gutter + 1 <= f["bbox"][0] + 2
+            if row is None or across or f["bbox"][0] - row["bbox"][2] > ROW_GAP * text_width:
                 row = dict(f)
                 rows.append(row)
                 continue
@@ -105,11 +133,13 @@ def _rows(page) -> tuple[list[dict], bool]:
     for f in (f for frags in by_block.values() for f in frags):
         lo, hi = widths.get(f["dir"], (f["bbox"][0], f["bbox"][2]))
         widths[f["dir"]] = (min(lo, f["bbox"][0]), max(hi, f["bbox"][2]))
+    everything = [f for frags in by_block.values() for f in frags]
+    gutters = {d: text_gutter([f for f in everything if f["dir"] == d]) for d in widths}
     rows = []
     for frags in by_block.values():
         for direction in {f["dir"] for f in frags}:
             lo, hi = widths[direction]
-            rows += join_fragments([f for f in frags if f["dir"] == direction], hi - lo)
+            rows += join_fragments([f for f in frags if f["dir"] == direction], hi - lo, gutters[direction])
     return rows, has_image
 
 

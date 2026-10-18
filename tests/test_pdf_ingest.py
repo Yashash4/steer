@@ -171,20 +171,57 @@ def test_document_id_differs_by_role(two):
     assert ingest_pdf(TWO, "evidence")["document_id"] == two["document_id"]
 
 
-def test_two_columns_in_one_block_stay_apart(tmp_path):
-    # TextWriter puts both columns into ONE PyMuPDF block, on shared baselines
+def _fill(prefix: str, width: float) -> str:
+    """A line of words starting with `prefix`, as wide as possible up to `width` (Helvetica 10)."""
+    line = prefix
+    for word in "alpha beta gamma delta kappa sigma omega theta zeta eta nu xi pi mu".split() * 3:
+        if pymupdf.get_text_length(line + " " + word, fontsize=10) <= width:
+            line += " " + word
+    return line
+
+
+def test_justified_columns_in_one_block_stay_apart(tmp_path):
+    # TextWriter puts both columns into ONE PyMuPDF block, on shared baselines; left lines run to
+    # about x=290 and right lines start at x=310 (an 18 pt gutter), like a justified journal page
     doc = pymupdf.open()
     page = doc.new_page()
     tw = pymupdf.TextWriter(page.rect)
-    left = [f"Left line {i} tells the first story." for i in range(1, 9)]
-    right = [f"Right line {i} tells another story." for i in range(1, 9)]
+    left = [_fill(f"Left{i}", 238) + "." for i in range(1, 11)]
+    right = [_fill(f"Right{i}", 238) + "." for i in range(1, 11)]
     for i, (lt, rt) in enumerate(zip(left, right)):
         tw.append((50, 100 + i * 14), lt, fontsize=10)
-        tw.append((320, 100 + i * 14), rt, fontsize=10)
+        tw.append((310, 100 + i * 14), rt, fontsize=10)
     tw.write_text(page)
-    assert len([b for b in page.get_text("dict")["blocks"] if b["type"] == 0]) == 1
+    blocks = [b for b in page.get_text("dict")["blocks"] if b["type"] == 0]
+    assert len(blocks) == 1
+    ends = [ln["bbox"][2] for ln in blocks[0]["lines"] if ln["bbox"][0] < 100]
+    assert 12 <= 310 - max(ends) <= 25  # a narrow gutter, like a justified journal page
     path = tmp_path / "oneblock.pdf"
     doc.save(path)
     out = ingest_pdf(path, "evidence")
     assert out["pages"][0]["layout"] == "two_column"
     assert [s["text"] for s in out["sentences"]] == left + right
+
+
+def test_table_in_one_block_keeps_its_rows(tmp_path):
+    # a table (ragged label column + value columns) must not be split into "text columns"
+    doc = pymupdf.open()
+    page = doc.new_page()
+    tw = pymupdf.TextWriter(page.rect)
+    labels = ["Body weight (kg)", "BMI (kg/m2)", "Waist (cm)", "HOMA IR", "Total cholesterol (mg/dl)",
+              "HbA1c (%)", "Systolic BP (mmHg)", "Apo B (mg/dl)"]
+    for i, label in enumerate(labels):
+        y = 100 + i * 14
+        tw.append((50, y), label, fontsize=10)
+        for k, x in enumerate((220, 300, 380, 460)):
+            tw.append((x, y), f"{i + 1}.{k} ± 0.{k + 1}", fontsize=10)
+    tw.write_text(page)
+    path = tmp_path / "table.pdf"
+    doc.save(path)
+    out = ingest_pdf(path, "evidence")
+    assert out["pages"][0]["layout"] == "single"
+    flat = out["text"].replace("\n", " ")  # the gate's canonical form treats line breaks as spaces
+    for i, label in enumerate(labels):
+        cells = " ".join(f"{i + 1}.{k} ± 0.{k + 1}" for k in range(4))
+        assert f"{label} {cells}" in flat
+    assert out["pages"][0]["lines"][0]["raw"] == "Body weight (kg) 1.0 ± 0.1 1.1 ± 0.2 1.2 ± 0.3 1.3 ± 0.4"
