@@ -1,0 +1,378 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "steer/reel_props/1",
+  "title": "reel_props.json v1: everything the Remotion composition may draw or play. Written by `steer reel` (Python) after the post's checks; every string in it is a checked script line (or an exact substring of one) or a string built by code. The composition draws no other text.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "fps",
+    "width",
+    "height",
+    "durationInFrames",
+    "audio",
+    "fonts",
+    "palette",
+    "chrome",
+    "scenes"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "fps": {
+      "const": 30
+    },
+    "width": {
+      "const": 1080
+    },
+    "height": {
+      "const": 1920
+    },
+    "durationInFrames": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "audio": {
+      "type": "string",
+      "description": "the voice track, a WAV in the render's public folder"
+    },
+    "fonts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "serif",
+        "serif_italic",
+        "sans"
+      ],
+      "properties": {
+        "serif": {
+          "type": "string"
+        },
+        "serif_italic": {
+          "type": "string"
+        },
+        "sans": {
+          "type": "string"
+        }
+      },
+      "description": "font files in the public folder (Fraunces, Fraunces italic, Inter); loaded with staticFile(), never from the network"
+    },
+    "palette": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cream",
+        "rust",
+        "maroon",
+        "ink",
+        "clay",
+        "blush",
+        "paper"
+      ],
+      "properties": {
+        "cream": {
+          "$ref": "#/$defs/hex"
+        },
+        "rust": {
+          "$ref": "#/$defs/hex"
+        },
+        "maroon": {
+          "$ref": "#/$defs/hex"
+        },
+        "ink": {
+          "$ref": "#/$defs/hex"
+        },
+        "clay": {
+          "$ref": "#/$defs/hex"
+        },
+        "blush": {
+          "$ref": "#/$defs/hex"
+        },
+        "paper": {
+          "$ref": "#/$defs/hex"
+        }
+      }
+    },
+    "chrome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "draft_mark",
+        "wordmark"
+      ],
+      "properties": {
+        "draft_mark": {
+          "type": "string",
+          "description": "shown on every frame: 'draft · pending doctor review'"
+        },
+        "wordmark": {
+          "type": "string",
+          "description": "'steer'"
+        }
+      }
+    },
+    "scenes": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "$ref": "#/$defs/scene"
+      }
+    }
+  },
+  "$defs": {
+    "hex": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
+    "seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "ground",
+        "start",
+        "end",
+        "transition_in",
+        "broll",
+        "lines",
+        "sources"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "hook",
+            "point",
+            "brand",
+            "cta",
+            "sources"
+          ]
+        },
+        "ground": {
+          "enum": [
+            "cream",
+            "rust",
+            "maroon"
+          ]
+        },
+        "start": {
+          "$ref": "#/$defs/seconds"
+        },
+        "end": {
+          "$ref": "#/$defs/seconds"
+        },
+        "transition_in": {
+          "enum": [
+            "wipe",
+            "none"
+          ]
+        },
+        "broll": {
+          "type": "null",
+          "description": "reserved: a background clip behind framing scenes (S7-full); always null in v1"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/line"
+          },
+          "description": "empty for the sources scene"
+        },
+        "sources": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sources"
+            }
+          ],
+          "description": "the end card (kind sources only)"
+        }
+      }
+    },
+    "line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "text",
+        "start",
+        "end",
+        "hold_end",
+        "beats",
+        "emphasis",
+        "key",
+        "source_label"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "health",
+            "framing",
+            "brand",
+            "cta",
+            "signoff"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "description": "the checked line, verbatim, in display form (number and unit joined by a no-break space, kg/m2 as kg/m²): drawn whole during the hold"
+        },
+        "start": {
+          "$ref": "#/$defs/seconds"
+        },
+        "end": {
+          "$ref": "#/$defs/seconds",
+          "description": "the voice finishes the line"
+        },
+        "hold_end": {
+          "$ref": "#/$defs/seconds",
+          "description": "the whole line stays on screen, every word at full ink, from end to hold_end (>= end + 0.8 s for health lines)"
+        },
+        "beats": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "start",
+              "words"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "2-4 consecutive words of the line, an exact substring of text"
+              },
+              "start": {
+                "$ref": "#/$defs/seconds",
+                "description": "the voice reaches the beat's first word"
+              },
+              "words": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text",
+                    "start"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "start": {
+                      "$ref": "#/$defs/seconds"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "emphasis": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "hook only: words of the line to set in rust italic (the post's checked emphasis)"
+        },
+        "key": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "number",
+                "label",
+                "at"
+              ],
+              "properties": {
+                "number": {
+                  "type": "string",
+                  "description": "the checked key_number, an exact substring of text"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "the checked key_label, an exact substring of text; always drawn with the number"
+                },
+                "at": {
+                  "$ref": "#/$defs/seconds",
+                  "description": "the voice reaches the number"
+                }
+              }
+            }
+          ]
+        },
+        "source_label": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "health lines: the short source built by code, e.g. 'West et al. 2026, section text, no page layout'"
+        }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "heading",
+        "entries",
+        "footnote",
+        "url"
+      ],
+      "properties": {
+        "heading": {
+          "type": "string",
+          "description": "'Sources'"
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "before",
+              "journal",
+              "after"
+            ],
+            "properties": {
+              "before": {
+                "type": "string",
+                "description": "built by code: 'West S, Scragg J, Aveyard P et al. <title>.'"
+              },
+              "journal": {
+                "type": "string",
+                "description": "the journal's display name, drawn in italic"
+              },
+              "after": {
+                "type": "string",
+                "description": "built by code: ', 2026. doi:10.1136/bmj-2025-085304. Section text, no page layout.'"
+              }
+            }
+          }
+        },
+        "footnote": {
+          "type": "string",
+          "description": "'Every claim on these slides is linked to the paper. Pending review by a Steer doctor before publishing.'"
+        },
+        "url": {
+          "type": "string",
+          "description": "'steerclub.com'"
+        }
+      }
+    }
+  }
+}

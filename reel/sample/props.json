@@ -1,0 +1,584 @@
+{
+ "version": 1,
+ "fps": 30,
+ "width": 1080,
+ "height": 1920,
+ "durationInFrames": 874,
+ "audio": "voice.wav",
+ "fonts": {
+  "serif": "Fraunces.ttf",
+  "serif_italic": "Fraunces-Italic.ttf",
+  "sans": "Inter.ttf"
+ },
+ "palette": {
+  "cream": "#F5EBDF",
+  "rust": "#C04E2A",
+  "maroon": "#661414",
+  "ink": "#351D1D",
+  "clay": "#B58777",
+  "blush": "#E6CBBD",
+  "paper": "#F8F2EB"
+ },
+ "chrome": {
+  "draft_mark": "draft · pending doctor review",
+  "wordmark": "steer"
+ },
+ "scenes": [
+  {
+   "kind": "hook",
+   "ground": "cream",
+   "start": 0.0,
+   "end": 4.23,
+   "transition_in": "none",
+   "broll": null,
+   "lines": [
+    {
+     "kind": "framing",
+     "text": "Will the weight come back when the medicine stops?",
+     "start": 0.3,
+     "end": 3.18,
+     "hold_end": 3.98,
+     "beats": [
+      {
+       "text": "Will the weight",
+       "start": 0.3,
+       "words": [
+        {
+         "text": "Will",
+         "start": 0.3
+        },
+        {
+         "text": "the",
+         "start": 0.62
+        },
+        {
+         "text": "weight",
+         "start": 0.94
+        }
+       ]
+      },
+      {
+       "text": "come back when",
+       "start": 1.26,
+       "words": [
+        {
+         "text": "come",
+         "start": 1.26
+        },
+        {
+         "text": "back",
+         "start": 1.58
+        },
+        {
+         "text": "when",
+         "start": 1.9
+        }
+       ]
+      },
+      {
+       "text": "the medicine stops?",
+       "start": 2.22,
+       "words": [
+        {
+         "text": "the",
+         "start": 2.22
+        },
+        {
+         "text": "medicine",
+         "start": 2.54
+        },
+        {
+         "text": "stops?",
+         "start": 2.86
+        }
+       ]
+      }
+     ],
+     "emphasis": "come back",
+     "key": null,
+     "source_label": null
+    }
+   ],
+   "sources": null
+  },
+  {
+   "kind": "point",
+   "ground": "rust",
+   "start": 3.93,
+   "end": 10.4,
+   "transition_in": "wipe",
+   "broll": null,
+   "lines": [
+    {
+     "kind": "health",
+     "text": "After stopping weight management medicines, the time to no difference between treatment and control was 1.4 years.",
+     "start": 4.23,
+     "end": 9.35,
+     "hold_end": 10.15,
+     "beats": [
+      {
+       "text": "After stopping weight",
+       "start": 4.23,
+       "words": [
+        {
+         "text": "After",
+         "start": 4.23
+        },
+        {
+         "text": "stopping",
+         "start": 4.55
+        },
+        {
+         "text": "weight",
+         "start": 4.87
+        }
+       ]
+      },
+      {
+       "text": "management medicines, the",
+       "start": 5.19,
+       "words": [
+        {
+         "text": "management",
+         "start": 5.19
+        },
+        {
+         "text": "medicines,",
+         "start": 5.51
+        },
+        {
+         "text": "the",
+         "start": 5.83
+        }
+       ]
+      },
+      {
+       "text": "time to no",
+       "start": 6.15,
+       "words": [
+        {
+         "text": "time",
+         "start": 6.15
+        },
+        {
+         "text": "to",
+         "start": 6.47
+        },
+        {
+         "text": "no",
+         "start": 6.79
+        }
+       ]
+      },
+      {
+       "text": "difference between treatment",
+       "start": 7.11,
+       "words": [
+        {
+         "text": "difference",
+         "start": 7.11
+        },
+        {
+         "text": "between",
+         "start": 7.43
+        },
+        {
+         "text": "treatment",
+         "start": 7.75
+        }
+       ]
+      },
+      {
+       "text": "and control was",
+       "start": 8.07,
+       "words": [
+        {
+         "text": "and",
+         "start": 8.07
+        },
+        {
+         "text": "control",
+         "start": 8.39
+        },
+        {
+         "text": "was",
+         "start": 8.71
+        }
+       ]
+      },
+      {
+       "text": "1.4 years.",
+       "start": 9.03,
+       "words": [
+        {
+         "text": "1.4 years.",
+         "start": 9.03
+        }
+       ]
+      }
+     ],
+     "emphasis": null,
+     "key": {
+      "number": "1.4 years",
+      "label": "time to no difference between treatment and control",
+      "at": 9.03
+     },
+     "source_label": "West et al. 2026, section text, no page layout"
+    }
+   ],
+   "sources": null
+  },
+  {
+   "kind": "point",
+   "ground": "cream",
+   "start": 10.1,
+   "end": 17.85,
+   "transition_in": "wipe",
+   "broll": null,
+   "lines": [
+    {
+     "kind": "health",
+     "text": "Improvements in weight and cardiometabolic health fade soon after treatment ends, with no evidence of benefit 1.7 years after stopping treatment.",
+     "start": 10.4,
+     "end": 16.8,
+     "hold_end": 17.6,
+     "beats": [
+      {
+       "text": "Improvements in weight",
+       "start": 10.4,
+       "words": [
+        {
+         "text": "Improvements",
+         "start": 10.4
+        },
+        {
+         "text": "in",
+         "start": 10.72
+        },
+        {
+         "text": "weight",
+         "start": 11.04
+        }
+       ]
+      },
+      {
+       "text": "and cardiometabolic health",
+       "start": 11.36,
+       "words": [
+        {
+         "text": "and",
+         "start": 11.36
+        },
+        {
+         "text": "cardiometabolic",
+         "start": 11.68
+        },
+        {
+         "text": "health",
+         "start": 12.0
+        }
+       ]
+      },
+      {
+       "text": "fade soon after",
+       "start": 12.32,
+       "words": [
+        {
+         "text": "fade",
+         "start": 12.32
+        },
+        {
+         "text": "soon",
+         "start": 12.64
+        },
+        {
+         "text": "after",
+         "start": 12.96
+        }
+       ]
+      },
+      {
+       "text": "treatment ends, with",
+       "start": 13.28,
+       "words": [
+        {
+         "text": "treatment",
+         "start": 13.28
+        },
+        {
+         "text": "ends,",
+         "start": 13.6
+        },
+        {
+         "text": "with",
+         "start": 13.92
+        }
+       ]
+      },
+      {
+       "text": "no evidence of",
+       "start": 14.24,
+       "words": [
+        {
+         "text": "no",
+         "start": 14.24
+        },
+        {
+         "text": "evidence",
+         "start": 14.56
+        },
+        {
+         "text": "of",
+         "start": 14.88
+        }
+       ]
+      },
+      {
+       "text": "benefit 1.7 years after",
+       "start": 15.2,
+       "words": [
+        {
+         "text": "benefit",
+         "start": 15.2
+        },
+        {
+         "text": "1.7 years",
+         "start": 15.52
+        },
+        {
+         "text": "after",
+         "start": 15.84
+        }
+       ]
+      },
+      {
+       "text": "stopping treatment.",
+       "start": 16.16,
+       "words": [
+        {
+         "text": "stopping",
+         "start": 16.16
+        },
+        {
+         "text": "treatment.",
+         "start": 16.48
+        }
+       ]
+      }
+     ],
+     "emphasis": null,
+     "key": null,
+     "source_label": "West et al. 2026, section text, no page layout"
+    }
+   ],
+   "sources": null
+  },
+  {
+   "kind": "brand",
+   "ground": "maroon",
+   "start": 17.55,
+   "end": 22.93,
+   "transition_in": "wipe",
+   "broll": null,
+   "lines": [
+    {
+     "kind": "brand",
+     "text": "A planned exit. We help you build habits that last after the medicine stops.",
+     "start": 17.85,
+     "end": 22.33,
+     "hold_end": 22.68,
+     "beats": [
+      {
+       "text": "A planned exit.",
+       "start": 17.85,
+       "words": [
+        {
+         "text": "A",
+         "start": 17.85
+        },
+        {
+         "text": "planned",
+         "start": 18.17
+        },
+        {
+         "text": "exit.",
+         "start": 18.49
+        }
+       ]
+      },
+      {
+       "text": "We help you",
+       "start": 18.81,
+       "words": [
+        {
+         "text": "We",
+         "start": 18.81
+        },
+        {
+         "text": "help",
+         "start": 19.13
+        },
+        {
+         "text": "you",
+         "start": 19.45
+        }
+       ]
+      },
+      {
+       "text": "build habits that",
+       "start": 19.77,
+       "words": [
+        {
+         "text": "build",
+         "start": 19.77
+        },
+        {
+         "text": "habits",
+         "start": 20.09
+        },
+        {
+         "text": "that",
+         "start": 20.41
+        }
+       ]
+      },
+      {
+       "text": "last after the",
+       "start": 20.73,
+       "words": [
+        {
+         "text": "last",
+         "start": 20.73
+        },
+        {
+         "text": "after",
+         "start": 21.05
+        },
+        {
+         "text": "the",
+         "start": 21.37
+        }
+       ]
+      },
+      {
+       "text": "medicine stops.",
+       "start": 21.69,
+       "words": [
+        {
+         "text": "medicine",
+         "start": 21.69
+        },
+        {
+         "text": "stops.",
+         "start": 22.01
+        }
+       ]
+      }
+     ],
+     "emphasis": null,
+     "key": null,
+     "source_label": null
+    }
+   ],
+   "sources": null
+  },
+  {
+   "kind": "cta",
+   "ground": "cream",
+   "start": 22.63,
+   "end": 26.15,
+   "transition_in": "wipe",
+   "broll": null,
+   "lines": [
+    {
+     "kind": "cta",
+     "text": "Talk to a Steer doctor",
+     "start": 22.93,
+     "end": 24.53,
+     "hold_end": 24.83,
+     "beats": [
+      {
+       "text": "Talk to a",
+       "start": 22.93,
+       "words": [
+        {
+         "text": "Talk",
+         "start": 22.93
+        },
+        {
+         "text": "to",
+         "start": 23.25
+        },
+        {
+         "text": "a",
+         "start": 23.57
+        }
+       ]
+      },
+      {
+       "text": "Steer doctor",
+       "start": 23.89,
+       "words": [
+        {
+         "text": "Steer",
+         "start": 23.89
+        },
+        {
+         "text": "doctor",
+         "start": 24.21
+        }
+       ]
+      }
+     ],
+     "emphasis": null,
+     "key": null,
+     "source_label": null
+    },
+    {
+     "kind": "signoff",
+     "text": "steerclub.com",
+     "start": 25.08,
+     "end": 25.4,
+     "hold_end": 25.9,
+     "beats": [
+      {
+       "text": "steerclub.com",
+       "start": 25.08,
+       "words": [
+        {
+         "text": "steerclub.com",
+         "start": 25.08
+        }
+       ]
+      }
+     ],
+     "emphasis": null,
+     "key": null,
+     "source_label": null
+    }
+   ],
+   "sources": null
+  },
+  {
+   "kind": "sources",
+   "ground": "cream",
+   "start": 26.15,
+   "end": 29.15,
+   "transition_in": "wipe",
+   "broll": null,
+   "lines": [],
+   "sources": {
+    "heading": "Sources",
+    "entries": [
+     {
+      "before": "West S, Scragg J, Aveyard P et al. Weight regain after cessation of medication for weight management: systematic review and meta-analysis.",
+      "journal": "BMJ",
+      "after": ", 2026. doi:10.1136/bmj-2025-085304. Section text, no page layout."
+     }
+    ],
+    "footnote": "Every claim on these slides is linked to the paper. Pending review by a Steer doctor before publishing.",
+    "url": "steerclub.com"
+   }
+  }
+ ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "steer-reel",
+  "private": true,
+  "type": "module",
+  "description": "Renders reel_props.json (checked lines, word timings, brand) to a vertical MP4 with Remotion. Called by `steer reel`.",
+  "license": "AGPL-3.0-only",
+  "dependencies": {
+    "@remotion/bundler": "4.0.530",
+    "@remotion/cli": "4.0.530",
+    "@remotion/layout-utils": "4.0.530",
+    "@remotion/renderer": "4.0.530",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "remotion": "4.0.530"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.8",
+    "typescript": "5.8.3"
+  }
+}
