@@ -63,9 +63,30 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--settings")
     v.add_argument("--engine", default="remotion", choices=["remotion", "playwright"],
                    help="remotion: kinetic type (code/reel); playwright: the fallback renderer")
+    st = sub.add_parser("studio", help="the review studio: --serve (local, with actions) or --export (read-only copy)")
+    st.add_argument("--db", required=True)
+    st.add_argument("--posts", nargs="*", default=[], help="folders holding written posts (out/...)")
+    st.add_argument("--reviewers", default=str(Path(__file__).resolve().parents[2] / "reviewers.toml"))
+    st.add_argument("--static", help="the studio's HTML/CSS/JS folder")
+    st.add_argument("--serve", action="store_true")
+    st.add_argument("--port", type=int, default=8765)
+    st.add_argument("--export", help="write a read-only copy (no actions) to this folder")
     d = sub.add_parser("render", help="render (again) the PNGs of a written post folder")
     d.add_argument("folder", help="out/<run_id>/<post_id>")
     args = ap.parse_args(argv)
+
+    if args.cmd == "studio":
+        from . import studio
+        dirs, static = [Path(d) for d in args.posts], Path(args.static) if args.static else None
+        if args.export:
+            r = studio.export_site(args.db, dirs, args.reviewers, Path(args.export), static)
+            print(f"read-only copy in {args.export}: {r}", file=sys.stderr)
+            return 0
+        if args.serve:
+            studio.serve(args.db, dirs, args.reviewers, args.port, static)
+            return 0
+        print("say --serve or --export DIR", file=sys.stderr)
+        return 2
 
     if args.cmd == "reel":
         settings = load_settings(args.settings)

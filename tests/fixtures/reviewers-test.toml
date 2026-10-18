@@ -1,0 +1,9 @@
+# TEST ONLY: never loaded by the demo. Adds a clinician so the pending -> clinically approved -> publishable path
+# can be tested in isolation.
+[[reviewer]]
+name = "Test editor"
+role = "editor"
+
+[[reviewer]]
+name = "Test clinician"
+role = "clinician"

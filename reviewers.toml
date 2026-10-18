@@ -1,0 +1,6 @@
+# Studio reviewers (S4). The server resolves each typed name to its role here; a role sent by the browser is ignored.
+# Prototype: names are self-identified, there is no login. The demo has NO clinician, so no post can be clinically
+# approved in the demo: every post stays "pending doctor review" until a Steer clinician is added here.
+[[reviewer]]
+name = "Steer editor (demo)"
+role = "editor"

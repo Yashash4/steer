@@ -8,6 +8,7 @@ result, with the checking model and its independence). Nothing here approves a p
 import json
 import tomllib
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import store
@@ -74,12 +75,13 @@ def write_and_check(con, run_id: str, fmt: str, settings: dict, router: Router |
     written = write_post(brief, usable, brand, boundaries, hashtags, router)
     result = check_post(written["post"], claims, brand, settings["rules"], boundaries, router, written["endpoint"], context)
     post_id = f"post-{uuid.uuid4().hex[:8]}"
+    written_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     used = sorted({i for ln in result["lines"] for i in ln["claim_ids"]})
     srcs = sources(used, claims, doc)
     folder = Path(out_dir) / run_id / post_id
     folder.mkdir(parents=True, exist_ok=True)
     post = written["post"]
-    record = {"post_id": post_id, "run_id": run_id, "status": result["status"], "brief": brief,
+    record = {"post_id": post_id, "run_id": run_id, "written_at": written_at, "status": result["status"], "brief": brief,
               "message": post["message"], "reasoning": post["reasoning"], "format": post["format"],
               "writer": {"endpoint": written["endpoint"], "model": written["model"], "usage": written["usage"]},
               "post": post, "sources": srcs, "flags": result["flags"], "needs_layout_check": result["needs_layout_check"],
@@ -101,6 +103,7 @@ def write_and_check(con, run_id: str, fmt: str, settings: dict, router: Router |
     (folder / "caption.txt").write_text(caption, encoding="utf-8")
     if render and record["status"] == "draft_pending_review":  # a blocked post gets no artwork
         record["render"] = render_post(folder, brand)
+    store.save_post(con, record, folder, written_at)   # the studio's register of posts (post.json is the file of record)
     return record | {"folder": str(folder), "lines_checked": len(result["lines"])}
 
 

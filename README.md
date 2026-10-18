@@ -321,6 +321,26 @@ more than 35 body words, a used claim missing from the sources, or a PNG that is
   numbers must equal the line's numbers (a transcript that cannot be compared fails); the sources card lists every
   claim; the draft mark is found in decoded frames.
 
+## Studio (S4 backend)
+
+`steer studio --db steer.db --posts out/ --serve` runs the review studio locally (stdlib HTTP server, one thread);
+`steer studio ... --export site/` writes a read-only copy for judges (a data snapshot and images, no action routes,
+"demo copy: actions disabled").
+- Statuses are derived, never stored: from the stored claims and posts and the append-only `review_action` table
+  (SQLite triggers refuse any UPDATE or DELETE). Each post is re-checked by code against today's rules and
+  boundaries when the studio loads, so a post written under older rules shows as blocked, with its codes.
+- Four stages per post, in order: code checks → layout check of every claim that needs one → editorial review →
+  clinical approval. Acting on a stage before the earlier ones are complete is refused (409, naming the stage).
+- Reviewers come from `reviewers.toml`: the server resolves the typed name to its role and ignores any role the
+  browser sends. Names are self-identified (prototype, no login). The demo file has no clinician, so no post can be
+  clinically approved in the demo.
+- Exports: a draft pack for any post (every image keeps "draft · pending doctor review", the manifest lists all four
+  stages), and a publishable pack only when all four stages are complete (a clean re-render), else 409.
+- Page images: in the local studio for every paper; in the read-only copy and in packs only for CC BY papers (CC
+  BY-NC papers show the sentence, line ids and the PMC link instead). The highlight uses only S1 line boxes.
+- Estimated review time (timestamp-based): per paper, the sum of gaps between consecutive actions on its items,
+  gaps over 10 minutes excluded. It may include short idle time.
+
 ## Labels and rules
 
 - **Labels** (`label.py`): the model gives each claim one theme and zero or more reader doubts, from the

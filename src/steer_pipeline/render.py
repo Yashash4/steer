@@ -36,6 +36,8 @@ LADDERS = {  # px, largest first; the last step is the floor
 SOURCES_PER_SLIDE = 3
 DRAFT = "draft · pending doctor review"
 FOOTNOTE = "Every claim on these slides is linked to the paper. Pending review by a Steer doctor before publishing."
+# only the studio's publishable export (all four review stages complete) renders without the draft mark
+PUBLISHED_FOOTNOTE = "Every claim on these slides is linked to the paper. Reviewed by a Steer doctor before publishing."
 
 FIT_JS = """() => {
   const area = document.querySelector('.content');
@@ -200,7 +202,7 @@ def _entry_html(e: dict) -> str:
     return _fit("sources", "entry", text)
 
 
-def build_pages(record: dict, brand: dict) -> list[dict]:
+def build_pages(record: dict, brand: dict, draft: bool = True) -> list[dict]:
     """[{name, html, words, kind, claim_ids}] for the post's artwork, sources slides included."""
     p, post = brand["palette"], record["post"]
     by_claim = {s["claim_id"]: s for s in record["sources"]}
@@ -232,6 +234,10 @@ def build_pages(record: dict, brand: dict) -> list[dict]:
         pages.append({"name": "static.png", "kind": "static", "words": sum(len(ln["text"].split()) for ln in lines),
                       "claim_ids": sorted({c for e in entries for c in e["claim_ids"]}),
                       "html": _page(p, content, 1, 1)})
+    if not draft:   # the publishable re-render: no draft mark, the reviewed footnote
+        for pg in pages:
+            pg["html"] = pg["html"].replace(f'<div class="mark">{DRAFT}</div>', "").replace(
+                html.escape(FOOTNOTE), html.escape(PUBLISHED_FOOTNOTE))
     return pages
 
 
@@ -242,12 +248,12 @@ def png_size(path: Path) -> tuple[int, int]:
     return struct.unpack(">II", head[16:24])
 
 
-def render(record: dict, brand: dict, out_dir: Path) -> dict:
+def render(record: dict, brand: dict, out_dir: Path, draft: bool = True) -> dict:
     """Write the PNGs and render_qa.json into out_dir; returns {status: passed|failed, pages: [...]}."""
     from playwright.sync_api import sync_playwright
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    pages = build_pages(record, brand)
+    pages = build_pages(record, brand, draft)
     used = sorted({i for sl in record["post"].get("slides") or [] for ln in sl["lines"] for i in ln["claim_ids"]}
                   | {i for ln in ([record["post"]["static"]["headline"], *record["post"]["static"]["supporting"]]
                                   if record["post"].get("static") else []) for i in ln["claim_ids"]})

@@ -8,7 +8,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS documents (
@@ -71,18 +71,79 @@ CREATE TABLE IF NOT EXISTS crosschecks (
     FOREIGN KEY (run_id, claim_id) REFERENCES claims (run_id, claim_id)
 );
 """
+# version 3 adds these tables only (add-only again). review_action is append-only, enforced by the database: a
+# reviewer's decision is never edited or deleted; statuses are derived from the latest action (studio.py).
+SCHEMA_V3 = """
+CREATE TABLE IF NOT EXISTS posts (
+    post_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    folder TEXT NOT NULL,            -- out/<run_id>/<post_id>: post.json and trace.json are the files of record
+    status TEXT NOT NULL,            -- the status the checks gave when the post was written
+    written_at TEXT NOT NULL,
+    record TEXT NOT NULL             -- post.json as written, JSON
+);
+CREATE TABLE IF NOT EXISTS review_action (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    reviewer TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('editor', 'clinician')),   -- resolved by the server from reviewers.toml
+    target_kind TEXT NOT NULL CHECK (target_kind IN ('claim', 'post')),
+    target TEXT NOT NULL,            -- '<run_id>/<claim_id>' or '<post_id>'
+    stage TEXT NOT NULL CHECK (stage IN ('layout', 'editorial', 'clinical')),
+    action TEXT NOT NULL CHECK (action IN ('layout_checked', 'layout_unresolved', 'editorial_approved',
+                                           'editorial_rejected', 'clinically_approved', 'clinically_rejected')),
+    reason TEXT,
+    reason_category TEXT CHECK (reason_category IS NULL OR reason_category IN
+                                ('inaccurate', 'overstated', 'missing context', 'tone/brand', 'other')),
+    before_status TEXT,
+    after_status TEXT
+);
+CREATE INDEX IF NOT EXISTS review_action_by_target ON review_action (target_kind, target, id);
+CREATE TRIGGER IF NOT EXISTS review_action_no_update BEFORE UPDATE ON review_action
+    BEGIN SELECT RAISE(ABORT, 'review_action is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS review_action_no_delete BEFORE DELETE ON review_action
+    BEGIN SELECT RAISE(ABORT, 'review_action is append-only'); END;
+"""
 STATUSES = {"passed": "passed", "needs_check": "needs_check", "rejected": "rejected"}
 
 
-def connect(path: str | Path) -> sqlite3.Connection:
-    con = sqlite3.connect(str(path))
+def connect(path: str | Path, check_same_thread: bool = True) -> sqlite3.Connection:
+    con = sqlite3.connect(str(path), check_same_thread=check_same_thread)
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(SCHEMA)
     con.execute("INSERT OR IGNORE INTO meta VALUES ('schema_version', '1')")
     con.executescript(SCHEMA_V2)
+    con.executescript(SCHEMA_V3)
     with con:
         con.execute("UPDATE meta SET value = ? WHERE key = 'schema_version'", (str(SCHEMA_VERSION),))
     return con
+
+
+def save_post(con: sqlite3.Connection, record: dict, folder: str | Path, written_at: str) -> None:
+    """Register a written post (its folder holds the files of record)."""
+    with con:
+        con.execute("INSERT OR REPLACE INTO posts VALUES (?, ?, ?, ?, ?, ?)",
+                    (record["post_id"], record["run_id"], str(folder), record["status"], written_at, _j(record)))
+
+
+ACTION_COLUMNS = ("at", "reviewer", "role", "target_kind", "target", "stage", "action", "reason", "reason_category",
+                  "before_status", "after_status")
+
+
+def add_action(con: sqlite3.Connection, action: dict) -> int:
+    """Append one reviewer action; returns its id. There is no way to change or remove one."""
+    with con:
+        cur = con.execute(f"INSERT INTO review_action ({', '.join(ACTION_COLUMNS)}) VALUES ({', '.join('?' * len(ACTION_COLUMNS))})",
+                          tuple(action.get(k) for k in ACTION_COLUMNS))
+    return cur.lastrowid
+
+
+def actions(con: sqlite3.Connection) -> list[dict]:
+    con.row_factory = sqlite3.Row
+    try:
+        return [dict(r) for r in con.execute("SELECT * FROM review_action ORDER BY id")]
+    finally:
+        con.row_factory = None
 
 
 def save_crosschecks(con: sqlite3.Connection, run_id: str, results: list[dict], checked_at: str) -> None:

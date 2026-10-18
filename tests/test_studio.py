@@ -1,0 +1,227 @@
+import copy
+import io
+import json
+import threading
+import urllib.error
+import urllib.request
+import zipfile
+from pathlib import Path
+
+import pytest
+
+from steer_pipeline import posts as posts_mod, render, store, studio
+
+HERE = Path(__file__).parent
+DEMO = studio.load_reviewers(HERE.parent / "reviewers.toml")
+TEST = studio.load_reviewers(HERE / "fixtures" / "reviewers-test.toml")
+BRAND = posts_mod.load_brand()
+SUPPORTED = {"verdict": "supported", "independence": "different_provider"}
+
+
+def claim(cid, status="passed", reasons=(), cc=SUPPORTED, **kw):
+    return {"run_id": "r1", "claim_id": cid, "status": status, "review_reasons": list(reasons), "crosscheck": cc,
+            "claim_text": f"text {cid}", "quote": f"quote {cid}", "sids": ["p0001-s0001"], "line_ids": ["p0001-l0001"]} | kw
+
+
+def L(kind, text, ids=()):
+    return {"kind": kind, "text": text, "claim_ids": list(ids)}
+
+
+def post(pid="post-00000001", status="draft_pending_review", needs=("c1",), render_status="passed"):
+    health = L("health", "On average weight came back at 0.4 kg a month, not a personal promise.", ["c1", "c2"])
+    return {"post_id": pid, "run_id": "r1", "status": status, "format": "carousel", "message": "m", "reasoning": "r",
+            "needs_layout_check": list(needs), "post_failures": [] if status != "blocked" else [{"code": "SLIDE_TOO_LONG"}],
+            "render": {"status": render_status, "pngs": []}, "folder": "",
+            "sources": [{"claim_id": i, "authors": "West S, Scragg J, Aveyard P et al.", "title": "T", "journal": "BMJ",
+                         "year": 2026, "doi": "10.1/w", "location": "page 3", "sids": ["p0003-s0001"]} for i in ("c1", "c2")],
+            "post": {"format": "carousel",
+                     "slides": [{"role": "hook", "lines": [L("framing", "Will the weight come back?")]},
+                                {"role": "point", "lines": [health]},
+                                {"role": "cta", "lines": [L("cta", "Talk to a Steer doctor"), L("signoff", "steerclub.com")]}],
+                     "caption": {"lines": [health], "hashtags": []}, "reel_script": {"scenes": [{"lines": [health]}]}}}
+
+
+def world(tmp_path):
+    con = store.connect(tmp_path / "s.db")
+    claims = {f"r1/{c['claim_id']}": c for c in [claim("c1", reasons=["LAYOUT_CHECK_NEEDED"]), claim("c2"),
+                                                 claim("c3", "needs_check", ["CONTEXT_NOT_IN_QUOTE"])]}
+    p = post()
+    p["folder"] = str(tmp_path / "p1")
+    Path(p["folder"]).mkdir()
+    return con, claims, {p["post_id"]: p}
+
+
+def do(con, reviewers, claims, posts, **body):
+    return studio.act(con, reviewers, body, claims, posts)
+
+
+def refused(con, reviewers, claims, posts, **body):
+    with pytest.raises(studio.Refused) as e:
+        studio.act(con, reviewers, body, claims, posts)
+    return e.value
+
+
+def test_the_demo_has_no_clinician_and_roles_come_from_the_server(tmp_path):
+    assert "clinician" not in DEMO.values() and "clinician" in TEST.values()
+    con, claims, posts = world(tmp_path)
+    e = refused(con, DEMO, claims, posts, reviewer="Somebody", action="layout_checked", target="r1/c1")
+    assert e.http == 403
+    do(con, DEMO, claims, posts, reviewer="Steer editor (demo)", action="layout_checked", target="r1/c1")
+    do(con, DEMO, claims, posts, reviewer="Steer editor (demo)", action="editorial_approved", target="post-00000001")
+    # the browser claiming to be a clinician changes nothing: the server reads the role from reviewers.toml
+    e = refused(con, DEMO, claims, posts, reviewer="Steer editor (demo)", role="clinician", action="clinically_approved",
+                target="post-00000001")
+    assert e.http == 403 and e.stage == "clinical"
+    assert store.actions(con)[-1]["role"] == "editor"
+
+
+def test_each_stage_waits_for_the_one_before_it(tmp_path):
+    con, claims, posts = world(tmp_path)
+    ed, cl = "Test editor", "Test clinician"
+    e = refused(con, TEST, claims, posts, reviewer=ed, action="editorial_approved", target="post-00000001")
+    assert (e.http, e.stage) == (409, "layout")                                # c1 still needs its layout check
+    e = refused(con, TEST, claims, posts, reviewer=cl, action="clinically_approved", target="post-00000001")
+    assert (e.http, e.stage) == (409, "layout")
+    row = do(con, TEST, claims, posts, reviewer=ed, action="layout_checked", target="r1/c1")
+    assert row["before_status"].startswith("needs check") and row["after_status"].startswith("layout checked by Test editor")
+    e = refused(con, TEST, claims, posts, reviewer=cl, action="clinically_approved", target="post-00000001")
+    assert (e.http, e.stage) == (409, "editorial")
+    do(con, TEST, claims, posts, reviewer=ed, action="editorial_approved", target="post-00000001")
+    st = studio.post_stages(posts["post-00000001"], claims, store.actions(con))
+    assert st["words"] == "pending doctor review" and st["first_open"] == "clinical"
+    do(con, TEST, claims, posts, reviewer=cl, action="clinically_approved", target="post-00000001")
+    st = studio.post_stages(posts["post-00000001"], claims, store.actions(con))
+    assert st["first_open"] is None and st["words"].startswith("clinically approved by Test clinician (clinician)")
+    # a blocked post never reaches editorial review
+    blocked = post("post-00000002", status="blocked", needs=())
+    e = refused(con, TEST, claims, {blocked["post_id"]: blocked}, reviewer=ed, action="editorial_approved",
+                target="post-00000002")
+    assert (e.http, e.stage) == (409, "code")
+
+
+def test_rejections_need_a_reason_and_layout_unresolved_blocks_the_post(tmp_path):
+    con, claims, posts = world(tmp_path)
+    ed = "Test editor"
+    assert refused(con, TEST, claims, posts, reviewer=ed, action="layout_unresolved", target="r1/c1").http == 400
+    do(con, TEST, claims, posts, reviewer=ed, action="layout_unresolved", target="r1/c1", reason="lines from two columns")
+    st = studio.post_stages(posts["post-00000001"], claims, store.actions(con))
+    assert st["stages"]["code"]["words"] == "blocked (layout unresolved: c1)" and st["first_open"] == "code"
+    assert studio.claim_status(claims["r1/c1"], store.actions(con))["words"] == "layout unresolved (lines from two columns)"
+    # editorial rejection: reason AND category
+    do(con, TEST, claims, posts, reviewer=ed, action="layout_checked", target="r1/c1")
+    assert refused(con, TEST, claims, posts, reviewer=ed, action="editorial_rejected", target="post-00000001",
+                   reason="tone").http == 400
+    do(con, TEST, claims, posts, reviewer=ed, action="editorial_rejected", target="post-00000001", reason="too alarming",
+       reason_category="tone/brand")
+    assert studio.post_stages(posts["post-00000001"], claims, store.actions(con))["words"] == \
+        "rejected by Test editor (editor): too alarming"
+
+
+def test_claim_status_words_say_exactly_what_was_checked():
+    w = lambda c: studio.claim_status(c, [])["words"]
+    assert w(claim("x", "rejected")) == "rejected by the gate"
+    assert w(claim("x")) == "verified"
+    assert w(claim("x", cc={"verdict": "supported", "independence": "same_model"})) == "passed code checks"
+    assert w(claim("x", "needs_check", ["CONTEXT_NOT_IN_QUOTE"])) == "needs check (CONTEXT_NOT_IN_QUOTE)"
+    assert w(claim("x", reasons=["LAYOUT_CHECK_NEEDED"])) == "needs check (LAYOUT_CHECK_NEEDED)"
+
+
+def test_draft_pack_for_any_post_publishable_only_when_every_stage_is_done(tmp_path):
+    con, claims, posts = world(tmp_path)
+    p = posts["post-00000001"]
+    r = render.render(p, BRAND, Path(p["folder"]))                            # the draft PNGs, as `steer write` makes them
+    p["render"]["pngs"] = [x["png"] for x in r["pages"]]
+    pack = zipfile.ZipFile(io.BytesIO(studio.export_draft_pack(con, [p["post_id"]], claims, posts)))
+    names = pack.namelist()
+    assert "manifest.json" in names and any(n.endswith(".png") for n in names)
+    m = json.loads(pack.read("manifest.json"))
+    assert set(m["posts"][0]["stages"]) == {"code", "layout", "editorial", "clinical"}
+    assert all(render.DRAFT in pg["html"] for pg in render.build_pages(p, BRAND))   # every draft image has the mark
+    for stage, step in [("layout", ("Test editor", "layout_checked", "r1/c1")),
+                        ("editorial", ("Test editor", "editorial_approved", p["post_id"])),
+                        ("clinical", ("Test clinician", "clinically_approved", p["post_id"]))]:
+        with pytest.raises(studio.Refused) as e:
+            studio.export_publishable(con, p["post_id"], claims, posts, BRAND)
+        assert (e.value.http, e.value.stage) == (409, stage)                  # the endpoint names the missing stage
+        do(con, TEST, claims, posts, reviewer=step[0], action=step[1], target=step[2])
+    pub = zipfile.ZipFile(io.BytesIO(studio.export_publishable(con, p["post_id"], claims, posts, BRAND)))
+    assert json.loads(pub.read("manifest.json"))["kind"] == "publishable"
+    clean = render.build_pages(p, BRAND, draft=False)
+    assert all(render.DRAFT not in pg["html"] for pg in clean)
+    assert render.PUBLISHED_FOOTNOTE in clean[-1]["html"]
+
+
+def test_review_time_is_timestamp_based_with_long_gaps_left_out():
+    acts = [{"target_kind": "claim", "target": "r1/c1", "at": t} for t in
+            ("2026-10-18T10:00:00", "2026-10-18T10:03:00", "2026-10-18T10:30:00", "2026-10-18T10:31:00")]
+    assert studio.review_minutes(acts, lambda a: "r1") == {"r1": 4.0}            # 3 + 1; the 27-minute gap is excluded
+
+
+def test_page_images_in_a_public_copy_only_for_cc_by(tmp_path):
+    assert studio.cc_by({"license": "CC BY"}) and studio.cc_by({"license": "cc-by-4.0"})
+    assert not studio.cc_by({"license": "CC BY-NC"}) and not studio.cc_by({"license": None})
+    con, claims, posts = world(tmp_path)
+    for lic, shown in (("CC BY", True), ("CC BY-NC", False)):
+        docs = {"r1": {"citation": {"pmcid": "PMC1", "license": lic}, "warnings": [],
+                       "pages": [{"lines": [{"line_id": "p0001-l0001", "bbox": [10, 20, 300, 34]}]}]}}
+        snap = studio.data(con, docs, claims, posts, DEMO, public=True)
+        assert snap["papers"]["r1"]["page_images"] is shown
+        assert studio.data(con, docs, claims, posts, DEMO, public=False)["papers"]["r1"]["page_images"] is True
+        c1 = next(c for c in snap["claims"] if c["key"] == "r1/c1")
+        assert c1["boxes"] == {"1": [{"line_id": "p0001-l0001", "bbox": [10, 20, 300, 34]}]}   # S1 line boxes only
+    assert "/api/" not in json.dumps(snap) and snap["reviewers"]["has_clinician"] is False
+
+
+def test_the_server_ignores_a_browser_role_and_answers_with_the_gate(tmp_path):
+    from http.server import HTTPServer
+    _, claims, posts = world(tmp_path)
+    con = store.connect(tmp_path / "s.db", check_same_thread=False)   # served from a second thread, one at a time
+    docs = {"r1": {"citation": {"pmcid": "PMC1", "license": "CC BY"}, "warnings": [], "pages": []}}
+    srv = HTTPServer(("127.0.0.1", 0), studio.make_handler(con, lambda: (docs, claims, posts), DEMO, BRAND, tmp_path, None))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+
+    def post_json(path, body):
+        req = urllib.request.Request(base + path, json.dumps(body).encode(), {"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+    try:
+        with urllib.request.urlopen(base + "/api/data") as r:
+            assert json.loads(r.read())["reviewers"]["note"] == "self-identified (prototype, no login)"
+        assert post_json("/api/action", {"reviewer": "Steer editor (demo)", "role": "clinician",
+                                         "action": "clinically_approved", "target": "post-00000001"})[0] == 409
+        code, body = post_json("/api/action", {"reviewer": "Steer editor (demo)", "action": "layout_checked", "target": "r1/c1"})
+        assert code == 200 and body["role"] == "editor"
+        code, body = post_json("/api/export/publishable", {"post_id": "post-00000001"})
+        assert code == 409 and body["stage"] == "editorial"
+    finally:
+        srv.shutdown()
+
+
+@pytest.mark.network
+def test_layout_check_highlight_is_the_s1_line_boxes_of_narayan_p1_s0027(tmp_path):
+    from steer_pipeline.fetch import fetch
+    doc = fetch("PMC8006839", "evidence")
+    sent = next(s for s in doc["sentences"] if s["sid"] == "p0001-s0027")
+    lines = {ln["line_id"]: ln for pg in doc["pages"] for ln in pg["lines"]}
+    con = store.connect(tmp_path / "s.db")
+    c = claim("c9", reasons=["LAYOUT_CHECK_NEEDED"], line_ids=sent["line_ids"], sids=["p0001-s0027"])
+    snap = studio.data(con, {"r1": doc}, {"r1/c9": c}, {}, DEMO)
+    boxes = snap["claims"][0]["boxes"]["1"]
+    assert [b["line_id"] for b in boxes] == sent["line_ids"]
+    assert all(b["bbox"] == lines[b["line_id"]]["bbox"] for b in boxes)
+    assert any(w["code"] == "UNCERTAIN_COLUMN_ORDER" and w.get("page") == 1 for w in doc["warnings"])
+
+
+def test_a_post_that_fails_todays_rules_is_not_reviewable(tmp_path):
+    con, claims, posts = world(tmp_path)
+    p = posts["post-00000001"] | {"current_failures": ["STATIC_NO_SIGNOFF"]}
+    st = studio.post_stages(p, claims, [])
+    assert st["first_open"] == "code" and st["words"] == "blocked under the current rules (STATIC_NO_SIGNOFF)"
+    b = post("post-00000003", status="blocked") | {"write_failures": ["QUALIFIER_DROPPED"], "current_failures": ["NUMBER_NOT_IN_CLAIM"]}
+    assert studio.post_stages(b, claims, [])["words"] == "blocked (NUMBER_NOT_IN_CLAIM, QUALIFIER_DROPPED)"
+    ex = dict(claims) | {"r1/c2": claims["r1/c2"] | {"excluded": "harmful under family framing"}}
+    assert studio.claim_status(ex["r1/c2"], [])["words"] == "excluded from posts (harmful under family framing)"
