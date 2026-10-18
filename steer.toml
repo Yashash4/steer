@@ -97,3 +97,9 @@ hashtags = ["#steerclub", "#metabolichealth", "#doctorled", "#weightmanagement",
             "#healthyhabits", "#insulinresistance", "#musclehealth", "#evidencebased", "#lifestylemedicine",
             "#southasianhealth", "#longtermhealth", "#nutritionscience"]
 brief_claims = 4   # claims picked for an automatic brief
+
+# The reel's voice (S7-min). A placeholder chosen for the build; the final voice is a settings change only.
+# edge-tts is Microsoft's online voice service: each line's text is sent to it.
+[voice]
+provider = "edge-tts"
+name = "en-IN-NeerjaNeural"

@@ -303,6 +303,24 @@ slide down a type ladder until nothing overflows; render QA fails on overflow, b
 more than 35 body words, a used claim missing from the sources, or a PNG that is not exactly 1080 × 1350
 (`render_qa.json` in the post folder). A blocked post gets no PNGs.
 
+## Reel (S7-min)
+
+`steer reel out/<run_id>/<post_id> --db steer.db` turns a rendered draft's reel script into `reel.mp4`
+(1080 × 1920, 30 fps, H.264 + AAC), `reel.srt` and `reel_trace.json`. Setup once: `bash tools/setup-whisper.sh`
+(builds whisper.cpp v1.9.1 into `.tools/` and fetches `ggml-base.en.bin` into `.models/`, pinned by hash).
+- Refused unless the post is a rendered draft whose code checks still pass against the current boundaries file
+  and whose reel lines all have an independent supported cross-check. The reel adds no words.
+- Voice: `[voice]` in `steer.toml` (placeholder edge-tts `en-IN-NeerjaNeural`, a Microsoft online service). The
+  text sent is a fixed spoken form made by code: units, symbols and ranges expanded; numbers stay digits.
+- Picture: one HTML page per scene with S3's brand; lines fade in and rise as they are spoken; no counters or
+  number animation (a lint test). Every frame is captured by Playwright and encoded by ffmpeg (imageio-ffmpeg).
+- Subtitles: the display text, at most 2 lines of 32 characters, timed from the voice's word boundaries, each at
+  least 1.2 s; burned in and in `reel.srt`.
+- QA (fails the reel): size, frame rate, 20–60 s; every text node on screen comes from the script or code; no
+  overflow; audio length matches the timeline; every line's audio is transcribed locally (whisper.cpp) and its
+  numbers must equal the line's numbers (a transcript that cannot be compared fails); the sources card lists every
+  claim; the draft mark is found in decoded frames.
+
 ## Labels and rules
 
 - **Labels** (`label.py`): the model gives each claim one theme and zero or more reader doubts, from the

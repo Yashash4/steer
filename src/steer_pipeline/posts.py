@@ -113,3 +113,49 @@ def render_post(folder: str | Path, brand: dict | None = None) -> dict:
                         "pngs": [r["png"] for r in qa["pages"]]}
     (folder / "post.json").write_text(json.dumps(record, ensure_ascii=False, indent=1), encoding="utf-8")
     return record["render"]
+
+
+class ReelRefused(Exception):
+    """The post may not become a reel; .reasons lists why."""
+
+    def __init__(self, reasons: list[dict]):
+        super().__init__("; ".join(r["code"] for r in reasons))
+        self.reasons = reasons
+
+
+def reel_post(folder: str | Path, con, settings: dict, tts=None, transcribe=None) -> dict:
+    """Make the reel of a written post, after checking it may be voiced: a rendered draft whose code checks still
+    pass against the current boundaries, and whose reel lines all have an independent supported cross-check."""
+    from .checks import COUNTS
+    from .reel import make_reel
+
+    folder = Path(folder)
+    record = json.loads((folder / "post.json").read_text())
+    trace = json.loads((folder / "trace.json").read_text())
+    reasons = []
+    if record["status"] != "draft_pending_review":
+        reasons.append({"code": "REFUSED_STATUS", "detail": record["status"]})
+    if (record.get("render") or {}).get("status") != "passed":
+        reasons.append({"code": "REFUSED_NOT_RENDERED", "detail": record.get("render")})
+    if reasons:  # nothing else to look at
+        raise ReelRefused(reasons)
+    claims, doc = claims_from_store(con, record["run_id"])
+    boundaries = load_boundaries(doc["citation"].get("pmcid") or "")
+    again = check_post(record["post"], claims, load_brand(), settings["rules"], boundaries, None,
+                       record["writer"]["endpoint"], study_context(boundaries, doc))
+    failed = again["post_failures"] + [f | {"path": ln["path"]} for ln in again["lines"] for f in ln["failures"]]
+    if failed:
+        reasons.append({"code": "REFUSED_CODE_CHECKS", "detail": failed,
+                        "boundaries_version": boundaries.get("version")})
+    for ln in trace["lines"]:
+        cc = ln.get("crosscheck") or {}
+        if ln["path"].startswith("reel_script/") and ln["kind"] in ("health", "framing") and \
+                (cc.get("verdict") != "supported" or cc.get("independence") not in COUNTS):
+            reasons.append({"code": "REFUSED_CROSSCHECK", "detail": ln["path"]})
+    if reasons:
+        raise ReelRefused(reasons)
+    post = record["post"]
+    emphasis = (post.get("slides") or [{}])[0].get("emphasis") if post.get("slides") else (post.get("static") or {}).get("emphasis")
+    script = json.loads((folder / "reel_script.json").read_text())
+    return make_reel(record, script, load_brand(), folder, settings["voice"], tts=tts, transcribe=transcribe,
+                     post_emphasis=emphasis)

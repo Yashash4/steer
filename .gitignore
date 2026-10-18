@@ -5,3 +5,5 @@ __pycache__/
 out/
 steer.db
 .browsers/
+.tools/
+.models/

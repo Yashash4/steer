@@ -57,9 +57,24 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--settings")
     w.add_argument("--out", default="out")
     w.add_argument("--no-render", action="store_true", help="skip the PNGs")
+    v = sub.add_parser("reel", help="make the reel (MP4, SRT, trace) of a rendered draft post")
+    v.add_argument("folder", help="out/<run_id>/<post_id>")
+    v.add_argument("--db", required=True, help="the SQLite file the post was written from")
+    v.add_argument("--settings")
     d = sub.add_parser("render", help="render (again) the PNGs of a written post folder")
     d.add_argument("folder", help="out/<run_id>/<post_id>")
     args = ap.parse_args(argv)
+
+    if args.cmd == "reel":
+        settings = load_settings(args.settings)
+        try:
+            t = posts.reel_post(args.folder, store.connect(args.db), settings)
+        except posts.ReelRefused as e:
+            print(f"refused: {json.dumps(e.reasons, ensure_ascii=False)[:2000]}", file=sys.stderr)
+            return 2
+        print(f"reel {t['status']}: {t['probe'].get('duration')} s, {t['probe'].get('bytes')} bytes; timings {t['timings']}; "
+              f"failures {[f['code'] for f in t['failures']]}", file=sys.stderr)
+        return 0 if t["status"] == "passed" else 1
 
     if args.cmd == "render":
         from .render import qa_line

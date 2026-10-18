@@ -53,13 +53,13 @@ FIT_JS = """() => {
 }"""
 
 
-def _css(p: dict) -> str:
+def _css(p: dict, w: int = W, h: int = H) -> str:
     return f"""
 @font-face {{ font-family: Fraunces; src: url('Fraunces.ttf'); }}
 @font-face {{ font-family: Fraunces; font-style: italic; src: url('Fraunces-Italic.ttf'); }}
 @font-face {{ font-family: Inter; src: url('Inter.ttf'); }}
 * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-html, body {{ width: {W}px; height: {H}px; overflow: hidden; }}
+html, body {{ width: {w}px; height: {h}px; overflow: hidden; }}
 body {{ background: {p['cream']}; color: {p['ink']}; font-family: Inter; position: relative; }}
 body.bold {{ background: {p['maroon']}; color: {p['cream']}; }}
 .serif {{ font-family: Fraunces; font-variation-settings: 'WONK' 0, 'SOFT' 50; font-weight: 500; line-height: 1.12; }}
