@@ -169,11 +169,11 @@ def quote_hedged(quote: str) -> bool:
     return bool(MODAL_HEDGE.search(quote) or NUMBER_HEDGE.search(quote))
 
 
-COMPARATOR = re.compile(r"\b(?:than|compared (?:with|to)|versus|vs\.?|relative to)\s+([^,;.()\[\]]+)", re.I)
+COMPARATOR = re.compile(r"\b(?:than|compared (?:with|to)|versus|vs\.?|relative to)\s+([^,;:.()\[\]]+)", re.I)
 
 
 def comparator_phrases(text: str) -> list[str]:
-    """The noun phrases after "than / compared with / versus / vs / relative to", up to , ; . or a bracket.
+    """The noun phrases after "than / compared with / versus / vs / relative to", up to , ; : . or a bracket.
 
     A phrase starting with a number ("more than 30") is a comparison of values, not of groups: skipped.
     """

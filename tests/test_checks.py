@@ -85,6 +85,9 @@ def test_comparison_group_rule():
     assert "COMPARATOR_NOT_IN_CLAIM" not in codes(L("health", "In men, risk was 3 times higher in South Asians than in US whites.",
                                                     ["men_res"]))
     assert "COMPARATOR_NOT_IN_CLAIM" not in codes(L("health", "Incidence was 5.3 times higher than in white women.", ["women"]))
+    # the group ends at a colon: "compared with US whites: South Asian women had 5.27 ..." is about "US whites"
+    from steer_pipeline.extract import comparator_phrases
+    assert comparator_phrases("With BMI under 25, compared with US whites: South Asian women had 5.27 times") == ["US whites"]
     assert "COMPARATOR_NOT_IN_CLAIM" in codes(L("health", "Incidence was 5.3 times higher than in white men.", ["women"]))
 
 
