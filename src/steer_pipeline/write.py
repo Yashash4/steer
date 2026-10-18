@@ -145,9 +145,10 @@ key_number + key_label whose label says who the number is about (for example "ri
 under 25"); a static with only a fact card is blocked. Every artwork ends with the sign-off: on the carousel's
 CTA slide, and among the static's supporting lines.
 Leave them out when nothing deserves it.
-The reel script is spoken in about 25-40 seconds: 55-85 words in all its lines together. Each reel line has at most 22
-words (a whole line is on screen at once); split a longer one into two lines that each make sense on their own.
-The reel opens on a framing line of at most 8 words (spoken in under 4 seconds). In the reel, one health line may state
+The reel script is spoken in 30-40 seconds: 50-70 words in all its lines together, in this order: ONE opening framing
+line (one sentence, no full stop inside, at most 7 words, so it is spoken in under 4 seconds), the health line(s), at
+most ONE more framing line, the brand line, the call to action and the sign-off. Each reel line has at most 22 words (32
+for a health line that states two claims together); a whole line is on screen at once. In the reel, one health line may state
 two claims together when they share the same population and qualifiers (list both claim_ids; each number exactly as
 its own claim gives it), for example "Aged 45+ in Chennai, Delhi and Karachi, with BMI under 25 kg/m2: diabetes risk was
 5.27 times higher in South Asian women and 2.99 times in men than in US whites."
