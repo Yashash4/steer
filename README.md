@@ -19,6 +19,11 @@ uv run pytest            # offline tests (the render tests need the browser abov
 uv run pytest -m network # also hit the live public APIs
 ```
 
+The reel tests also need `bash tools/setup-whisper.sh` (into `.tools/` and `.models/`) and `cd reel && npm ci`. These four
+folders (`.browsers`, `.tools`, `.models`, `reel/node_modules`) are untracked: a fresh clone builds them as above, and an
+extra `git worktree` links them from the main checkout (`for d in .tools .browsers .models reel/node_modules; do ln -sfn
+<main>/code/$d $d; done`), else 14 render/reel tests fail with "Executable doesn't exist". Never commit the links.
+
 ## Use
 
 ```bash

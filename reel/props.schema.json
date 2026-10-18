@@ -651,6 +651,17 @@
         "url": {
           "type": "string",
           "description": "'steerclub.com'"
+        },
+        "url_at": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/seconds"
+            }
+          ],
+          "description": "v5: when the URL line enters (a visual change on the held card); null = shown with the card"
         }
       }
     }

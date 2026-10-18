@@ -474,6 +474,10 @@ def test_v5_hero_cards_status_line_and_no_silent_beats(tmp_path):
     assert ln["evidence"]["start"] > ln["cards"][-1]["start"]                                # after both heroes popped
     st = props["scenes"][4]
     assert [i["text"] for i in st["checklist"]["items"]] == list(reel.CHECK_LINES)
+    assert all(sc["ground"] != "cream" for sc in props["scenes"] if sc["presenter"])   # white text never on her cream fade
+    lay = json.loads((reel.REEL_DIR / "layout.json").read_text())
+    assert lay["setting"]["top"] + lay["setting"]["height"] <= lay["evidence"]["top"] \
+        and lay["evidence"]["top"] + lay["evidence"]["height"] <= lay["captions"]["top"]   # the phone clears both
     cta = props["scenes"][-1]
     assert cta["pullback"] == "pullback.png" and cta["sources"] and cta["sources_at"] == cta["lines"][1]["start"]
     assert reel.pool_check(props, s5, record, None, [], quotes) == [] and reel.timing_problems(props) == []
@@ -482,6 +486,29 @@ def test_v5_hero_cards_status_line_and_no_silent_beats(tmp_path):
     assert any("status line" in f["detail"] for f in reel.pool_check(props, bad, record, None, [], quotes))
     gappy = dict(props, durationInFrames=props["durationInFrames"] + 120)   # 4 s of silence at the end
     assert "MAX_SILENT_GAP" in [f["code"] for f in reel.voice_problems(gappy)]
+    # the reviewer's dead air: build_props filled every static span behind a clip with punch-ins; the URL enters late
+    assert reel.static_problems(props) == [], reel.static_spans(props)
+    assert cta["sources"]["url_at"] == round(cta["sources_at"] + reel.URL_DELAY, 3)
+    long = [z for sc in props["scenes"] for z in sc["zoom"] if z["scale"] == reel.PUNCH["scale"]]
+    assert long and all(z["dur"] == reel.PUNCH["dur"] for z in long)
+
+
+def test_a_static_span_is_filled_behind_a_clip_and_reported_on_a_plain_ground(tmp_path):
+    sc = lambda kind, a, b, **kw: {"kind": kind, "start": a, "end": b, "zoom": [], "lines": [], "checklist": None,
+                                   "pullback": None, "sources_at": None, "sources": None, "presenter": None, "broll": None} | kw
+    props = {"durationInFrames": 20 * reel.FPS, "scenes": [sc("hook", 0, 10, broll={"video": "l.mp4"}), sc("brand", 10, 20)]}
+    assert reel.static_spans(props) == [(0.3, 10), (10.3, 20)]
+    reel.fill_static(props)
+    assert len(props["scenes"][0]["zoom"]) == 3 and props["scenes"][1]["zoom"] == []        # 9.7 s -> 4 pieces of < 3 s
+    assert [f["detail"]["from"] for f in reel.static_problems(props)] == [10.3]              # plain ground: reported
+    # SMALL_TEXT: the layout's floors; lowering one fails
+    assert reel.small_text_problems() == []
+    lay = json.loads((reel.REEL_DIR / "layout.json").read_text())
+    assert lay["presenter_label"]["px"] >= 30 and lay["source_label"]["px"] >= 34 and lay["sources"]["px"] >= 40
+    (tmp_path / "l.json").write_text(json.dumps(lay | {"source_label": {"top": 1506, "height": 44, "px": 26}}))
+    assert reel.small_text_problems(tmp_path / "l.json") == [{"code": "SMALL_TEXT", "detail": {"box": "source_label", "px": 26, "floor": 34}}]
+    x, y, w, h = reel.LABEL_BOX                                                              # the QA looks inside the label row
+    assert lay["presenter_label"]["top"] <= y and y + h <= lay["presenter_label"]["top"] + lay["presenter_label"]["height"]
 
 
 def test_a_setting_line_is_shown_for_the_scene_and_never_voiced():

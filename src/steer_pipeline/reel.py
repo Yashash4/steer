@@ -18,6 +18,7 @@ refused unless it is a draft whose artwork rendered, and its code checks are re-
 import asyncio
 import html
 import json
+import math
 import re
 import subprocess
 import tempfile
@@ -767,7 +768,7 @@ REMOTION_DURATION = (20.0, 45.0)
 HOOK_MAX = 4.0   # the hook line is spoken in at most 4 s (its own speech; the 0.4 s lead before it is not counted)
 REMOTION_END_CARD, HEALTH_HOLD = 5.0, 0.8   # the sources card holds >= 5 s (its text >= 40 px)
 PRESENTER_LABEL = "AI-generated presenter · not a Steer clinician"   # D-026: on every frame a presenter clip is on screen
-LABEL_BOX = (60, 222, 220, 30)  # x, y, w, h inside the label pill (top left, layout.json "pill"; Reel.tsx LABEL_BG / LABEL_INK)
+LABEL_BOX = (60, 282, 220, 30)  # x, y, w, h inside the label pill (top left, layout.json "presenter_label"; Reel.tsx LABEL_BG / LABEL_INK)
 GROUNDS = {"hook": "cream", "brand": "maroon", "cta": "cream", "sources": "cream", "checklist": "cream", "pullback": "cream", "status": "cream"}
 
 
@@ -918,6 +919,8 @@ def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | N
             point += 1
         else:
             ground = GROUNDS[sc["kind"]]
+        if presenter and sc["index"] in presenter and ground == "cream":
+            ground = "maroon"   # her bottom gradient takes the ground; white text on cream would not read
         lines = []
         for ln in sc["lines"]:
             text = display(ln["text"])
@@ -973,10 +976,14 @@ def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | N
                     "presenter": {"video": f"presenter-{sc['index']}.mp4", "start": round(sc["start"], 3), "end": round(sc["end"], 3),
                                   "label": PRESENTER_LABEL} if presenter and sc["index"] in presenter else None, "lines": lines,
                     "sources": {"heading": "Sources", "entries": [source_entry_parts(e) for e in entries],
-                                "footnote": rd.FOOTNOTE, "url": "steerclub.com"} if sc["kind"] == "sources" or shot.get("sources") else None})
-    return {"version": 3, "fps": FPS, "width": W, "height": H, "durationInFrames": int(round(scenes[-1]["end"] * FPS)),
-            "audio": "voice.wav", "fonts": {"serif": "Fraunces.ttf", "serif_italic": "Fraunces-Italic.ttf", "sans": "Inter.ttf"},
-            "palette": brand["palette"], "chrome": {"draft_mark": rd.DRAFT, "wordmark": "steer"}, "scenes": out}
+                                "footnote": rd.FOOTNOTE, "url": "steerclub.com",
+                                "url_at": round(next((ln["start"] for ln in sc["lines"] if ln["kind"] == "signoff"), sc["start"])
+                                                + URL_DELAY, 3) if shot.get("sources") else None}
+                    if sc["kind"] == "sources" or shot.get("sources") else None})
+    props = {"version": 3, "fps": FPS, "width": W, "height": H, "durationInFrames": int(round(scenes[-1]["end"] * FPS)),
+             "audio": "voice.wav", "fonts": {"serif": "Fraunces.ttf", "serif_italic": "Fraunces-Italic.ttf", "sans": "Inter.ttf"},
+             "palette": brand["palette"], "chrome": {"draft_mark": rd.DRAFT, "wordmark": "steer"}, "scenes": out}
+    return fill_static(props) if v5 else props
 
 
 def voice_problems(props: dict) -> list[dict]:
@@ -994,6 +1001,70 @@ def voice_problems(props: dict) -> list[dict]:
     if gaps and max(gaps) > MAX_SILENCE + 1e-6:
         out.append({"code": "MAX_SILENT_GAP", "detail": {"longest": round(max(gaps), 2)}})
     return out
+
+
+STATIC_MAX, URL_DELAY = 3.0, 1.5   # v5: no span over 3 s without a visual change; the URL enters 1.5 s after the card
+PUNCH = {"dur": 0.6, "scale": 1.06}   # the punch-in that fills a static span (background layer only, never text)
+TEXT_FLOORS = {"source_label": 34, "setting": 34, "evidence": 34, "sources": 40, "presenter_label": 30}   # px at 1080 wide
+
+
+def visual_changes(props: dict) -> list[tuple[float, float]]:
+    """Every visual change as a (from, to) span: a cut, a punch-in, a card pop, the evidence phone's entry, a checklist
+    tick, the pull-back's motion (Fx.tsx PullBack), the sources card and its URL entering. Captions and a playing clip
+    do not count (the reviewer called a talking head or a slow b-roll behind fixed text static)."""
+    out = []
+    for sc in props["scenes"]:
+        out.append((sc["start"], sc["start"] + 0.3))
+        out += [(z["at"], z["at"] + z["dur"]) for z in sc["zoom"]]
+        for ln in sc["lines"]:
+            out += [(c["start"], c["start"] + 0.25) for c in ln["cards"] or []]
+            if ln["evidence"]:
+                out.append((ln["evidence"]["start"], ln["evidence"]["start"] + 0.35))
+        out += [(it["at"], it["at"] + 0.3) for it in (sc["checklist"] or {}).get("items", [])]
+        if sc["pullback"]:
+            end = sc["sources_at"] if sc["sources_at"] is not None else sc["end"]
+            out.append((sc["start"], sc["start"] + max(0.5, (end - sc["start"]) * 0.7)))
+        if sc["sources_at"] is not None:
+            out.append((sc["sources_at"], sc["sources_at"] + 0.3))
+        if sc["sources"] and sc["sources"].get("url_at") is not None:
+            out.append((sc["sources"]["url_at"], sc["sources"]["url_at"] + 0.35))
+    return sorted(out)
+
+
+def static_spans(props: dict) -> list[tuple[float, float]]:
+    """The spans with no visual change longer than STATIC_MAX, from the edit plan (the props), over the whole runtime."""
+    total, edge, out = props["durationInFrames"] / FPS, 0.0, []
+    for a, b in visual_changes(props) + [(total, total)]:
+        if a - edge > STATIC_MAX + 1e-6:
+            out.append((round(edge, 3), round(a, 3)))
+        edge = max(edge, b)
+    return out
+
+
+def fill_static(props: dict) -> dict:
+    """v5: punch-ins on the clip behind any static span in a scene with a presenter or b-roll, evenly spaced so no piece
+    is over STATIC_MAX. A span on a plain ground is left for STATIC_SPAN to report."""
+    for a, b in static_spans(props):
+        sc = next(s for s in props["scenes"] if s["start"] <= (a + b) / 2 < s["end"])
+        if not (sc["presenter"] or sc["broll"]):
+            continue
+        k = math.ceil((b - a) / STATIC_MAX) - 1
+        step = (b - a) / (k + 1)
+        sc["zoom"] = sorted(sc["zoom"] + [{"at": round(a + (i + 1) * step - PUNCH["dur"] / 2, 3), **PUNCH} for i in range(k)],
+                            key=lambda z: z["at"])
+    return props
+
+
+def static_problems(props: dict) -> list[dict]:
+    return [{"code": "STATIC_SPAN", "detail": {"from": a, "to": b, "seconds": round(b - a, 2)}} for a, b in static_spans(props)]
+
+
+def small_text_problems(layout_path: Path | None = None) -> list[dict]:
+    """The citation/source text, the setting line and the evidence phone >= 34 px, the sources card >= 40 px, the
+    presenter label >= 30 px: each box's px (layout.json) is the floor Remotion's fit() enforces at render time."""
+    lay = json.loads((layout_path or REEL_DIR / "layout.json").read_text())
+    return [{"code": "SMALL_TEXT", "detail": {"box": k, "px": lay.get(k, {}).get("px"), "floor": f}}
+            for k, f in TEXT_FLOORS.items() if (lay.get(k, {}).get("px") or 0) < f]
 
 
 def timing_problems(props: dict) -> list[dict]:
@@ -1096,7 +1167,7 @@ def pool_check(props: dict, script: dict, record: dict, emphasis: str | None, ke
         pr = sc["presenter"]
         if pr is not None and (pr["label"] != PRESENTER_LABEL or pr["video"] != f"presenter-{props['scenes'].index(sc)}.mp4"):
             bad("presenter", pr)
-        if sc["sources"] is not None and sc["sources"] != {"heading": "Sources", "entries": [source_entry_parts(e) for e in entries],
+        if sc["sources"] is not None and {k: v for k, v in sc["sources"].items() if k != "url_at"} != {"heading": "Sources", "entries": [source_entry_parts(e) for e in entries],
                                                            "footnote": rd.FOOTNOTE, "url": "steerclub.com"}:
             bad("sources", sc["sources"])
     return fails
@@ -1264,7 +1335,8 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
                             (v4 or {}).get("quotes"), bool((v4 or {}).get("checked")),
                             "pullback.png" if (v4 or {}).get("pullback") else None, v5)
         fails = pool_check(props, script, record, post_emphasis, keys or [], (v4 or {}).get("quotes")) + timing_problems(props) \
-            + pullback_problems((v4 or {}).get("pullback_meta")) + (voice_problems(props) if v5 else [])
+            + pullback_problems((v4 or {}).get("pullback_meta")) + small_text_problems() \
+            + (voice_problems(props) + static_problems(props) if v5 else [])
         extra = {f"broll-{n}.mp4": c for n, c in ((v4 or {}).get("broll") or {}).items()}
         if (v4 or {}).get("pullback"):
             extra["pullback.png"] = v4["pullback"]

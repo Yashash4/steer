@@ -11,7 +11,7 @@ export type Line = {
   beats: Beat[]; cards: Card[] | null; cards_style: "split" | "stack"; evidence: Evidence | null; emphasis: string | null; key: Key | null; source_label: string | null;
 };
 export type Sources = {
-  heading: string; entries: { before: string; journal: string; after: string }[]; footnote: string; url: string;
+  heading: string; entries: { before: string; journal: string; after: string }[]; footnote: string; url: string; url_at?: number | null;
 };
 export type Broll = { video: string; start: number; end: number };
 export type Zoom = { at: number; dur: number; scale: number };

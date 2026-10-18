@@ -40,8 +40,9 @@ const PresenterLayer = (p: { pr: Presenter; sceneStart: number; c: Colors; scale
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1060,
         background: `linear-gradient(to bottom, transparent 0%, ${p.c.ground}d9 38%, ${p.c.ground} 70%)` }} />
       <div style={{
-        position: "absolute", top: L.pill.top, left: 48, height: L.pill.height, boxSizing: "border-box", padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
-        fontSize: 26, color: LABEL_INK, background: LABEL_BG, textShadow: "none",
+        // its own row under the draft mark, at >= 30 px (readable while she says "hear it from a doctor")
+        position: "absolute", top: L.presenter_label.top, left: 48, height: L.presenter_label.height, boxSizing: "border-box", padding: "7px 22px", borderRadius: 999,
+        fontFamily: SANS, fontWeight: 600, fontSize: L.presenter_label.px, lineHeight: 1.2, color: LABEL_INK, background: LABEL_BG, textShadow: "none",
       }}>{p.pr.label}</div>
     </Sequence>
   );
@@ -120,7 +121,7 @@ const CardsView = (p: { line: Line; cards: Card[]; t: number; c: Colors; top: nu
       {line.source_label ? (
         <div style={{
           position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: L.source_label.top, height: L.source_label.height, textAlign: "center", fontFamily: SANS,
-          fontWeight: 500, fontSize: 26, lineHeight: 1.25, color: c.sub,
+          fontWeight: 500, fontSize: fit(line.source_label, SANS, 500, 1, BOX, L.source_label.px, L.source_label.px).fontSize, lineHeight: 1.25, color: c.sub,
         }}>{line.source_label}</div>
       ) : null}
     </>
@@ -168,7 +169,7 @@ const LineView = (p: { line: Line; t: number; c: Colors; top: number; height: nu
       {line.source_label ? (
         <div style={{
           position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: L.source_label.top, height: L.source_label.height, textAlign: "center", fontFamily: SANS,
-          fontWeight: 500, fontSize: 26, lineHeight: 1.25, color: c.sub,
+          fontWeight: 500, fontSize: fit(line.source_label, SANS, 500, 1, BOX, L.source_label.px, L.source_label.px).fontSize, lineHeight: 1.25, color: c.sub,
         }}>{line.source_label}</div>
       ) : null}
     </>
@@ -198,7 +199,7 @@ const KeyPair = (p: { number: string; label: string; at: number; t: number; fram
   );
 };
 
-const SourcesCard = (p: { s: NonNullable<Scene["sources"]>; c: Colors }) => {
+const SourcesCard = (p: { s: NonNullable<Scene["sources"]>; c: Colors; t: number }) => {
   const { s, c } = p;
   const m = useMemo(() => {
     // every string on the card at least 40 px (1080 wide), so the DOI and location read on a phone
@@ -207,13 +208,13 @@ const SourcesCard = (p: { s: NonNullable<Scene["sources"]>; c: Colors }) => {
       const fits = s.entries.map((e) => fit(e.before + e.journal + e.after, SANS, 500, 16, BOX - 20, max, 1));
       const size = Math.min(...fits.map((f) => f.fontSize));
       const h = fits.reduce((a, f) => a + f.lines.length * size * 1.3 + 30, 0);
-      if (size < 40) throw new Error("sources do not fit at 40px");
+      if (size < L.sources.px) throw new Error("sources do not fit at " + L.sources.px + "px");
       if (h <= 1060) return size;
       max = size - 1;
     }
   }, [s]);
-  const foot = useMemo(() => fit(s.footnote, SANS, 500, 6, BOX - 20, 40, 40), [s]);
-  const url = useMemo(() => fit(s.url, SERIF, 600, 1, BOX, 56, 40), [s]);
+  const foot = useMemo(() => fit(s.footnote, SANS, 500, 6, BOX - 20, L.sources.px, L.sources.px), [s]);
+  const url = useMemo(() => fit(s.url, SERIF, 600, 1, BOX, 56, L.sources.px), [s]);
   return (
     <div style={{
       position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: L.sources.top, height: L.sources.height, display: "flex", flexDirection: "column",
@@ -226,7 +227,8 @@ const SourcesCard = (p: { s: NonNullable<Scene["sources"]>; c: Colors }) => {
         </div>
       ))}
       <div style={{ fontFamily: SANS, fontWeight: 500, fontSize: foot.fontSize, lineHeight: 1.35, color: c.sub }}>{s.footnote}</div>
-      <div style={{ fontFamily: SERIF, fontVariationSettings: SERIF_VARS, fontWeight: 600, fontSize: url.fontSize, color: c.emph, whiteSpace: "nowrap" }}>{s.url}</div>
+      <div style={{ fontFamily: SERIF, fontVariationSettings: SERIF_VARS, fontWeight: 600, fontSize: url.fontSize, color: c.emph, whiteSpace: "nowrap",
+        ...(s.url_at == null ? {} : { opacity: ease(clamp01((p.t - s.url_at) / 0.35)), transform: `translateY(${(1 - ease(clamp01((p.t - s.url_at) / 0.35))) * 24}px)` }) }}>{s.url}</div>
     </div>
   );
 };
@@ -266,7 +268,7 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
         // shown, never spoken: who was studied, an exact run of the scene's checked health line
         <div key={i} style={{ position: "absolute", left: 60, width: 960, top: L.setting.top, height: L.setting.height, display: "flex",
           alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: SANS, fontWeight: 600,
-          fontSize: fit(l.text, SANS, 600, 2, 960, 30, 22).fontSize, lineHeight: 1.2, color: c.ink, opacity: 0.9 }}>{l.text}</div>
+          fontSize: fit(l.text, SANS, 600, 2, 960, L.setting.px + 6, L.setting.px).fontSize, lineHeight: 1.2, color: c.ink, opacity: 0.9 }}>{l.text}</div>
       ) : l.cards && l.cards_style === "stack" ? (
         <div key={i}>
           <StackCards line={l} cards={l.cards} t={t} accent={props.palette.blush} />
@@ -283,7 +285,10 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
           {l.evidence ? <PhoneEvidence e={l.evidence} t={t} ink={props.palette.ink} accent={props.palette.rust} /> : null}
         </div>
       ) : scene.captions ? (
-        <Captions key={i} line={l} t={t} accent={props.palette.blush} emph={emphasisFlags(l)} />
+        <div key={i}>
+          <Captions line={l} t={t} accent={props.palette.blush} emph={emphasisFlags(l)} />
+          {l.evidence ? <PhoneEvidence e={l.evidence} t={t} ink={props.palette.ink} accent={props.palette.rust} /> : null}
+        </div>
       ) : (
         <div key={i}>
           <LineView line={l} t={t} c={c} top={box.top} height={box.height} appear={i === 0 ? scene.start : l.start}
@@ -296,7 +301,7 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
           fromFrame={p.from} c={c} ground={scene.ground} {...keyBox} />
       ) : null}
       {scene.checklist ? <ChecklistView c={scene.checklist} t={t} ink={c.ink} accent={props.palette.rust} low={media} /> : null}
-      {scene.sources ? <SourcesCard s={scene.sources} c={c} /> : null}
+      {scene.sources ? <SourcesCard s={scene.sources} c={c} t={t} /> : null}
       <div style={{
         position: "absolute", top: L.pill.top, right: 48, height: L.pill.height, boxSizing: "border-box", padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
         fontSize: 26, color: media ? "#FFFFFF" : c.sub, border: "2px solid " + (media ? "#FFFFFF" : c.sub),
@@ -310,14 +315,25 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
   );
 };
 
+// the draft mark at full size above a pull-back (the shrinking frame's own pill gets too small to read)
+const OuterPill = (p: { props: ReelProps }) => (
+  <div style={{
+    position: "absolute", top: L.pill.top, right: 48, height: L.pill.height, boxSizing: "border-box", padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
+    fontSize: 26, color: p.props.palette.ink, border: "2px solid " + p.props.palette.ink, background: "rgba(245, 235, 223, 0.92)",
+  }}>{p.props.chrome.draft_mark}</div>
+);
+
 const PullBackScene = (p: { s: Scene; prev: Scene; from: number; props: ReelProps }) => {
   const frame = useCurrentFrame();
   const t = (frame + p.from) / FPS;
   return (
-    <PullBack image={p.s.pullback as string} t={t} start={p.s.start} end={p.s.end}>
-      <SceneView scene={p.prev} from={Math.round(p.prev.start * FPS)} wipe={false} zoomIn={false} props={p.props}
-        frozenAt={p.prev.end - 0.04} />
-    </PullBack>
+    <AbsoluteFill>
+      <PullBack image={p.s.pullback as string} t={t} start={p.s.start} end={p.s.end}>
+        <SceneView scene={p.prev} from={Math.round(p.prev.start * FPS)} wipe={false} zoomIn={false} props={p.props}
+          frozenAt={p.prev.end - 0.04} />
+      </PullBack>
+      <OuterPill props={p.props} />
+    </AbsoluteFill>
   );
 };
 
@@ -334,6 +350,7 @@ const CtaScene = (p: { s: Scene; prev: Scene; from: number; props: ReelProps }) 
           <SceneView scene={p.prev} from={Math.round(p.prev.start * FPS)} wipe={false} zoomIn={false} props={p.props}
             frozenAt={p.prev.end - 0.04} />
         </PullBack>
+        <OuterPill props={p.props} />
         {p.s.lines[0] ? <Captions line={p.s.lines[0]} t={t} accent={p.props.palette.blush} emph={emphasisFlags(p.s.lines[0])} /> : null}
       </AbsoluteFill>
     );

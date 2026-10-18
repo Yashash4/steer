@@ -1,5 +1,5 @@
 {
-  "_comment": "Every text box the composition draws, as {top, height} px on 1080x1920. reel.py's QA asserts each sits inside safe (below the IG top bar, above its caption/UI area); Reel.tsx reads the same file.",
+  "_comment": "Every text box the composition draws, as {top, height} px on 1080x1920. reel.py's QA asserts each sits inside safe (below the IG top bar, above its caption/UI area); Reel.tsx reads the same file. px = the smallest font size drawn in that box (reel.py SMALL_TEXT floors; Remotion's fit() fails the render below it).",
   "safe": {
     "top": 210,
     "bottom": 1620
@@ -37,8 +37,9 @@
     "height": 320
   },
   "source_label": {
-    "top": 1510,
-    "height": 34
+    "top": 1506,
+    "height": 44,
+    "px": 34
   },
   "wordmark": {
     "top": 1556,
@@ -46,11 +47,13 @@
   },
   "sources": {
     "top": 290,
-    "height": 1200
+    "height": 1200,
+    "px": 40
   },
   "evidence": {
-    "top": 330,
-    "height": 1000
+    "top": 430,
+    "height": 740,
+    "px": 34
   },
   "checklist": {
     "top": 420,
@@ -65,7 +68,13 @@
     "height": 440
   },
   "setting": {
+    "top": 334,
+    "height": 86,
+    "px": 34
+  },
+  "presenter_label": {
     "top": 272,
-    "height": 52
+    "height": 50,
+    "px": 30
   }
 }
