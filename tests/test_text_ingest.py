@@ -63,3 +63,12 @@ def test_cli_ingest_text(tmp_path, validate):
     doc = json.loads(out.read_text())
     validate(doc)
     assert doc["sentences"][0]["text"] == "Screening and blood tests come first."
+
+
+def test_bom_is_not_part_of_the_text(tmp_path, validate):
+    p = tmp_path / "bom.txt"
+    p.write_bytes("﻿First line here.\n".encode("utf-8"))
+    doc = ingest_text(p, "editorial")
+    validate(doc)
+    assert doc["pages"][0]["lines"][0]["raw"] == "First line here."
+    assert doc["text"] == "First line here."

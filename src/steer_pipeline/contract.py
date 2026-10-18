@@ -45,12 +45,15 @@ def build_document(
     body = [dict(ln, page=p["page"]) for p in pages for ln in p["lines"] if not ln["furniture"]]
     asm = assemble(body)
     digest = sha256(content)
+    source_id = "src-" + digest[:16]
     return {
         "schema_version": SCHEMA_VERSION,
+        # source_id identifies the bytes (dedupe); document_id identifies this reading of them
+        "document_id": "doc-" + sha256(f"{source_id}\n{role}\n{extraction_version}".encode())[:16],
         "extraction_version": extraction_version,
         "extractor": extractor,
         "source": {
-            "source_id": "src-" + digest[:16],
+            "source_id": source_id,
             "source_type": source_type,
             "role": role,
             "access": access,

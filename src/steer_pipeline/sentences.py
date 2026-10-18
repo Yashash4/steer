@@ -17,11 +17,30 @@ def _is_abbreviation(text: str, dot: int) -> bool:
     return word in ABBREVIATIONS or (len(word) == 1 and word.isalpha())
 
 
-def split_spans(text: str) -> list[tuple[int, int]]:
-    """Sentence spans [start, end) over `text`, whitespace-trimmed, never empty."""
-    spans, start, depth = [], 0, 0
+def _unmatched_openers(text: str) -> set[int]:
+    """Positions of "(" or "[" that are never closed within their paragraph (a typo in the source).
+
+    They are ignored when deciding sentence ends, so one missing ")" cannot merge many sentences.
+    """
+    unmatched, stack = set(), []
     for i, ch in enumerate(text):
         if ch in "([":
+            stack.append(i)
+        elif ch in ")]" and stack:
+            stack.pop()
+        elif ch == "\n":
+            unmatched.update(stack)
+            stack = []
+    unmatched.update(stack)
+    return unmatched
+
+
+def split_spans(text: str) -> list[tuple[int, int]]:
+    """Sentence spans [start, end) over `text`, whitespace-trimmed, never empty."""
+    unmatched = _unmatched_openers(text)
+    spans, start, depth = [], 0, 0
+    for i, ch in enumerate(text):
+        if ch in "([" and i not in unmatched:
             depth += 1
         elif ch in ")]":
             depth = max(depth - 1, 0)

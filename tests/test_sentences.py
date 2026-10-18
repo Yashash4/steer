@@ -36,3 +36,9 @@ def test_sids_restart_per_page_and_use_start_page():
     ]
     assert out[1]["line_ids"] == ["p0001-l0001", "p0002-l0001"]
     assert out[2]["line_ids"] == ["p0002-l0001"]
+
+
+def test_unclosed_bracket_does_not_merge_sentences():
+    t = "Values fell (by 0.4 (range 0.1, 0.7) overall. Next sentence here. Third (balanced. Not split) end."
+    assert sents(t) == ["Values fell (by 0.4 (range 0.1, 0.7) overall.", "Next sentence here.",
+                        "Third (balanced. Not split) end."]

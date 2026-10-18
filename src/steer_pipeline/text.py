@@ -32,7 +32,7 @@ def text_lines(text: str) -> list[dict]:
 def ingest_text(path: str | Path, role: str, title: str | None = None) -> dict:
     path = Path(path)
     content = path.read_bytes()
-    lines = text_lines(content.decode("utf-8"))
+    lines = text_lines(content.decode("utf-8-sig"))
     warnings = [] if lines else [{"code": "EMPTY_PAGE", "page": 1, "detail": "the text input has no content"}]
     return build_document(
         content=content,

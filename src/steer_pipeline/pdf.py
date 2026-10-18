@@ -16,6 +16,7 @@ from .contract import build_document
 EXTRACTION_VERSION = "pdf-1"
 FURNITURE_BAND = 0.07      # top/bottom share of the page height checked for headers/footers
 SAME_ROW = 2.0             # pt: line fragments whose vertical centres differ less than this are one row
+FONT_STEP = 1.0           # pt: a larger change of the main font size between rows starts a paragraph
 EDGE = 3.0                 # pt: tolerance when clustering line start positions
 DOI_RE = re.compile(r"\b(10\.\d{4,9}/[^\s\"<>]+[^\s\"<>.,;)])")
 PAGE_NO_RE = re.compile(r"^(page\s*)?\d{1,4}(\s*(of|/)\s*\d{1,4})?$", re.I)
@@ -62,14 +63,17 @@ def _rows(page) -> tuple[list[dict], bool]:
             if not text.strip():
                 continue
             direction = (round(ln["dir"][0]), round(ln["dir"][1]))
+            main_span = max(ln["spans"], key=lambda sp: len(sp["text"].strip()))
             frags.append({"page_bbox": list(ln["bbox"]), "bbox": _upright(ln["bbox"], direction),
-                          "raw": text, "block": bi, "dir": direction})
+                          "raw": text, "block": bi, "dir": direction, "size": main_span["size"]})
         frags.sort(key=lambda f: (f["dir"], (f["bbox"][1] + f["bbox"][3]) / 2, f["bbox"][0]))
         for f in frags:
             prev = rows[-1] if rows else None
             if (prev and prev["block"] == bi and prev["dir"] == f["dir"]
                     and abs((prev["bbox"][1] + prev["bbox"][3]) / 2 - (f["bbox"][1] + f["bbox"][3]) / 2) < SAME_ROW
                     and f["bbox"][0] >= prev["bbox"][2] - 1):
+                if len(f["raw"].strip()) > len(prev["raw"].strip()):
+                    prev["size"] = f["size"]
                 prev["raw"] = prev["raw"].rstrip() + " " + f["raw"].lstrip()
                 prev["bbox"] = [prev["bbox"][0], min(prev["bbox"][1], f["bbox"][1]), f["bbox"][2], max(prev["bbox"][3], f["bbox"][3])]
                 pb, fb = prev["page_bbox"], f["page_bbox"]
@@ -174,6 +178,9 @@ def mark_paragraphs(rows: list[dict]) -> None:
         height = max(p["bbox"][3] - p["bbox"][1], 1.0)
         gap = r["bbox"][1] - p["bbox"][3]
         moved = r["block"] != p["block"] or r["column"] != p["column"] or gap > 0.5 * height or gap < -height
+        if abs(r["size"] - p["size"]) > FONT_STEP:
+            r["para_break"] = True  # a heading or caption: the font size changes
+            continue
         if not moved:
             r["para_break"] = False
             continue

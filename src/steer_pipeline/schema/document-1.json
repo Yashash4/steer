@@ -3,7 +3,7 @@
   "$id": "steer-pipeline/document-1.json",
   "title": "Normalised source document, schema version 1",
   "type": "object",
-  "required": ["schema_version", "extraction_version", "extractor", "source", "citation", "pages", "raw_text", "text",
+  "required": ["schema_version", "document_id", "extraction_version", "extractor", "source", "citation", "pages", "raw_text", "text",
                "map", "line_starts", "line_order", "sentences", "warnings"],
   "additionalProperties": false,
   "$defs": {
@@ -13,6 +13,7 @@
   },
   "properties": {
     "schema_version": {"const": "1"},
+    "document_id": {"type": "string", "pattern": "^doc-[0-9a-f]{16}$"},
     "extraction_version": {"type": "string", "minLength": 1},
     "extractor": {
       "type": "object", "required": ["name", "version"],

@@ -32,6 +32,8 @@ uv run steer ingest brief.txt --role editorial -o brief.json
 
 The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
 
+- `document_id`: `doc-` plus 16 hex characters of a SHA-256 over the source ID, role and extraction version.
+  Later stages key on it. The same file read with another role, or by another parser version, gets a new one.
 - `source`: the ID (`src-` plus the first 16 hex characters of the SHA-256 of the input bytes), type, role,
   access (`full_text` or `abstract_only`) and provenance (input, file path or URL, access time).
 - `citation`: title, authors, journal, year, DOI, PMID, PMCID, licence and retraction status, where known.
@@ -65,6 +67,14 @@ The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
     a vertical gap.
   - Known limit: a real compound split across lines ("follow-" / "up") reads as "followup" in `text`. The raw
     text keeps the true form, and claim checking ignores hyphens between letters.
+- **Sentences.**
+  - A sentence ends at `.`, `?` or `!` followed by a space and an uppercase letter, a digit or an opening
+    bracket or quote; also at every paragraph break.
+  - There is no split inside brackets. A bracket the source never closes within its paragraph is ignored.
+  - There is no split after common abbreviations ("et al.", "e.g.", "Fig.").
+  - Known limit: a single-letter word before a full stop counts as an initial, so "...in group B. Results..."
+    does not split. That is the safe direction: sentences merge, and quotes still match.
+  - A change of more than 1 pt in the main font size between lines (a heading) starts a new paragraph.
 - A PDF with no extractable text fails with "OCR required". Text-free pages inside an otherwise readable
   PDF are listed as warnings.
 

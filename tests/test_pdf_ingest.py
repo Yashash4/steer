@@ -145,3 +145,27 @@ def test_cli_ingest_pdf(tmp_path, validate):
     doc = json.loads(out.read_text())
     validate(doc)
     assert re.fullmatch(r"src-[0-9a-f]{16}", doc["source"]["source_id"])
+
+
+def test_unclosed_bracket_in_real_abstract(two):
+    # the abstract has "HOMA IR (−0.4 (−0.7, −0.04; p = 0.03)" with one ")" missing
+    p2 = [s["text"] for s in two["sentences"] if s["page"] == 2]
+    assert any(s.startswith("Signiﬁcant improvement was seen in DIo") and s.endswith("compared to the control group.")
+               for s in p2)
+    assert any(s.startswith("Incremental area under the curve (IAUC)") for s in p2)
+    assert any(s.startswith("Dietary 24-h recalls showed") for s in p2)
+
+
+def test_font_size_change_splits_headings(single):
+    p3 = [s["text"] for s in single["sentences"] if s["page"] == 3]
+    assert "DATA AND METHODS" in p3
+    assert "Inclusion and exclusion criteria" in p3
+    assert any(s.startswith("Study population: All included studies") for s in p3)
+
+
+def test_document_id_differs_by_role(two):
+    ctx = ingest_pdf(TWO, "contextual")
+    assert ctx["source"]["source_id"] == two["source"]["source_id"]  # same bytes
+    assert ctx["document_id"] != two["document_id"]                  # different reading
+    assert re.fullmatch(r"doc-[0-9a-f]{16}", two["document_id"])
+    assert ingest_pdf(TWO, "evidence")["document_id"] == two["document_id"]
