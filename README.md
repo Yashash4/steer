@@ -67,7 +67,8 @@ A DOI, PubMed ID or URL, PMC ID or URL, or a direct PDF link is resolved like th
 4. Any other URL: a PDF response is read directly. An HTML page is followed only through its `citation_doi`
    meta tag; there is no scraping.
 
-Authors, journal and year come from Europe PMC. Errors (HTTP status, timeouts, MD5 mismatch) stop with the
+Authors, journal and year come from Europe PMC. The citation carries one year: Europe PMC's `pubYear`,
+falling back to the first year in PMC's citation string. Every label uses that year. Errors (HTTP status, timeouts, MD5 mismatch) stop with the
 URL named. Publisher websites usually block scripted downloads, which is why the public PMC route comes first.
 
 ## The document (schema version 1)
@@ -238,6 +239,24 @@ A model proposes claims from the paper, and the gate decides which ones are kept
     phrase: "white men" is not stated by "... South Asian men ... white women");
   - `POPULATION_NOT_IN_SECTION`: a population word not found in the chunk's text. The population may come
     from the section, not only the quote.
+
+## One command: `steer run`
+
+```bash
+uv run steer run 10.1136/bmj-2025-085304 --role evidence --export run.json
+```
+
+The command runs ingest → extract and verify → label (passed claims) → rules check (claim library profile) →
+store, and prints counts and the time of each step.
+
+Everything goes into one SQLite file (`[storage] db` in `steer.toml`, default `steer.db`):
+- `documents`: the full contract document;
+- `runs`: input, settings and rules versions, timings, summary, chunks, and every model call with tokens only
+  as reported, never credentials;
+- `claims`: every claim of every run with status `passed` / `needs_check` / `rejected`, its gate result, flags,
+  review reasons, labels and rule flags.
+
+`--export` writes the stored run back out as JSON, exactly as stored.
 
 ## Labels and rules
 

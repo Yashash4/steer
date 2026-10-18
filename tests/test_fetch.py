@@ -215,3 +215,22 @@ def test_retraction_check_partial_when_europepmc_fails(validate):
     assert doc["citation"]["retracted"] is False  # PMC's flag was still checked
     ok = fetch("PMC13564392", "evidence", client=recorded())
     assert not any(w["code"] == "RETRACTION_CHECK_PARTIAL" for w in ok["warnings"])
+
+
+def test_citation_carries_one_year_from_europepmc_first():
+    from steer_pipeline.fetch import _citation_from
+    oa = {"title": "T", "citation": "BMJ. 2026 Jan 7;392:e085304. doi: 10.1136/bmj-2025-085304", "pmcid": "PMC1",
+          "license_code": "CC BY", "is_retracted": False}
+    epmc = {"title": "T", "authorString": "West S, Scragg J.", "pubYear": "2026",
+            "journalInfo": {"journal": {"title": "BMJ (Clinical research ed.)"}}}
+    assert _citation_from(oa, epmc, {})["year"] == 2026          # Europe PMC pubYear
+    assert _citation_from(oa, epmc | {"pubYear": "2025"}, {})["year"] == 2025  # it wins over the OA citation string
+    assert _citation_from(oa, None, {})["year"] == 2026          # fallback: the first year in the OA citation
+    no_year = {"title": "T", "citation": "", "pmcid": "PMC1"}
+    assert _citation_from(no_year, None, {})["year"] is None
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("pmcid,year", [("PMC12776922", 2026), ("PMC13461373", 2026), ("PMC8006839", 2021)])
+def test_live_citation_years(pmcid, year):
+    assert fetch(pmcid, "evidence")["citation"]["year"] == year

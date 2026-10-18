@@ -67,3 +67,7 @@ promise_words = ["guaranteed", "guarantee", "miracle", "melt away", "melts fat",
 hype_words = ["outsmart", "secret", "shocking", "surprised even", "doctors hate", "game changer", "game-changer",
               "breakthrough", "magic", "hack", "you won't believe"]
 before_after = ["before and after", "before/after", "before & after", "transformation photo", "body transformation"]
+
+# Where `steer run` stores documents, claims and run records (relative to the working directory).
+[storage]
+db = "steer.db"

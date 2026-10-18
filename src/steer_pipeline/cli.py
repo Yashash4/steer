@@ -7,6 +7,7 @@ from pathlib import Path
 import json
 
 from . import contract, verify
+from . import pipeline, store
 from .extract import extract
 from .router import Router, load_settings
 from .fetch import FetchError, fetch
@@ -42,7 +43,32 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("doc", help="a contract document (role evidence)")
     x.add_argument("--settings", help="model settings file (default: steer.toml)")
     x.add_argument("-o", "--out", required=True)
+    r = sub.add_parser("run", help="ingest, extract and verify, label, rules check and store one source")
+    r.add_argument("source", help="a PDF or text file, or a DOI, PubMed/PMC ID or URL")
+    r.add_argument("--role", default="evidence", choices=contract.ROLES)
+    r.add_argument("--settings", help="settings file (default: steer.toml)")
+    r.add_argument("--db", help="SQLite file (default: [storage] db in the settings)")
+    r.add_argument("--export", help="also write the stored run as JSON to this file")
     args = ap.parse_args(argv)
+
+    if args.cmd == "run":
+        settings = load_settings(args.settings)
+        try:
+            rec = pipeline.run(args.source, args.role, settings)
+        except (OcrRequired, FetchError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        con = store.connect(args.db or settings.get("storage", {}).get("db", "steer.db"))
+        store.save_run(con, rec)
+        if args.export:
+            Path(args.export).write_text(json.dumps(store.export_run(con, rec["run_id"]), ensure_ascii=False, indent=1),
+                                         encoding="utf-8")
+        s, t = rec["summary"], rec["timings"]
+        print(f"{rec['run_id']}: {s['proposed']} proposed, {s['passed']} passed, {s['needs_check']} need a check "
+              f"{s['needs_check_by_reason']}, {s['rejected']} rejected {s['rejected_by_reason']}, {s['flagged']} flagged; "
+              f"labelled {s['labelled']}, rule flags {s['rule_flags']}; {s['model_calls']} model calls; "
+              f"time {t}", file=sys.stderr)
+        return 0
 
     if args.cmd == "extract":
         run = extract(contract.load(args.doc), Router(load_settings(args.settings)))
