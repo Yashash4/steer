@@ -136,6 +136,9 @@ of its quote's numbers.
 Optional emphasis per slide (or on the static): key_number with key_label, shown large together, both copied
 exactly from ONE health line of that slide (key_number holds the number, key_label says what it measures, for
 example "2.99 times higher" with "risk in South Asian men with BMI under 25"); never a number without its label.
+The key_label must read as everyday words a reader would say (not a table header such as "time to no difference
+between treatment and control"), still copied exactly from the line; if the line has no plain phrase that fits,
+give no key pair.
 emphasis: a few words copied exactly from the hook's framing line (or the static headline), set in italic.
 The static needs a headline that stops the scroll: either a framing line as its headline (a hook), or a
 key_number + key_label whose label says who the number is about (for example "risk in South Asian men with BMI

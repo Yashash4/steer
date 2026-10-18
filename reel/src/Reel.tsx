@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AbsoluteFill, Audio, Easing, Sequence, cancelRender, continueRender, delayRender, interpolate, spring,
+  AbsoluteFill, Audio, Easing, Sequence, cancelRender, continueRender, delayRender, spring,
   staticFile, useCurrentFrame,
 } from "remotion";
+import { ENTER_DELAY, EXIT_S, onScreen, pinnedSet } from "./beats";
 import { SANS, SERIF, SERIF_ITALIC, SERIF_VARS, fit } from "./fit";
 import type { Beat, Ground, Line, Palette, ReelProps, Scene } from "./types";
 
@@ -48,12 +49,13 @@ const BeatView = (p: { line: Line; beat: Beat; flags: boolean[]; t: number; exit
   const { line, beat, flags, t, exitAge, c } = p;
   const st = beatStyle(line);
   const fitted = useMemo(() => fit(beat.text, st.family, st.weight, 2, BOX - 20, 150, 56), [beat, st.family, st.weight]);
-  const enter = ease(clamp01((t - beat.start) / 0.25));
+  // the next beat starts to appear only after the leaving one is gone: never two beats on screen
+  const enter = ease(clamp01((t - beat.start - ENTER_DELAY) / 0.22));
   let y = (1 - enter) * 60;
   let opacity = enter;
   if (exitAge !== null) {
-    y = -520 * ease(clamp01(exitAge / 0.3));
-    opacity = interpolate(exitAge, [0, 0.2, 0.4], [1, 0.25, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+    y = -120 * ease(clamp01(exitAge / EXIT_S));
+    opacity = 1 - clamp01(exitAge / EXIT_S);
   }
   const activeIdx = exitAge !== null ? -1 : beat.words.reduce((a, w, i) => (w.start <= t ? i : a), 0);
   return (
@@ -114,24 +116,45 @@ const HoldView = (p: { line: Line; c: Colors; top: number; height: number; t: nu
   );
 };
 
+// The opening beat of a health line, and every beat with a negation or qualifier, stay pinned at the top (dimmed)
+// until the hold: a still frame never loses "No evidence was found that ..." (beats.ts).
+const PIN_MAX = 64, PIN_MIN = 32, PIN_GAP = 12;
+
 const LineView = (p: { line: Line; t: number; c: Colors; hasKey: boolean }) => {
   const { line, t, c } = p;
   const flags = useMemo(() => emphasisFlags(line), [line]);
-  if (t < line.start || t >= line.hold_end) return null;
+  const st = beatStyle(line);
+  const pinFits = useMemo(() => {
+    const pins = pinnedSet(line);
+    return line.beats.map((b, k) => (pins.has(k) ? fit(b.text, st.family, st.weight, 2, BOX, PIN_MAX, PIN_MIN) : null));
+  }, [line, st.family, st.weight]);
+  const s = onScreen(line, t);
+  if (!s) return null;
   const top = p.hasKey ? 700 : 240;
-  const height = 1640 - top;
-  const speaking = t < line.end;
-  let i = 0;
-  line.beats.forEach((b, k) => { if (b.start <= t) i = k; });
-  const prev = i > 0 ? line.beats[i - 1] : null;
-  const age = t - line.beats[i].start;
+  const pinH = s.pinned.reduce((a, k) => a + (pinFits[k]?.lines.length ?? 1) * (pinFits[k]?.fontSize ?? PIN_MAX) * 1.12 + PIN_GAP, 0);
+  const beatTop = top + pinH + (s.pinned.length ? 24 : 0);
+  const height = 1640 - beatTop;
+  const age = s.current !== null ? t - line.beats[s.current].start : 0;
   return (
     <>
-      {speaking && prev && age < 0.4 ? (
-        <BeatView key={i - 1} line={line} beat={prev} flags={flags[i - 1]} t={t} exitAge={age} c={c} top={top} height={height} />
+      {s.pinned.length ? (
+        <div style={{ position: "absolute", left: (1080 - BOX) / 2, width: BOX, top, display: "flex", flexDirection: "column",
+          gap: PIN_GAP, alignItems: "center", opacity: 0.55 }}>
+          {s.pinned.map((k) => (
+            <div key={k} style={{ fontSize: pinFits[k]?.fontSize ?? PIN_MAX, lineHeight: 1.12, textAlign: "center", color: c.ink,
+              ...fam(st.family), fontWeight: st.weight }}>{line.beats[k].text}</div>
+          ))}
+        </div>
       ) : null}
-      {speaking ? <BeatView key={i} line={line} beat={line.beats[i]} flags={flags[i]} t={t} exitAge={null} c={c} top={top} height={height} /> : null}
-      {speaking ? null : <HoldView line={line} c={c} top={top} height={height} t={t} />}
+      {s.exiting !== null ? (
+        <BeatView key={s.exiting} line={line} beat={line.beats[s.exiting]} flags={flags[s.exiting]} t={t} exitAge={age} c={c}
+          top={beatTop} height={height} />
+      ) : null}
+      {s.current !== null ? (
+        <BeatView key={s.current} line={line} beat={line.beats[s.current]} flags={flags[s.current]} t={t} exitAge={null} c={c}
+          top={beatTop} height={height} />
+      ) : null}
+      {s.hold ? <HoldView line={line} c={c} top={top} height={1640 - top} t={t} /> : null}
       {line.source_label ? (
         <div style={{
           position: "absolute", left: (1080 - BOX) / 2, width: BOX, bottom: 200, textAlign: "center", fontFamily: SANS,
