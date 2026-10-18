@@ -137,7 +137,8 @@ example "2.99 times higher" with "risk in South Asian men with BMI under 25"); n
 emphasis: a few words copied exactly from the hook's framing line (or the static headline), set in italic.
 The static needs a headline that stops the scroll: either a framing line as its headline (a hook), or a
 key_number + key_label whose label says who the number is about (for example "risk in South Asian men with BMI
-under 25"); a static with only a fact card is blocked.
+under 25"); a static with only a fact card is blocked. Every artwork ends with the sign-off: on the carousel's
+CTA slide, and among the static's supporting lines.
 Leave them out when nothing deserves it.
 State the message (the one thing the audience should take away) and the reasoning (why this post, for whom,
 which doubt it answers). Both are published with the post and checked like health lines: the message may only

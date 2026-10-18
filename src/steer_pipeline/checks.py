@@ -298,6 +298,9 @@ def check_artwork(post: dict) -> list[dict]:
     if post.get("static"):
         st = post["static"]
         units.append(("static", st, [st["headline"], *st["supporting"]]))
+    if post.get("slides") and not any(ln["kind"] == "signoff" for sl in post["slides"] for ln in sl["lines"]):
+        fails.append({"check": "structure", "code": "CAROUSEL_NO_SIGNOFF", "path": "slides",
+                      "detail": "the carousel must end with the sign-off (on the CTA slide)"})
     for path, unit, lns in units:
         words = sum(len(ln["text"].split()) for ln in lns)
         if words > WORD_BUDGET:
@@ -310,6 +313,9 @@ def check_artwork(post: dict) -> list[dict]:
                               "detail": f"key_number {num!r} and key_label {label!r} must both be copied from one health line"})
             elif not re.search(r"\d", num):
                 fails.append({"check": "structure", "code": "KEY_NUMBER_NOT_A_NUMBER", "path": path, "detail": num})
+        if path == "static" and not any(ln["kind"] == "signoff" for ln in lns):
+            fails.append({"check": "structure", "code": "STATIC_NO_SIGNOFF", "path": path,
+                          "detail": "the static must carry the sign-off on the art"})
         if path == "static" and unit["headline"]["kind"] != "framing" and not (num and label):
             fails.append({"check": "structure", "code": "STATIC_NO_HEADLINE", "path": path,
                           "detail": "the static needs a framing headline or a key_number + key_label"})

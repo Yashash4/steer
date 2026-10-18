@@ -157,7 +157,7 @@ def test_write_and_check_from_a_stored_run(tmp_path):
             {"role": "hook", "lines": [L("framing", "Did people stay with the almond plan?")]},
             {"role": "point", "lines": [L("health", "A total of 352 participants completed the study.", [good])]},
             {"role": "brand", "lines": [L("brand", "Built for India. Local meals, culture and appetite.")]},
-            {"role": "cta", "lines": [L("cta", "Talk to a Steer doctor")]}],
+            {"role": "cta", "lines": [L("cta", "Talk to a Steer doctor"), L("signoff", "steerclub.com")]}],
             "caption": {"lines": [L("health", "A total of 352 participants completed the study.", [good]),
                                   L("signoff", "steerclub.com")], "hashtags": SETTINGS["writer"]["hashtags"][:5]},
             "reel_script": {"scenes": [{"lines": [L("framing", "Did people stay with the almond plan?") | {"show_large": True}]},

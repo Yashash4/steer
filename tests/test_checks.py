@@ -208,7 +208,7 @@ def says(verdict="supported", medical=False):
 GOOD = post([[L("framing", "Will the weight come back?")],
              [L("health", "On average weight came back at 0.4 kg a month, not a personal promise.", ["regain"])],
              [L("brand", "A planned exit. We help you build habits that last after the medicine stops.")],
-             [L("cta", "See if the programme fits you")]])
+             [L("cta", "See if the programme fits you"), L("signoff", "steerclub.com")]])
 
 
 def test_clean_post_with_independent_checker_is_a_draft():
@@ -302,9 +302,9 @@ def test_artwork_word_budget_and_emphasis_copied_from_its_slide():
     regain = L("health", "On average weight came back at 0.4 kg a month, not a personal promise.", ["regain"])
     art = lambda p: [f["code"] for f in checks.check_artwork(p)]
     assert art(GOOD) == []
-    long = post([[regain, L("framing", " ".join(["word"] * 22))]])            # 14 + 22 = 36 words
+    long = post([[regain, L("framing", " ".join(["word"] * 22))], [L("signoff", "steerclub.com")]])  # 14 + 22 = 36 words
     assert art(long) == ["SLIDE_TOO_LONG"]
-    keyed = post([[regain]])
+    keyed = post([[regain], [L("signoff", "steerclub.com")]])
     keyed["slides"][0] |= {"key_number": "0.4 kg a month", "key_label": "weight came back"}
     assert art(keyed) == []
     keyed["slides"][0]["key_label"] = "weight regain per month"                 # not copied from the line
@@ -313,7 +313,7 @@ def test_artwork_word_budget_and_emphasis_copied_from_its_slide():
     assert art(keyed) == ["KEY_NUMBER_NOT_IN_LINE"]
     keyed["slides"][0] |= {"key_number": "weight came back", "key_label": "On average"}
     assert art(keyed) == ["KEY_NUMBER_NOT_A_NUMBER"]
-    hook = post([[L("framing", "Will the weight come back?")]])
+    hook = post([[L("framing", "Will the weight come back?")], [L("signoff", "steerclub.com")]])
     hook["slides"][0]["emphasis"] = "come back"
     assert art(hook) == []
     hook["slides"][0]["emphasis"] = "come back for good"
@@ -449,8 +449,20 @@ def test_pronoun_one_is_not_a_number_in_framing():
 
 def test_a_static_needs_a_headline_that_stops_the_scroll():
     card = L("health", "On average weight came back at 0.4 kg a month, not a personal promise.", ["regain"])
-    st = lambda headline, **kw: {"static": {"headline": headline, "supporting": [], **kw}}
+    st = lambda headline, **kw: {"static": {"headline": headline, "supporting": [L("signoff", "steerclub.com")], **kw}}
     art = lambda p: [f["code"] for f in checks.check_artwork(p)]
     assert art(st(card)) == ["STATIC_NO_HEADLINE"]
     assert art(st(card, key_number="0.4 kg a month", key_label="On average weight came back")) == []
     assert art(st(L("framing", "Will the weight come back?"))) == []
+
+
+def test_every_artwork_ends_with_the_signoff():
+    art = lambda p: [f["code"] for f in checks.check_artwork(p)]
+    assert art(GOOD) == []
+    no_sign = copy.deepcopy(GOOD)
+    no_sign["slides"][3]["lines"] = no_sign["slides"][3]["lines"][:1]
+    assert art(no_sign) == ["CAROUSEL_NO_SIGNOFF"]
+    st = {"static": {"headline": L("framing", "Will the weight come back?"), "supporting": []}}
+    assert art(st) == ["STATIC_NO_SIGNOFF"]
+    st["static"]["supporting"] = [L("signoff", "steerclub.com")]
+    assert art(st) == []
