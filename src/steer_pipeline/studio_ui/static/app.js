@@ -29,7 +29,7 @@
     post("/api/action", body).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, code: r.status, j: j }; }); })
       .then(function (r) {
         if (r.ok) { out.textContent = "Recorded: " + r.j.after_status; setTimeout(function () { location.reload(); }, 700); }
-        else out.textContent = "Refused (" + r.code + (r.j.stage ? ", stage " + r.j.stage : "") + "): " + r.j.error;
+        else out.textContent = r.code === 400 ? r.j.error : "Refused (" + r.code + (r.j.stage ? ", stage " + r.j.stage : "") + "): " + r.j.error;
       });
   }
 
@@ -54,7 +54,15 @@
 
   /* ---------- claim helpers ---------- */
   function stClass(c) { return c.bucket === "rejected" ? "st-rejected" : (c.usable ? "st-passed" : "st-needs"); }
-  function chip(c) { return '<span class="chip ' + stClass(c) + '">' + esc(c.status) + "</span>"; }
+  var IST = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+  function ist(iso) { var d = new Date(iso); return isNaN(d) ? String(iso) : IST.format(d) + " IST"; }
+  function statusPill(c) { return '<span class="chip ' + stClass(c) + '">' + esc(c.status_word) + "</span>"; }
+  function reviewStatus(c) {
+    var cl = c.clearances || [];
+    return '<div class="card review-status" style="margin-top:14px"><h3>Review status</h3><p class="small">Current status: ' + statusPill(c) + "</p>" +
+      (cl.length ? '<div class="clearances">' + cl.map(function (k) { return "<p class=\"small\"><strong>" + esc(k.code) + "</strong> cleared by " + esc(k.reviewer) + " (" + esc(k.role) + ") &middot; " + esc(ist(k.at)) + " &mdash; " + esc(k.reason) + "</p>"; }).join("") + "</div>"
+        : '<p class="small muted">No flag has been cleared yet.</p>') + "</div>";
+  }
   function pageText(c) { return c.pages ? "page " + c.pages.join(", ") : "NO_PAGE_LAYOUT (no page exists for this source; locate by sentence)"; }
   function postsUsing(c) {
     if (!c.used_in.length) return '<span class="muted">none</span>';
@@ -66,7 +74,7 @@
     var cc = c.crosscheck ? esc(c.crosscheck.verdict) + " (" + esc(c.crosscheck.independence || "no independence recorded") + (c.crosscheck.model ? ", " + esc(c.crosscheck.model) : "") + ")" : "not run";
     return '<dl class="kv">' +
       "<dt>Claim ID</dt><dd>" + esc(c.claim_id) + " (" + esc(p.short) + ", " + esc(c.paper) + ")</dd>" +
-      "<dt>Status</dt><dd>" + chip(c) + "</dd>" +
+      "<dt>Status</dt><dd>" + statusPill(c) + '<div class="small">' + esc(c.status) + "</div></dd>" +
       "<dt>Claim text</dt><dd>" + esc(c.claim_text) + "</dd>" +
       "<dt>Source</dt><dd>" + esc(cit.title) + ", " + esc(cit.journal) + " " + esc(cit.year) + ' (<a href="https://doi.org/' + esc(cit.doi) + '">doi ' + esc(cit.doi) + "</a>, licence " + esc(cit.license) + ")</dd>" +
       "<dt>Exact quote</dt><dd><blockquote>" + esc(c.quote) + "</blockquote></dd>" +
@@ -153,7 +161,7 @@
       });
       $("#count").textContent = "Matching " + rows.length + " of " + F.claims.length + " claims; listing the first " + Math.min(limit, rows.length) + ".";
       $("#list").innerHTML = rows.slice(0, limit).map(function (c) {
-        return '<details class="claim" data-k="' + esc(c.key) + '"><summary>' + chip(c) + ' <span class="small muted">' + esc(F.papers[c.paper].short) + " &middot; " + esc(c.claim_id) + " &middot; " + esc(c.sids[0] || "") + " &middot; " + esc(c.pages ? "page " + c.pages.join(", ") : "no page layout") + '</span><span class="ctext">' + esc(c.claim_text) + '</span></summary><div class="body"></div></details>';
+        return '<details class="claim" data-k="' + esc(c.key) + '"><summary>' + statusPill(c) + ' <span class="small muted">' + esc(F.papers[c.paper].short) + " &middot; " + esc(c.claim_id) + " &middot; " + esc(c.sids[0] || "") + " &middot; " + esc(c.pages ? "page " + c.pages.join(", ") : "no page layout") + '</span><span class="ctext">' + esc(c.claim_text) + '</span></summary><div class="body"></div></details>';
       }).join("") + (rows.length > limit ? '<p><button type="button" id="more">Show 40 more</button></p>' : "");
       var m = $("#more"); if (m) m.addEventListener("click", function () { limit += 40; render(false); });
     }
@@ -195,19 +203,19 @@
     }
     var warnWords = c.gate_warnings.concat(c.flags, c.gate_reasons).filter(function (w, i, a) { return a.findIndex(function (z) { return z.code === w.code; }) === i; }).map(function (w) { return GLOSS[w.code] ? "<li><strong>" + esc(rc(w.code)) + ".</strong> " + esc(GLOSS[w.code]) + "</li>" : ""; }).join("");
     var noLayout = !c.pages, can = LIVE && c.needs_layout;
-    var decision = LIVE ? (can ? '<label class="small muted" for="why">Reason (required for &ldquo;does not match&rdquo;)</label><br><textarea id="why" rows="2" style="width:100%"></textarea>' +
+    var decision = LIVE ? (can ? '<label class="small muted" for="why">Reason (required, at least 40 characters and 6 words: say what you checked and where)</label><br><textarea id="why" rows="2" style="width:100%"></textarea>' +
         '<div class="decision"><button type="button" id="ok">' + (noLayout ? "Matches the source text" : "Matches the page") + '</button><button type="button" class="alt" id="no">Does not match</button></div><p id="out" class="small" aria-live="polite"></p>'
         : '<p class="small muted">No layout decision is needed for this claim (the gate raised no layout warning).</p>')
       : '<p class="small muted">Read-only copy: no actions.</p>';
     $("#main").innerHTML =
       "<h1>Does the quote <em>match</em> the page?</h1>" +
       '<form class="filters" onsubmit="return false"><label style="width:min(100%,640px)">Choose a claim<select id="pick" style="width:100%;min-width:0">' + opts + "</select></label></form>" +
-      "<p>" + chip(c) + ' <span class="small muted">' + esc(p.short) + " &middot; " + esc(c.claim_id) + " &middot; " + esc(pageText(c).split(" (")[0]) + "</span></p>" +
+      "<p>" + statusPill(c) + ' <span class="small muted">' + esc(p.short) + " &middot; " + esc(c.claim_id) + " &middot; " + esc(pageText(c).split(" (")[0]) + "</span></p>" +
       '<div class="split"><div>' + left + "</div><div>" +
       '<div class="card"><h3>The claim</h3><p>' + esc(c.claim_text) + "</p><h3>The exact quote</h3><blockquote>" + esc(c.quote) + "</blockquote>" +
       "<h3>Extracted sentence" + (c.sentences.length > 1 ? "s" : "") + "</h3>" + c.sentences.map(function (s) { return '<p class="small"><span class="muted">' + s.sid + "</span><br>" + esc(s.text) + "</p>"; }).join("") + "</div>" +
       '<div class="card" style="margin-top:14px"><h3>What the gate and the code flags said</h3>' + (warnWords ? "<ul>" + warnWords + "</ul>" : "<p>No warnings that need a person.</p>") + "</div>" +
-      '<div class="card" style="margin-top:14px"><h3>Layout decision</h3><p class="small">Current status: ' + chip(c) + "</p>" + decision + "</div>" + clearForm(c) + "</div></div>" +
+      '<div class="card" style="margin-top:14px"><h3>Layout decision</h3>' + decision + "</div>" + reviewStatus(c) + clearForm(c) + "</div></div>" +
       '<h2>All recorded fields</h2><div class="card">' + claimFields(c) + "</div>";
     document.querySelectorAll(".pagebox img").forEach(function (im) {
       var miss = function () { im.parentNode.innerHTML = '<p class="card" style="margin:0"><strong>Page image not available.</strong> The quote&rsquo;s line ids are ' + esc(c.line_ids.join(", ")) + ".</p>"; };
@@ -217,7 +225,7 @@
     var clr = $("#clr-ok");
     if (clr) clr.addEventListener("click", function () { act({ action: "check_cleared", target: c.target, clears: $("#clr-code").value, reason: $("#clr-why").value }, $("#clr-out")); });
     if (can) {
-      $("#ok").addEventListener("click", function () { act({ action: "layout_checked", target: c.target }, $("#out")); });
+      $("#ok").addEventListener("click", function () { act({ action: "layout_checked", target: c.target, reason: $("#why").value }, $("#out")); });
       $("#no").addEventListener("click", function () { act({ action: "layout_unresolved", target: c.target, reason: $("#why").value }, $("#out")); });
     }
   }
@@ -226,7 +234,7 @@
     if (!LIVE || !c.clearable || !c.clearable.length) return "";
     return '<div class="card" style="margin-top:14px"><h3>Review an automated flag</h3><p class="small">Clear a flag only if it is a false alarm, and say why. The flag stays on record next to your clearance. This is an editorial disposition, not clinical approval.</p>' +
       '<label class="small muted">Flag <select id="clr-code">' + c.clearable.map(function (r) { return '<option value="' + esc(r) + '">' + esc(rc(r)) + "</option>"; }).join("") + "</select></label>" +
-      '<br><label class="small muted" for="clr-why">Why it is a false alarm (required)</label><br><textarea id="clr-why" rows="3" style="width:100%"></textarea>' +
+      '<br><label class="small muted" for="clr-why">Why it is a false alarm (required, at least 40 characters and 6 words)</label><br><textarea id="clr-why" rows="3" style="width:100%"></textarea>' +
       '<div class="decision"><button type="button" id="clr-ok">Clear this flag</button></div><p id="clr-out" class="small" aria-live="polite"></p></div>';
   }
 

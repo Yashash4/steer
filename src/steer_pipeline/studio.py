@@ -29,6 +29,16 @@ REVIEW_GAP_S = 600   # estimated review time: gaps over 10 min between actions a
 DPI = 130
 
 
+MIN_REASON_CHARS, MIN_REASON_WORDS = 40, 6
+THIN_REASON = (f"A clearance needs a reason of at least {MIN_REASON_CHARS} characters and {MIN_REASON_WORDS} words: "
+               "say what you checked and where.")
+
+
+def status_word(bucket: str, usable: bool) -> str:
+    """The short status for the pill: verified / needs check / rejected."""
+    return "rejected" if bucket == "rejected" else ("verified" if usable else "needs check")
+
+
 class Refused(Exception):
     """An action or export the gate does not allow: .http is the status code (400 / 403 / 404 / 409)."""
 
@@ -172,6 +182,10 @@ def _post_lines(post: dict) -> list[dict]:
 
 # --- actions (the review gate) ---
 
+def thick(reason: str | None) -> bool:
+    return bool(reason) and len(reason) >= MIN_REASON_CHARS and len(reason.split()) >= MIN_REASON_WORDS
+
+
 def act(con, reviewers: dict[str, str], body: dict, claims: dict[str, dict], posts: dict[str, dict]) -> dict:
     """Validate one reviewer action and append it. Raises Refused (400 / 403 / 404 / 409) when the gate says no."""
     name = (body.get("reviewer") or "").strip()
@@ -199,6 +213,8 @@ def act(con, reviewers: dict[str, str], body: dict, claims: dict[str, dict], pos
         before = claim_status(c, acts)
         if stage == "layout" and not before["needs_layout"]:
             raise Refused(409, "this claim needs no layout check", "layout")
+        if action == "layout_checked" and not thick(reason):
+            raise Refused(400, THIN_REASON, "layout")
         if stage == "check":
             if c["status"] == "rejected":   # the gate's rejection is final: a rejected claim is re-extracted, not cleared
                 raise Refused(409, "a claim rejected by the gate cannot be cleared", "check")
@@ -209,8 +225,8 @@ def act(con, reviewers: dict[str, str], body: dict, claims: dict[str, dict], pos
                 raise Refused(400, f"clears must name one of this claim's open reasons: {sorted(to_clear(c))}")
             if clears in clearances(c, acts):
                 raise Refused(409, f"{clears} is already cleared", "check")
-            if not reason:
-                raise Refused(400, "a reason is required: why the flag is a false alarm")
+            if not thick(reason):
+                raise Refused(400, THIN_REASON, "check")
         kind = "claim"
     else:
         p = posts.get(target)
@@ -406,7 +422,7 @@ def data(con, docs: dict, claims: dict, posts: dict, reviewers: dict[str, str], 
         bucket = c["status"]
         out_claims.append({
             "key": f"{pm}/{c['claim_id']}", "target": key, "paper": pm, "run_id": run, "claim_id": c["claim_id"],
-            "bucket": bucket, "status": st["words"], "usable": st["usable"], "needs_layout": st["needs_layout"],
+            "bucket": bucket, "status": st["words"], "status_word": status_word(bucket, st["usable"]), "usable": st["usable"], "needs_layout": st["needs_layout"],
             "reasons": [r["code"] for r in gate.get("reasons", [])] if bucket == "rejected" else (c.get("review_reasons") or []),
             "claim_text": c["claim_text"], "quote": c["quote"], "claim_type": c.get("claim_type"),
             "population": c.get("population"), "comparison_group": c.get("comparison_group"), "outcome": c.get("outcome"),

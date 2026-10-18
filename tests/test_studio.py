@@ -15,6 +15,7 @@ HERE = Path(__file__).parent
 DEMO = studio.load_reviewers(HERE.parent / "reviewers.toml")
 TEST = studio.load_reviewers(HERE / "fixtures" / "reviewers-test.toml")
 BRAND = posts_mod.load_brand()
+OK_WHY = "compared the highlighted lines on the page with the quote; they say the same thing"
 SUPPORTED = {"verdict": "supported", "independence": "different_provider"}
 
 
@@ -66,7 +67,7 @@ def test_the_demo_has_no_clinician_and_roles_come_from_the_server(tmp_path):
     con, claims, posts = world(tmp_path)
     e = refused(con, DEMO, claims, posts, reviewer="Somebody", action="layout_checked", target="r1/c1")
     assert e.http == 403
-    do(con, DEMO, claims, posts, reviewer="Steer editor (demo)", action="layout_checked", target="r1/c1")
+    do(con, DEMO, claims, posts, reviewer="Steer editor (demo)", action="layout_checked", target="r1/c1", reason=OK_WHY)
     do(con, DEMO, claims, posts, reviewer="Steer editor (demo)", action="editorial_approved", target="post-00000001")
     # the browser claiming to be a clinician changes nothing: the server reads the role from reviewers.toml
     e = refused(con, DEMO, claims, posts, reviewer="Steer editor (demo)", role="clinician", action="clinically_approved",
@@ -82,7 +83,7 @@ def test_each_stage_waits_for_the_one_before_it(tmp_path):
     assert (e.http, e.stage) == (409, "layout")                                # c1 still needs its layout check
     e = refused(con, TEST, claims, posts, reviewer=cl, action="clinically_approved", target="post-00000001")
     assert (e.http, e.stage) == (409, "layout")
-    row = do(con, TEST, claims, posts, reviewer=ed, action="layout_checked", target="r1/c1")
+    row = do(con, TEST, claims, posts, reviewer=ed, action="layout_checked", target="r1/c1", reason=OK_WHY)
     assert row["before_status"].startswith("needs check") and row["after_status"].startswith("verified; layout checked by Test editor")
     e = refused(con, TEST, claims, posts, reviewer=cl, action="clinically_approved", target="post-00000001")
     assert (e.http, e.stage) == (409, "editorial")
@@ -108,7 +109,7 @@ def test_rejections_need_a_reason_and_layout_unresolved_blocks_the_post(tmp_path
     assert st["stages"]["code"]["words"] == "blocked (layout unresolved: c1)" and st["first_open"] == "code"
     assert studio.claim_status(claims["r1/c1"], store.actions(con))["words"] == "layout unresolved (lines from two columns)"
     # editorial rejection: reason AND category
-    do(con, TEST, claims, posts, reviewer=ed, action="layout_checked", target="r1/c1")
+    do(con, TEST, claims, posts, reviewer=ed, action="layout_checked", target="r1/c1", reason=OK_WHY)
     assert refused(con, TEST, claims, posts, reviewer=ed, action="editorial_rejected", target="post-00000001",
                    reason="tone").http == 400
     do(con, TEST, claims, posts, reviewer=ed, action="editorial_rejected", target="post-00000001", reason="too alarming",
@@ -143,7 +144,8 @@ def test_draft_pack_for_any_post_publishable_only_when_every_stage_is_done(tmp_p
         with pytest.raises(studio.Refused) as e:
             studio.export_publishable(con, p["post_id"], claims, posts, BRAND)
         assert (e.value.http, e.value.stage) == (409, stage)                  # the endpoint names the missing stage
-        do(con, TEST, claims, posts, reviewer=step[0], action=step[1], target=step[2])
+        do(con, TEST, claims, posts, reviewer=step[0], action=step[1], target=step[2],
+           reason=OK_WHY if step[1] == "layout_checked" else None)
     pub = zipfile.ZipFile(io.BytesIO(studio.export_publishable(con, p["post_id"], claims, posts, BRAND)))
     assert json.loads(pub.read("manifest.json"))["kind"] == "publishable"
     clean = render.build_pages(p, BRAND, draft=False)
@@ -197,7 +199,7 @@ def test_the_server_ignores_a_browser_role_and_answers_with_the_gate(tmp_path):
             assert r.headers["Cache-Control"] == "no-store"          # a reload always shows the latest statuses
         assert post_json("/api/action", {"reviewer": "Steer editor (demo)", "role": "clinician",
                                          "action": "clinically_approved", "target": "post-00000001"})[0] == 409
-        code, body = post_json("/api/action", {"reviewer": "Steer editor (demo)", "action": "layout_checked", "target": "r1/c1"})
+        code, body = post_json("/api/action", {"reviewer": "Steer editor (demo)", "action": "layout_checked", "target": "r1/c1", "reason": OK_WHY})
         assert code == 200 and body["role"] == "editor"
         code, body = post_json("/api/export/publishable", {"post_id": "post-00000001"})
         assert code == 409 and body["stage"] == "editorial"
@@ -234,7 +236,7 @@ def test_a_post_that_fails_todays_rules_is_not_reviewable(tmp_path):
 def test_a_layout_check_does_not_clear_other_reasons(tmp_path):
     con = store.connect(tmp_path / "s.db")
     c = claim("c5", "needs_check", ["CONTEXT_NOT_IN_QUOTE", "LAYOUT_CHECK_NEEDED"])
-    do(con, TEST, {"r1/c5": c}, {}, reviewer="Test editor", action="layout_checked", target="r1/c5")
+    do(con, TEST, {"r1/c5": c}, {}, reviewer="Test editor", action="layout_checked", target="r1/c5", reason=OK_WHY)
     st = studio.claim_status(c, store.actions(con))
     assert st["words"].startswith("needs check (CONTEXT_NOT_IN_QUOTE); layout checked by Test editor") and not st["usable"]
 
@@ -266,6 +268,21 @@ def test_check_cleared_needs_a_reason_and_every_flag_cleared(tmp_path):
     assert writable(lean | {"s4_cleared": studio.fully_cleared(lean, acts)})   # S3 may now write with it
     no_cc = lean | {"crosscheck": {"verdict": "supported", "independence": "same_model"}}
     assert not writable(no_cc | {"s4_cleared": studio.fully_cleared(no_cc, acts)})   # still needs the independent cross-check
+
+
+def test_a_thin_reason_is_refused_and_nothing_is_appended(tmp_path):
+    con = store.connect(tmp_path / "s.db")
+    c = claim("c7", "needs_check", ["CONTEXT_NOT_IN_QUOTE"], flags=[{"code": "CONTEXT_NOT_IN_QUOTE"}])
+    cs = {"r1/c7": c}
+    kw = dict(reviewer="Test editor", action="check_cleared", target="r1/c7", clears="CONTEXT_NOT_IN_QUOTE")
+    for thin in ("sd", "x" * 60, "one two three four five"):    # too short / one 60-char word / five words
+        e = refused(con, TEST, cs, {}, reason=thin, **kw)
+        assert e.http == 400 and "40 characters and 6 words" in str(e)
+    assert store.actions(con) == []
+    assert refused(con, TEST, {"r1/c1": claim("c1", reasons=["LAYOUT_CHECK_NEEDED"])}, {}, reviewer="Test editor",
+                   action="layout_checked", target="r1/c1", reason="sd").http == 400
+    do(con, TEST, cs, {}, reason=OK_WHY, **kw)
+    assert len(store.actions(con)) == 1
 
 
 def test_excluded_or_rejected_claims_cannot_be_cleared(tmp_path):
@@ -301,3 +318,39 @@ def test_later_stages_read_not_reached_while_an_earlier_one_is_open(tmp_path):
     st = studio.post_stages(posts["post-00000001"], claims, [])                # c1 still needs its layout check
     assert st["first_open"] == "layout" and st["stages"]["editorial"]["words"] == "not reached (layout stage first)"
     assert st["stages"]["clinical"]["words"] == "not reached (layout stage first)"
+
+
+@pytest.mark.parametrize("width,height", [(390, 844), (1440, 900)])
+def test_a_400_character_clearance_wraps_inside_its_card(tmp_path, width, height):
+    import shutil
+
+    from playwright.sync_api import sync_playwright
+
+    con = store.connect(tmp_path / "s.db")
+    c = claim("c1", "needs_check", ["CONTEXT_NOT_IN_QUOTE"], flags=[{"code": "CONTEXT_NOT_IN_QUOTE"}], gate={"status": "pass"})
+    cs = {"r1/c1": c}
+    long = ("checked the sentence before the quote and the methods section on page 3 " * 6)[:400].strip()
+    assert len(long) >= 399
+    do(con, TEST, cs, {}, reviewer="Test editor", action="check_cleared", target="r1/c1", clears="CONTEXT_NOT_IN_QUOTE", reason=long)
+    doc = {"citation": {"pmcid": "PMC1", "authors": ["West S"], "year": 2026, "title": "T", "journal": "J", "doi": "10.1/x",
+                        "license": "CC BY"},
+           "warnings": [{"code": "NO_PAGE_LAYOUT"}], "source": {}, "sentences": [{"sid": "p0001-s0001", "text": "a sentence"}],
+           "pages": []}
+    snap = studio.data(con, {"r1": doc}, cs, {}, TEST, public=True)
+    out = tmp_path / "site"
+    shutil.copytree(studio.Path(studio.__file__).parent / "studio_ui" / "static", out)
+    (out / "data.js").write_text("window.STEER_DATA = " + json.dumps(snap, default=str) + ";\n")
+    claim_row = snap["claims"][0]
+    assert claim_row["status_word"] == "verified"
+    with sync_playwright() as pw:
+        b = pw.chromium.launch()
+        pg = b.new_page(viewport={"width": width, "height": height})
+        pg.goto((out / "claim.html").as_uri() + "#" + "PMC1%2Fc1")
+        pg.wait_for_selector(".review-status .clearances p")
+        assert pg.inner_text(".review-status .chip") == "verified"
+        assert " IST" in pg.inner_text(".review-status .clearances")
+        r = pg.evaluate("""() => { const card = document.querySelector('.review-status'), blk = document.querySelector('.review-status .clearances');
+            const a = card.getBoundingClientRect(), x = blk.getBoundingClientRect();
+            return {sw: blk.scrollWidth, cw: blk.clientWidth, inside: x.left >= a.left && x.right <= a.right && x.top >= a.top && x.bottom <= a.bottom}; }""")
+        b.close()
+    assert r["sw"] <= r["cw"] and r["inside"], r
