@@ -1,0 +1,28 @@
+# Steer brand settings, from the official brand starter pack (the hackathon problem statement document).
+# The brand-line whitelist is the doc's own lines; their source is recorded as a contextual source.
+source = "Steer Hackathon: Problem Statements, brand starter pack (official document)"
+wordmark = "steer"
+signoff = ["steerclub.com"]
+cta = ["Talk to a Steer doctor", "See if the programme fits you"]
+whitelist = [
+  "Lose well. Live well.",
+  "Clinical weight loss, doctor-led.",
+  "Metabolic care, calibrated for Indian biology.",
+  "Before you start, hear it from a doctor, not a reel.",
+  "Stop Googling. Ask a doctor.",
+  "No obligation. If it isn't right for you, they'll say so.",
+  "Doctor-led. Real doctors make the medical calls.",
+  "Safety first. Screening and blood tests come before any medicine.",
+  "Personal. Plans built on your labs, history and goals.",
+  "Built for India. Local meals, culture and appetite.",
+  "A planned exit. We help you build habits that last after the medicine stops.",
+]
+
+[palette]
+cream = "#F5EBDF"
+rust = "#C04E2A"
+maroon = "#661414"
+ink = "#351D1D"
+clay = "#B58777"
+blush = "#E6CBBD"
+paper = "#F8F2EB"

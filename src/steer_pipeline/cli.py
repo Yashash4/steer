@@ -7,7 +7,7 @@ from pathlib import Path
 import json
 
 from . import contract, verify
-from . import pipeline, store
+from . import pipeline, posts, store
 from .extract import extract
 from .router import Router, load_settings
 from .fetch import FetchError, fetch
@@ -49,7 +49,23 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--settings", help="settings file (default: steer.toml)")
     r.add_argument("--db", help="SQLite file (default: [storage] db in the settings)")
     r.add_argument("--export", help="also write the stored run as JSON to this file")
+    w = sub.add_parser("write", help="write one post from a stored run and check every line")
+    w.add_argument("--db", required=True)
+    w.add_argument("--run", required=True, help="run id")
+    w.add_argument("--format", default="carousel", choices=["carousel", "static"])
+    w.add_argument("--brief", help="a brief JSON file (default: pick the fullest theme x doubt cell)")
+    w.add_argument("--settings")
+    w.add_argument("--out", default="out")
     args = ap.parse_args(argv)
+
+    if args.cmd == "write":
+        settings = load_settings(args.settings)
+        brief = json.loads(Path(args.brief).read_text()) if args.brief else None
+        rec = posts.write_and_check(store.connect(args.db), args.run, args.format, settings, brief=brief, out_dir=args.out)
+        print(f"{rec['post_id']}: {rec['status']} ({rec['lines_checked']} lines; writer {rec['writer']['model']}; "
+              f"flags {len(rec['flags'])}; layout checks pending {rec['needs_layout_check']}) -> {rec['folder']}",
+              file=sys.stderr)
+        return 0 if rec["status"] == "draft_pending_review" else 1
 
     if args.cmd == "run":
         settings = load_settings(args.settings)

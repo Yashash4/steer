@@ -1,0 +1,48 @@
+# Content boundaries for Laverde LP et al., Int J Obes 2026 (DOI 10.1038/s41366-026-02118-y).
+# Editorial input, versioned. Claims are matched by text in their quote (canonical form).
+version = 1
+pmcid = "PMC13461373"
+doi = "10.1038/s41366-026-02118-y"
+
+# The absolute loss and the share of total weight must appear together, each with its own label next to it.
+[[require_with]]
+why = "lean mass fell in kilograms but rose as a share of total weight: either number alone misleads"
+  [[require_with.claims]]
+  quote_contains = "-1.74 kg"
+  label_any_of = ["absolute lean mass", "lean mass in kilograms", "kilograms of lean mass"]
+  [[require_with.claims]]
+  quote_contains = "1.81%"
+  label_any_of = ["share of total weight", "proportion of total weight", "lean mass as a share"]
+
+[[require_qualifier]]
+when_claim_quote_contains = ["-1.74 kg"]
+placement = "same_slide"
+any_of = ["vary a lot between studies", "varied widely between studies", "I² = 98%", "I2 = 98%"]
+why = "heterogeneity was very high (I² = 98%) for the -1.74 kg result"
+
+[[require_qualifier]]
+when_claim_quote_contains = []
+placement = "post"
+any_of = ["nutrition and exercise", "nutrition and physical activity", "diet and exercise", "nutritional and physical exercise"]
+why = "the paper's own advice: pair treatment with nutrition and exercise"
+
+# "muscle" for lean mass is caught by LEAN_MASS_WORDING; drug names are flagged by the publication rules.
+[[avoid_phrase]]
+text = "muscle function"
+kinds = ["health"]
+why = "the meta-analysis measured lean mass, not function"
+
+[[avoid_phrase]]
+text = "semaglutide"
+kinds = ["health"]
+why = "no drug-by-drug comparison in posts"
+
+[[avoid_phrase]]
+text = "tirzepatide"
+kinds = ["health"]
+why = "no drug-by-drug comparison in posts"
+
+[[avoid_phrase]]
+text = "liraglutide"
+kinds = ["health"]
+why = "no drug-by-drug comparison in posts"

@@ -6,6 +6,9 @@ version = 1
 [jobs.extract]
 chain = ["claude_sonnet", "claude_opus", "anthropic_sonnet"]
 
+[jobs.write]
+chain = ["claude_sonnet", "claude_opus", "anthropic_sonnet"]
+
 [jobs.label]
 chain = ["claude_haiku", "claude_sonnet", "anthropic_haiku"]
 

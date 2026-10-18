@@ -1,0 +1,56 @@
+# Content boundaries for West S et al., BMJ 2026 (DOI 10.1136/bmj-2025-085304). No page layout (PMC text).
+# Editorial input, versioned. Claims are matched by text in their quote (canonical form).
+version = 1
+pmcid = "PMC12776922"
+doi = "10.1136/bmj-2025-085304"
+
+[[require_qualifier]]
+when_claim_quote_contains = ["0.4 kg"]
+placement = "same_slide"
+any_of = ["on average", "an average", "average across"]
+why = "0.4 kg a month is an average across weight-management medicines"
+
+[[require_qualifier]]
+when_claim_quote_contains = ["0.4 kg"]
+placement = "same_slide"
+any_of = ["not a personal promise", "not a prediction for any one person", "varies from person to person"]
+why = "an average is never a personal promise"
+
+# The 0.4 kg average covers all weight-management medicines: never present it as a GLP-1-only or drug-specific figure.
+[[avoid_phrase]]
+text = "GLP-1"
+kinds = ["health"]
+when_claim_quote_contains = ["0.4 kg"]
+why = "the 0.4 kg average is across all weight-management medicines, not GLP-1 only"
+
+[[avoid_phrase]]
+text = "semaglutide"
+kinds = ["health"]
+when_claim_quote_contains = ["0.4 kg"]
+why = "not a drug-specific figure"
+
+[[avoid_phrase]]
+text = "tirzepatide"
+kinds = ["health"]
+when_claim_quote_contains = ["0.4 kg"]
+why = "not a drug-specific figure"
+
+[[avoid_phrase]]
+text = "you will regain"
+kinds = ["health", "framing"]
+why = "a personal prediction (fear); the doubt as a question ('Will I gain it all back?') stays allowed"
+
+[[avoid_phrase]]
+text = "you'll regain"
+kinds = ["health", "framing"]
+why = "a personal prediction (fear); the doubt as a question ('Will I gain it all back?') stays allowed"
+
+[[avoid_phrase]]
+text = "you will gain it back"
+kinds = ["health", "framing"]
+why = "a personal prediction (fear); the doubt as a question ('Will I gain it all back?') stays allowed"
+
+[[avoid_phrase]]
+text = "you'll gain it all back"
+kinds = ["health", "framing"]
+why = "a personal prediction (fear); the doubt as a question ('Will I gain it all back?') stays allowed"

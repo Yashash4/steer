@@ -76,7 +76,8 @@ def parse_claude_envelope(stdout: str) -> tuple[object, dict | None]:
     except json.JSONDecodeError as e:
         raise ConnectorError("invalid_json", f"claude CLI output is not JSON: {e}") from e
     if env.get("is_error") or env.get("subtype") != "success":
-        raise ConnectorError("error", f"claude CLI result: subtype={env.get('subtype')!r} is_error={env.get('is_error')!r}")
+        raise ConnectorError("error", f"claude CLI result: subtype={env.get('subtype')!r} is_error={env.get('is_error')!r}: "
+                                       f"{str(env.get('result') or '')[:300]}")
     if env.get("structured_output") is None:
         raise ConnectorError("invalid_json", "claude CLI returned no structured_output")
     u = env.get("usage") or {}

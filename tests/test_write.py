@@ -58,7 +58,7 @@ def test_valid_carousel_and_static():
     (lambda p: p["caption"].update(hashtags=TAGS[:4] + ["#ozempic"]), "is not one of"),        # tag outside vocabulary
     (lambda p: p.pop("reasoning"), "'reasoning' is a required property"),                      # the doc requires both
     (lambda p: p["reel_script"]["scenes"][0].update(voiceover=["x"]), "Additional properties"), # one list per scene
-    (lambda p: p.update(static={"headline": L("framing", "x"), "supporting": []}), "should not be valid"),  # both blocks
+    (lambda p: p.update(static={"headline": L("framing", "x"), "supporting": []}), "Additional properties"),  # both blocks
 ])
 def test_contract_violations(mutate, expect):
     bad = copy.deepcopy(CAROUSEL)

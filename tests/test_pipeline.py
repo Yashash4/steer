@@ -135,3 +135,45 @@ def test_library_rule_hits_move_a_clean_claim_to_needs_check():
     assert m["review_reasons"] == ["PROMISE"] and m["flags"] == []  # clean at extraction, moved by the rules check
     assert not any(c["claim_text"].endswith("a miracle.") for c in rec["passed"])
     assert rec["summary"]["needs_check_by_reason"].get("PROMISE") == 1
+
+
+def test_write_and_check_from_a_stored_run(tmp_path):
+    from steer_pipeline import posts
+    rec = pipeline.run(str(FIX / "gayathri2023-frontiers-two-column.pdf"), "evidence", SETTINGS, router=fake_router())
+    con = store.connect(tmp_path / "s.db")
+    store.save_run(con, rec)
+    good = next(c["claim_id"] for c in rec["passed"] if c["claim_text"].startswith("A total of 352"))
+
+    def L(kind, text, ids=()):
+        return {"kind": kind, "text": text, "claim_ids": list(ids)}
+
+    def connector(ep, system, prompt, schema, **kw):
+        if "health" in schema["properties"]:  # line cross-check
+            hp = schema["properties"]["health"]["items"]["properties"]["line_id"]["enum"]
+            fp = schema["properties"]["framing"]["items"]["properties"]["line_id"]["enum"]
+            return {"health": [{"line_id": i, "verdict": "supported", "reason": "r"} for i in hp if i != "-"],
+                    "framing": [{"line_id": i, "asserts_medical_fact": False, "reason": "r"} for i in fp if i != "-"]}, None
+        return {"message": "m", "reasoning": "r", "format": "carousel", "slides": [
+            {"role": "hook", "lines": [L("framing", "Did people stay with the almond plan?")]},
+            {"role": "point", "lines": [L("health", "A total of 352 participants completed the study.", [good])]},
+            {"role": "brand", "lines": [L("brand", "Built for India. Local meals, culture and appetite.")]},
+            {"role": "cta", "lines": [L("cta", "Talk to a Steer doctor")]}],
+            "caption": {"lines": [L("health", "A total of 352 participants completed the study.", [good]),
+                                  L("signoff", "steerclub.com")], "hashtags": SETTINGS["writer"]["hashtags"][:5]},
+            "reel_script": {"scenes": [{"lines": [L("framing", "Did people stay with the almond plan?") | {"show_large": True}]},
+                                       {"lines": [L("health", "A total of 352 participants completed the study.", [good])]},
+                                       {"lines": [L("cta", "Talk to a Steer doctor")]}]}}, None
+    settings = SETTINGS | {"jobs": {"write": {"chain": ["f"]}, "crosscheck": {"chain": ["chk"]}},
+                           "endpoints": {"f": {"connector": "fake", "model": "fake"},
+                                         "chk": {"connector": "fake", "model": "other", "base_url": "https://checker.example"}}}
+    router = Router(settings, connectors={"fake": connector}, env={})
+    brief = {"format": "carousel", "theme": "insulin_resistance", "doubt": "is_it_for_me", "claim_ids": [good], "why": "test"}
+    out = posts.write_and_check(con, rec["run_id"], "carousel", settings, router=router, brief=brief, out_dir=tmp_path / "out")
+    assert out["status"] == "draft_pending_review", out["post_failures"]
+    folder = Path(out["folder"])
+    assert {p.name for p in folder.iterdir()} == {"post.json", "trace.json", "caption.txt", "reel_script.json"}
+    trace = json.loads((folder / "trace.json").read_text())
+    health = [ln for ln in trace["lines"] if ln["kind"] == "health"]
+    assert health and all(ln["claims"][0]["sids"] == ["p0002-s0002"] for ln in health)
+    assert all(ln["crosscheck"]["independence"] == "different_provider" for ln in health)
+    assert out["sources"][0]["location"] == "page 2" and "doi:" in (folder / "caption.txt").read_text()

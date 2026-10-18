@@ -1,0 +1,95 @@
+# Content boundaries for Narayan KMV et al., BMJ Open Diabetes Res Care 2021 (DOI 10.1136/bmjdrc-2020-001927).
+# Editorial input (written from the project's paper decisions), versioned. Claims are matched by text in their
+# QUOTE (canonical form), never by run-specific claim ids.
+version = 1
+pmcid = "PMC8006839"
+doi = "10.1136/bmjdrc-2020-001927"
+licence_note = "CC BY-NC: facts with attribution only; no reuse of the paper's figures or substantial text."
+
+# Who was studied sits next to the incidence numbers (same slide), and somewhere in every Narayan post.
+[[require_qualifier]]
+when_claim_quote_contains = ["2.9 times", "5.3 times", "2.99", "3 times higher", "incidence"]
+placement = "same_slide"
+any_of = ["aged 45", "45 and over", "45+", "45 or older", "≥45"]
+why = "the cohort is adults aged 45 and over"
+
+[[require_qualifier]]
+when_claim_quote_contains = []          # empty = every post that uses a claim from this paper
+placement = "post"
+any_of = ["aged 45", "45 and over", "45+", "45 or older", "≥45"]
+why = "the cohort is adults aged 45 and over"
+
+[[require_qualifier]]
+when_claim_quote_contains = ["2.9 times", "5.3 times", "2.99", "3 times higher", "incidence"]
+placement = "same_slide"
+all_of = ["Chennai", "Delhi", "Karachi"]
+why = "urban India and Pakistan: the three cities studied"
+
+[[require_qualifier]]
+when_claim_quote_contains = []
+placement = "post"
+all_of = ["Chennai", "Delhi", "Karachi"]
+why = "urban India and Pakistan: the three cities studied"
+
+[[require_qualifier]]
+when_claim_quote_contains = []
+placement = "post"
+any_of = ["US cohort", "US adults", "US whites", "US blacks", "white women", "in the US"]
+why = "the comparison is with US cohorts"
+
+[[avoid_phrase]]
+text = "every Indian"
+kinds = ["health", "framing"]
+why = "the study does not describe every Indian"
+
+[[avoid_phrase]]
+text = "all Indians"
+kinds = ["health", "framing"]
+why = "the study does not describe all Indians"
+
+[[avoid_phrase]]
+text = "cut-off"
+kinds = ["health"]
+why = "the paper proposes no new BMI cut-off"
+
+[[avoid_phrase]]
+text = "diagnos"
+kinds = ["framing", "cta"]
+why = "no diagnosis from a post (the paper's 'diagnosed with diabetes' outcome stays allowed in health lines)"
+
+[[avoid_phrase]]
+text = "you have diabetes"
+kinds = ["framing", "cta"]
+why = "never tell the reader about their own health"
+
+[[avoid_phrase]]
+text = "you are at risk"
+kinds = ["framing", "cta"]
+why = "never tell the reader about their own health"
+
+[[avoid_phrase]]
+text = "you're at risk"
+kinds = ["framing", "cta"]
+why = "never tell the reader about their own health"
+
+# The 2.9x men's figure from the abstract names no comparator; the comparison-group rule (code) enforces it per claim.
+
+[[avoid_phrase]]
+text = "Indians"
+kinds = ["health"]
+why = "the study includes Pakistan; never generalise to all Indians (say South Asian)"
+
+[[avoid_phrase]]
+text = "Indian men"
+kinds = ["health"]
+why = "the study includes Pakistan; never generalise to all Indians (say South Asian)"
+
+[[avoid_phrase]]
+text = "Indian women"
+kinds = ["health"]
+why = "the study includes Pakistan; never generalise to all Indians (say South Asian)"
+
+[[avoid_phrase]]
+text = "Indian adults"
+kinds = ["health"]
+why = "the study includes Pakistan; never generalise to all Indians (say South Asian)"

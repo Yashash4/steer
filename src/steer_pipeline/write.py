@@ -30,19 +30,24 @@ def post_schema(brief: dict, hashtags: list[str]) -> dict:
     ids = brief["claim_ids"]
     line = _line(ids)
     lines = {"type": "array", "items": line, "minItems": 1}
+    # the brief fixes the format, so only that artwork block exists (no top-level allOf: the API refuses it)
+    artwork = "slides" if brief["format"] == "carousel" else "static"
+    blocks = {
+        "slides": {"type": "array", "minItems": 4, "maxItems": 7, "items": {
+            "type": "object", "required": ["role", "lines"], "additionalProperties": False,
+            "properties": {"role": {"enum": SLIDE_ROLES}, "lines": lines}}},
+        "static": {"type": "object", "required": ["headline", "supporting"], "additionalProperties": False,
+                   "properties": {"headline": line, "supporting": {"type": "array", "items": line, "maxItems": 2}}},
+    }
     return {
         "type": "object",
-        "required": ["message", "reasoning", "format", "caption", "reel_script"],
+        "required": ["message", "reasoning", "format", artwork, "caption", "reel_script"],
         "additionalProperties": False,
         "properties": {
             "message": {"type": "string", "minLength": 1, "maxLength": 300},
             "reasoning": {"type": "string", "minLength": 1, "maxLength": 1200},
             "format": {"const": brief["format"]},
-            "slides": {"type": "array", "minItems": 4, "maxItems": 7, "items": {
-                "type": "object", "required": ["role", "lines"], "additionalProperties": False,
-                "properties": {"role": {"enum": SLIDE_ROLES}, "lines": lines}}},
-            "static": {"type": "object", "required": ["headline", "supporting"], "additionalProperties": False,
-                       "properties": {"headline": line, "supporting": {"type": "array", "items": line, "maxItems": 2}}},
+            artwork: blocks[artwork],
             "caption": {"type": "object", "required": ["lines", "hashtags"], "additionalProperties": False,
                         "properties": {"lines": lines,
                                        "hashtags": {"type": "array", "items": {"enum": hashtags}, "minItems": 5,
@@ -53,11 +58,6 @@ def post_schema(brief: dict, hashtags: list[str]) -> dict:
                                 "properties": {"lines": {"type": "array", "minItems": 1,
                                                          "items": _line(ids, {"show_large": {"type": "boolean"}})}}}}}},
         },
-        "allOf": [  # the format decides which artwork block is present
-            {"if": {"properties": {"format": {"const": "carousel"}}},
-             "then": {"required": ["slides"], "not": {"required": ["static"]}},
-             "else": {"required": ["static"], "not": {"required": ["slides"]}}},
-        ],
     }
 
 
@@ -85,3 +85,54 @@ def pick_brief(claims: list[dict], fmt: str, n: int = 4) -> dict:
     (theme, doubt), ids = sorted(cells.items(), key=lambda kv: (-len(kv[1]), kv[0][0], kv[0][1] or ""))[0]
     return {"format": fmt, "theme": theme, "doubt": doubt, "claim_ids": ids[:n],
             "why": f"most writable claims ({len(ids)}) in theme {theme!r} x doubt {doubt!r}; first {min(n, len(ids))} used"}
+
+
+SYSTEM = """You write draft social media posts for steer, India's doctor-led metabolic health club, from verified
+research claims. A Steer doctor reviews every post before anything is published.
+
+Voice: confident, warm, short lines, sentence case (never ALL CAPS). Indian daily life (rotis, chai, desk jobs,
+family dinners). Long-term habits, not quick fixes. No fear, no shame, no hype, no promises of weight loss,
+no before/after, no drug promotion, no brand names of medicines. Explain biology simply.
+
+Every line has a kind:
+- health: states a fact. It may ONLY restate what its claims say, with their exact numbers, units, signs and
+  comparison groups, and must list those claim_ids. Never add a number, a group, a cause or a promise. Expand
+  abbreviations for the public.
+- framing: the reader's doubt as a question, a transition, or a scene from Indian daily life. No numbers or
+  digits at all, and no health assertion.
+- brand: copy one of the brand lines given, exactly.
+- cta: copy one of the call-to-action lines given, exactly.
+- signoff: copy the sign-off given, exactly.
+Never write sources: the sources slide is added by code.
+State the message (the one thing the audience should take away) and the reasoning (why this post, for whom,
+which doubt it answers). Follow every editorial requirement given for the paper."""
+
+
+def write_prompt(brief: dict, claims: list[dict], brand: dict, boundaries: dict) -> str:
+    lines = [f"Format: {brief['format']}. Theme: {brief['theme']}. Reader doubt: {brief['doubt']}.", "", "Claims you may use:"]
+    for c in claims:
+        ctx = {k: c.get(k) for k in ("population", "comparison_group", "outcome", "time_point") if c.get(k)}
+        lines.append(f"- {c['claim_id']}: {c['claim_text']}\n  quote: {c['quote']}\n  context: {ctx or 'none'}")
+    lines += ["", "Brand lines (copy exactly): " + " | ".join(brand["whitelist"]),
+              "Call-to-action lines (copy exactly): " + " | ".join(brand["cta"]),
+              "Sign-off: " + brand["signoff"][0], "", "Editorial requirements for this paper:"]
+    for r in boundaries.get("require_qualifier", []):
+        words = r.get("all_of") or r.get("any_of")
+        how = "all of" if "all_of" in r else "one of"
+        where = {"same_slide": "on the same slide/scene as", "post": "somewhere in the post with",
+                 "caption": "in the caption with"}[r.get("placement", "post")]
+        scope = f"claims whose quote mentions {r['when_claim_quote_contains']}" if r.get("when_claim_quote_contains") else "any claim of this paper"
+        lines.append(f"- include {how} {words} {where} {scope} ({r.get('why', '')})")
+    for r in boundaries.get("require_with", []):
+        pair = [f"{c['quote_contains']!r} labelled as one of {c['label_any_of']}" for c in r["claims"]]
+        lines.append(f"- if you use one of these numbers, use all of them, each with its label beside it: {pair} ({r.get('why', '')})")
+    for r in boundaries.get("avoid_phrase", []):
+        lines.append(f"- never write {r['text']!r} in {r.get('kinds', ['health'])} lines ({r.get('why', '')})")
+    return "\n".join(lines)
+
+
+def write_post(brief: dict, claims: list[dict], brand: dict, boundaries: dict, hashtags: list[str], router) -> dict:
+    """One model-written post, schema-validated by the router; returns {post, endpoint, model, usage}."""
+    use = [c for c in claims if c["claim_id"] in brief["claim_ids"]]
+    r = router.call("write", SYSTEM, write_prompt(brief, use, brand, boundaries), post_schema(brief, hashtags))
+    return {"post": r["output"], "endpoint": r["endpoint"], "model": r["model"], "usage": r["usage"]}
