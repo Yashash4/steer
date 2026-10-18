@@ -4,10 +4,12 @@ const COMMA = String.fromCharCode(44);
 let C;
 let S;
 
+// display only: "kg/m2" is drawn as "kg/m²" (the checked text in claims.json is unchanged)
+const disp = (t) => String(t).split("/m2").join("/m\u00b2");
 function h(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.classList.add(...[].concat(cls));
-  if (text !== undefined && text !== null) e.textContent = text;
+  if (text !== undefined && text !== null) e.textContent = disp(text);
   return e;
 }
 function show(...nodes) {
@@ -116,11 +118,10 @@ function reveal(round, idx, next) {
   const g = h("p", "guess");
   g.append(h("span", null, C.ui.you_guessed), h("b", null, round.stops[idx].label));
   nodes.push(g);
-  if (round.qualifiers.length) {
-    const ul = h("ul", "quals");
-    round.qualifiers.forEach((q) => ul.append(h("li", null, q)));
-    nodes.push(ul);
-  }
+  const ul = h("ul", "quals");
+  round.qualifiers.forEach((q) => ul.append(h("li", null, q)));
+  if (C.ui.reveal_note) ul.append(h("li", null, C.ui.reveal_note));   // never personal risk
+  if (ul.children.length) nodes.push(ul);
   const src = h("p", "src");
   src.append(h("span", null, round.source.short), h("span", null, round.source.location));
   nodes.push(src);
@@ -282,6 +283,10 @@ load().then((c) => {
   document.title = c.brand.wordmark;
   document.getElementById("top").textContent = c.brand.wordmark;
   const f = document.getElementById("foot");
-  f.append(h("span", null, c.brand.footer), h("span", null, c.brand.signoff), h("span", null, c.built_at));
+  f.append(h("span", null, c.brand.footer), h("span", null, c.brand.signoff));
+  const meta = document.createElement("meta");   // the build time stays in the page, not on screen
+  meta.setAttribute("name", "steer-built-at");
+  meta.setAttribute("content", c.built_at);
+  document.head.append(meta);
   start();
 });

@@ -1,4 +1,5 @@
 import json
+import re
 import tomllib
 from pathlib import Path
 
@@ -111,3 +112,22 @@ def test_an_unusable_round_with_a_fallback_becomes_its_gap_card(stored, tmp_path
     assert rep["fallbacks"] and "-> gap card gap-regain" in rep["fallbacks"][0]
     assert next(d for d in out["doubts"] if d["id"] == "will_weight_come_back")["answered_by"] == ["gap-regain"]
     assert [r["id"] for r in out["rounds"]] == [] and "gap-regain" in [g["id"] for g in out["gap_cards"]]
+
+
+def test_only_the_fixed_strings_get_the_disclaimer_and_qualifier_exemptions(stored, tmp_path):
+    def build_with(**top):
+        p = rounds_file(tmp_path)
+        text = p.read_text()
+        for k, v in top.items():
+            text = re.sub(rf'^{k} = .*$', f'{k} = {json.dumps(v, ensure_ascii=False)}', text, count=1, flags=re.M)
+        p.write_text(text)
+        return ps1.build(stored, tmp_path / "x", SETTINGS, p, playable=False, fonts=False)
+    assert ROUNDS["footer"] in ps1.DISCLAIMERS
+    build_with()                                                                     # the fixed footer passes
+    with pytest.raises(ps1.BuildError, match="STEER_TEAM_CLAIM"):                   # any other wording: the usual rules
+        build_with(footer="Checked and loved by a Steer doctor, trust us")
+    # a qualifier not in the fixed list is checked as framing (avoid phrases and numbers included)
+    with pytest.raises(ps1.BuildError, match="FRAMING_HAS_NUMBER"):
+        ps1.build(stored, tmp_path / "y", SETTINGS, rounds_file(tmp_path, qualifiers=["Only 3 studies looked at this."]),
+                  playable=False, fonts=False)
+    assert "A comparison between groups in one study, not a prediction for you." in ps1.FIXED_QUALIFIERS

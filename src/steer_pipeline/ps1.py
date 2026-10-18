@@ -23,6 +23,12 @@ from .posts import claims_from_store, load_brand
 
 PS1 = Path(__file__).resolve().parents[2] / "ps1"
 FONTS = Path(__file__).resolve().parents[2] / "fonts"
+# fixed, code-defined strings: the only lines allowed the "disclaimer" kind (exempt from STEER_TEAM_CLAIM only) and the
+# only qualifiers exempt from a paper's avoid phrases; rounds.toml must use them verbatim, anything else is checked as usual
+DISCLAIMERS = {"Educational hackathon prototype · content pending review by a Steer doctor · not a medical assessment",
+               "Shown, not sent: this page makes no network call and has no form."}
+FIXED_QUALIFIERS = {"An average across studies, not a prediction for you.", "All weight-management medicines, not only GLP-1.",
+                    "Results varied a lot between studies.", "A comparison between groups in one study, not a prediction for you."}
 FALLS = re.compile(r"\b(fell|fall|falls|decrease[sd]?|lower|dropped|drop|loss|lost)\b", re.I)
 
 
@@ -112,7 +118,8 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
                 raise BuildError(f"round {r['id']}: context numbers {sorted(map(str, bad))} are not in the quote or the paper's context quotes")
         lines.append(("health", r["sentence"], [c["claim_id"]], f"{r['id']}/sentence", r["pmcid"]))
         lines.append(("framing", r["question"], [], f"{r['id']}/question", r["pmcid"]))
-        lines += [("qualifier", q, [c["claim_id"]], f"{r['id']}/qualifier", r["pmcid"]) for q in r.get("qualifiers", [])]
+        lines += [("qualifier" if q in FIXED_QUALIFIERS else "framing", q, [c["claim_id"]], f"{r['id']}/qualifier", r["pmcid"])
+                  for q in r.get("qualifiers", [])]
         out_rounds.append({"id": r["id"], "doubt": r["doubt"], "kind": r["kind"], "context": r.get("context"),
                            "question": r["question"], "stops": [{"label": s[0], "value": s[1]} for s in r["stops"]],
                            "answer": r["answer"],
@@ -158,7 +165,7 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
 
     # every line of copy through the PS2 checks
     for k, v in spec["ui"].items():
-        lines.append(("framing", v, [], f"ui/{k}", None))
+        lines.append(("qualifier" if v in FIXED_QUALIFIERS else "framing", v, [], f"ui/{k}", None))
     for k in ("under", "over", "close", "direction", "meaning_title"):
         lines.append(("framing", spec["readout"][k].replace("{n}", "").replace("{m}", ""), [], f"readout/{k}", None))
     for d in spec["doubt"]:
@@ -168,8 +175,9 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
     for doubt, qs in spec["doctor_questions"].items():
         lines += [("framing", q, [], f"questions/{doubt}", None) for q in qs]
     for k, v in spec["warm_lead"].items():
-        lines.append(("framing", v, [], f"warm_lead/{k}", None))
-    lines += [("disclaimer", spec["footer"], [], "footer", None), ("signoff", spec["signoff"], [], "signoff", None),
+        lines.append(("disclaimer" if v in DISCLAIMERS else "framing", v, [], f"warm_lead/{k}", None))
+    lines += [("disclaimer" if spec["footer"] in DISCLAIMERS else "framing", spec["footer"], [], "footer", None),
+              ("signoff", spec["signoff"], [], "signoff", None),
               ("cta", spec["cta"]["primary"], [], "cta/primary", None), ("cta", spec["cta"]["secondary"], [], "cta/secondary", None)]
     rules = settings["rules"]
     for kind, text, ids, where, pm in lines:
