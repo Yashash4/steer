@@ -281,9 +281,10 @@ Everything goes into one SQLite file (`[storage] db` in `steer.toml`, default `s
 
 Every AI step ("job") runs on an ordered fallback chain of model endpoints named in `steer.toml` (or another
 file). Default chains:
-- `extract`: Claude Sonnet, then Claude Opus (through Claude Code), then the Anthropic API, then an
-  OpenAI-compatible endpoint;
-- `label`: Claude Haiku, then Sonnet, then the same fallbacks.
+- `extract`: Claude Sonnet, then Claude Opus (through Claude Code), then the Anthropic API;
+- `label`: Claude Haiku, then Sonnet, then the Anthropic API;
+- `crosscheck`: OpenCode Go GLM-5.3, then DeepSeek V4 Pro, then Claude Opus (a different model family from the
+  writer first).
 
 Edit the file to change models.
 
@@ -295,7 +296,11 @@ Edit the file to change models.
   - `anthropic_api` calls the Messages API with the key in the environment variable named by `key_env`.
   - `openai_compatible` works with OpenAI, OpenCode Go, OpenRouter, or a local vLLM or Ollama. It sends a
     `User-Agent` and one `x-opencode-session` per run.
-    The `opencode_go` model name in `steer.toml` is unverified until a key is set.
+    OpenCode Go endpoints (`opencode_glm` = `glm-5.3`, `opencode_deepseek` = `deepseek-v4-pro`) are used only for
+    the cross-check. The model ids were verified on 2026-10-18 against `https://opencode.ai/inference/go/v1/models`;
+    note that `https://opencode.ai/inference/go/openai/v1/models` answers 404, while chat completions work on
+    `/openai/v1`. The key is read from the environment variable `OPENCODE_GO_API_KEY` (export it, or source your
+    own env file, before a run); no key or key path is stored in this repository.
 - **Behaviour:**
   - Each endpoint gets one call and one retry, then the chain moves to the next endpoint.
   - An error, a timeout, output that is not JSON, or JSON that fails the job's schema counts as a failure.

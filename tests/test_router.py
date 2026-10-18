@@ -101,6 +101,9 @@ def test_default_settings_models():
     chain = lambda job: [(s["endpoints"][n]["connector"], s["endpoints"][n]["model"]) for n in s["jobs"][job]["chain"]]
     assert chain("extract")[:2] == [("claude_cli", "sonnet"), ("claude_cli", "opus")]
     assert chain("label")[:2] == [("claude_cli", "haiku"), ("claude_cli", "sonnet")]
+    assert chain("crosscheck") == [("openai_compatible", "glm-5.3"), ("openai_compatible", "deepseek-v4-pro"),
+                                   ("claude_cli", "opus")]
+    assert all("contributor" not in (ep.get("model") or "") for ep in s["endpoints"].values())
     for ep in s["endpoints"].values():
         assert "key" not in ep  # only key_env names, never key values
 
@@ -210,3 +213,14 @@ def test_large_prompt_goes_on_stdin_not_argv(monkeypatch):
     assert out == {"n": 1}
     assert seen["input"] == big
     assert all(len(a) < 131072 for a in seen["argv"]) and big not in seen["argv"]
+
+
+@pytest.mark.network
+def test_live_crosscheck_chain_uses_opencode_first():
+    import os
+    if not os.environ.get("OPENCODE_GO_API_KEY"):
+        pytest.skip("OPENCODE_GO_API_KEY is not set")
+    r = Router(load_settings())
+    out = r.call("crosscheck", "You return only JSON.", "Return n = 7.", SCHEMA)
+    assert out["output"] == {"n": 7} and out["endpoint"] == "opencode_glm" and out["model"] == "glm-5.3"
+    assert os.environ["OPENCODE_GO_API_KEY"] not in json.dumps(r.log)

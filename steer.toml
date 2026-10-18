@@ -4,10 +4,15 @@
 version = 1
 
 [jobs.extract]
-chain = ["claude_sonnet", "claude_opus", "anthropic_sonnet", "opencode_go"]
+chain = ["claude_sonnet", "claude_opus", "anthropic_sonnet"]
 
 [jobs.label]
-chain = ["claude_haiku", "claude_sonnet", "anthropic_haiku", "opencode_go"]
+chain = ["claude_haiku", "claude_sonnet", "anthropic_haiku"]
+
+# The cross-check reads claims against their quotes with a DIFFERENT model family from the writer:
+# OpenCode first (low volume, batched), Claude Opus as the fallback (the writer will not be Opus).
+[jobs.crosscheck]
+chain = ["opencode_glm", "opencode_deepseek", "claude_opus"]
 
 # Claude Code headless, on the logged-in Claude account (minimal context, no tools).
 [endpoints.claude_sonnet]
@@ -39,12 +44,21 @@ key_env = "ANTHROPIC_API_KEY"
 timeout = 300
 
 # Any OpenAI-compatible endpoint (OpenAI, OpenCode Go, OpenRouter, a local vLLM or Ollama...).
-# OpenCode Go: pick a model that does not train on prompts.
-[endpoints.opencode_go]
+# OpenCode Go model ids verified 2026-10-18 against https://opencode.ai/inference/go/v1/models.
+# Both have 0-day retention and no training use per the OpenCode Go docs (DeepSeek's zero data retention is
+# renewed monthly; the agreement then current ran to 2026-10-31). Never use a "contributor" model.
+[endpoints.opencode_glm]
+connector = "openai_compatible"
+base_url = "https://opencode.ai/inference/go/openai/v1"
+model = "glm-5.3"
+key_env = "OPENCODE_GO_API_KEY"
+timeout = 300
+
+[endpoints.opencode_deepseek]
 connector = "openai_compatible"
 base_url = "https://opencode.ai/inference/go/openai/v1"
 model = "deepseek-v4-pro"
-key_env = "OPENCODE_API_KEY"
+key_env = "OPENCODE_GO_API_KEY"
 timeout = 300
 
 # Controlled vocabularies for labels (Steer can extend them). Codes, not free text.
