@@ -160,9 +160,8 @@ The reel script is spoken in about 30-40 seconds (50-75 words in all), ONE scene
    editorial requirements ask for who was studied beside this claim, do NOT speak it: add to this scene a second line
    of kind "setting" (shown on screen, not spoken, no claim_ids) that copies EXACTLY the who-was-studied words of the
    numbers line (for example "adults aged 45 and over in Chennai, Delhi and Karachi").
-4. what it means: ONE framing line, no number, no new health assertion.
-5. the brand line.
-6. the call to action and the sign-off.
+4. the brand line.
+5. the call to action and the sign-off.
 Never write a line about checking, review, doctors reviewing or sources: code adds that status line itself.
 State the message (the one thing the audience should take away) and the reasoning (why this post, for whom,
 which doubt it answers). Both are published with the post and checked like health lines: the message may only

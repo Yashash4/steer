@@ -641,8 +641,8 @@ CHECK_LINES = (CHECK_QUOTED, CHECK_CROSS, CHECK_DOCTOR)
 # v5 (presenter-led, no silent beats): the voice covers >= 85 % of the runtime, no silence over 1.0 s; a number on screen
 # >= 2.6 s from when it is spoken; the code-made status line is spoken only when the trace proves both its facts.
 VOICE_COVERAGE_MIN, MAX_SILENCE, STAT_MIN = 0.85, 1.0, 2.6
-STATUS_LINE = ("Every number here is quoted from the paper and checked by a second model, and a Steer doctor reviews it "
-               "before it's published.")
+STATUS_LINE = ("Every number is quoted from the paper, checked by a second model, and reviewed by a Steer doctor before "
+               "it's published.")
 FOOD_BROLL = {"thali"}      # food clips: never behind a line naming a health outcome or a number (it would imply a cause)
 OUTCOME = re.compile(r"\b(diabet\w*|weight|blood|sugar|glucose|insulin|hba1c|bmi|body mass|obes\w*|cholesterol|heart|"
                      r"pressure|risk|side effects?|adverse|muscle|lean mass|regain\w*|metabolic|disease|health)\b", re.I)
