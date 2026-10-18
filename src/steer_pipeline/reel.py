@@ -80,13 +80,14 @@ def _speak_token(tok: str) -> str:
 
 def spoken(text: str) -> tuple[str, list[str]]:
     """(the text to voice, the spoken form of each display word) - same word order, so captions can be timed.
-    Shorter speech, same numbers: the BMI unit is not voiced right after "BMI" ("BMI under 25 kg/m2" or "BMI <25 kg/m2"
+    Shorter speech, same numbers: the BMI unit is not voiced right after "BMI" or "body mass index" ("BMI under 25 kg/m2", "BMI <25 kg/m2"
     -> "BMI under 25"; the unit stays on screen), and "45+" is voiced "45 and over"."""
     words = text.split()
     core = lambda t: t.strip("(),.;:!?")
     per_word = []
     for i, t in enumerate(words):
-        after_bmi = "BMI" in [core(w) for w in words[max(0, i - 3):i]]
+        before = " ".join(core(w) for w in words[max(0, i - 5):i]).lower()
+        after_bmi = bool(re.search(r"\bbmi\b|body mass index", before))
         if after_bmi and re.match(r"^(kg/m2|kg/m²)$", core(t)):
             per_word.append("")
             if per_word[:-1]:   # its trailing punctuation moves to the word before, for the voice's pause

@@ -26,6 +26,7 @@ def test_spoken_form_expands_units_and_symbols_by_code_only():
     # shorter speech, same numbers (WIN, reel v3): no BMI unit voiced right after "BMI"; 45+ is "45 and over"
     assert say("BMI under 25 kg/m2, aged 45+ in Chennai") == "BMI under 25, aged 45 and over in Chennai"
     assert say("BMI <25 kg/m2.") == "BMI under 25."
+    assert say("with body mass index under 25 kg/m2: risk") == "with body mass index under 25: risk"
     assert say("a waist of 25 kg/m2") == "a waist of 25 kilograms per square metre"     # not after BMI: voiced
     assert reel.audio_numbers_match("BMI under 25 kg/m2, aged 45+", "BMI under twenty five, aged forty five and over")["ok"]
     assert len(reel.spoken("BMI under 25 kg/m2, aged 45+")[1]) == 6                      # still one entry per display word
