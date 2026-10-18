@@ -1,0 +1,279 @@
+{
+ "version": 1,
+ "built_at": "2026-10-18T14:00:00+00:00",
+ "brand": {
+  "palette": {
+   "cream": "#F5EBDF",
+   "rust": "#C04E2A",
+   "maroon": "#661414",
+   "ink": "#351D1D",
+   "clay": "#B58777",
+   "blush": "#E6CBBD",
+   "paper": "#F8F2EB"
+  },
+  "fonts": {
+   "serif": "Fraunces.ttf",
+   "serif_italic": "Fraunces-Italic.ttf",
+   "sans": "Inter.ttf"
+  },
+  "wordmark": "steer",
+  "signoff": "steerclub.com",
+  "footer": "Prototype, not an official steer product."
+ },
+ "ui": {
+  "lock": "Lock my guess",
+  "you_guessed": "You guessed",
+  "see_quote": "See the exact sentence",
+  "hide_quote": "Hide the sentence",
+  "next": "Next",
+  "pick_worries": "Pick your worries",
+  "pick_hint": "Tap the questions you have. Each one is a short round.",
+  "start_rounds": "Start",
+  "done": "Already answered",
+  "readout_title": "Your readout",
+  "questions_title": "Questions to take to a doctor",
+  "restart": "Play again"
+ },
+ "hook": {
+  "id": "hook",
+  "doubt": "is_it_for_me",
+  "kind": "slider",
+  "question": "Guess: a slim South Asian woman and a slim white woman. How much higher is her diabetes risk?",
+  "stops": [
+   {
+    "label": "1×",
+    "value": 1
+   },
+   {
+    "label": "2×",
+    "value": 2
+   },
+   {
+    "label": "3×",
+    "value": 3
+   },
+   {
+    "label": "4×",
+    "value": 4
+   },
+   {
+    "label": "5×",
+    "value": 5
+   },
+   {
+    "label": "6×",
+    "value": 6
+   },
+   {
+    "label": "7×",
+    "value": 7
+   },
+   {
+    "label": "8×",
+    "value": 8
+   },
+   {
+    "label": "9×",
+    "value": 9
+   },
+   {
+    "label": "10×",
+    "value": 10
+   }
+  ],
+  "answer": 5.3,
+  "reveals": [
+   {
+    "number": "5.3 times",
+    "label": "higher diabetes risk",
+    "sentence": "South Asian women aged 45 and over in Chennai, Delhi and Karachi with BMI under 25 kg/m2 had 5.3 times higher diabetes risk than US white women."
+   }
+  ],
+  "qualifiers": [
+   "Adults aged 45 and over in Chennai, Delhi and Karachi, compared with US cohorts."
+  ],
+  "quote": "Similarly, in women, the risk of diabetes in those with BMI <25 kg/m2 was 5.3 times higher in South Asian (IRR (95% CI) 5.27 (3.64 to 7.54)) than in white women.",
+  "source": {
+   "short": "Narayan et al. 2021",
+   "doi": "10.1136/bmjdrc-2020-001927",
+   "location": "page 5",
+   "full": "Narayan KMV, Kondal D, Daya N et al. Incidence and pathophysiology of diabetes in South Asian adults living in India and Pakistan compared with US blacks and whites. BMJ Open Diabetes Research & Care, 2021."
+  },
+  "claim_ids": [
+   "run-244d0fbd0c04/c004-01"
+  ]
+ },
+ "doubts": [
+  {
+   "id": "is_it_safe",
+   "label": "Is it safe?",
+   "answered_by": "gap-safety"
+  },
+  {
+   "id": "will_i_lose_muscle",
+   "label": "Will I lose muscle?",
+   "answered_by": "muscle"
+  },
+  {
+   "id": "will_weight_come_back",
+   "label": "Will the weight come back?",
+   "answered_by": "regain"
+  },
+  {
+   "id": "only_for_diabetics",
+   "label": "Is this only for diabetics?",
+   "answered_by": "gap-diabetics"
+  },
+  {
+   "id": "is_it_for_me",
+   "label": "Is it even for me?",
+   "answered_by": "hook"
+  }
+ ],
+ "rounds": [
+  {
+   "id": "regain",
+   "doubt": "will_weight_come_back",
+   "kind": "slider",
+   "question": "After stopping a weight management medicine, how long until weight is back where it would have been?",
+   "stops": [
+    {
+     "label": "Six months",
+     "value": 0.5
+    },
+    {
+     "label": "About a year",
+     "value": 1.0
+    },
+    {
+     "label": "About a year and a half",
+     "value": 1.5
+    },
+    {
+     "label": "Three years",
+     "value": 3.0
+    },
+    {
+     "label": "Never",
+     "value": 99
+    }
+   ],
+   "answer": 1.4,
+   "reveals": [
+    {
+     "number": "1.4 years",
+     "label": "weight was no different",
+     "sentence": "Across 28 randomised controlled trials, weight was no different between treatment and control groups 1.4 years after weight management medication stopped."
+    }
+   ],
+   "qualifiers": [
+    "An average across studies, not a prediction for you."
+   ],
+   "quote": "Among 28 randomised controlled trials, weight was no different between treatment and control groups 1.4 years after cessation of WMM.",
+   "source": {
+    "short": "West et al. 2026",
+    "doi": "10.1136/bmj-2025-085304",
+    "location": "section text, no page layout",
+    "full": "West S, Scragg J, Aveyard P et al. Weight regain after cessation of medication for weight management: systematic review and meta-analysis. BMJ, 2026."
+   },
+   "claim_ids": [
+    "run-a7cddabed62e/c004-01"
+   ]
+  },
+  {
+   "id": "muscle",
+   "doubt": "will_i_lose_muscle",
+   "kind": "choice",
+   "question": "On these medicines, does lean mass go up or down?",
+   "stops": [
+    {
+     "label": "Up",
+     "value": "up"
+    },
+    {
+     "label": "Down",
+     "value": "down"
+    },
+    {
+     "label": "Both, depending how you count",
+     "value": "both"
+    }
+   ],
+   "answer": "both",
+   "reveals": [
+    {
+     "number": "1.74 kg",
+     "label": "Absolute lean mass fell",
+     "sentence": "Absolute lean mass fell by 1.74 kg on average."
+    },
+    {
+     "number": "1.81%",
+     "label": "Lean mass as a share of total weight rose",
+     "sentence": "Lean mass as a share of total weight rose by 1.81% on average."
+    }
+   ],
+   "qualifiers": [
+    "Results varied a lot between studies."
+   ],
+   "quote": "(layout sample only: not a usable claim yet)",
+   "source": {
+    "short": "Laverde et al. 2026",
+    "doi": "10.1038/s41366-026-00000-0",
+    "location": "page 1",
+    "full": "Laverde et al. GLP-1 receptor agonists and lean mass: systematic review and meta-analysis. International Journal of Obesity, 2026."
+   },
+   "claim_ids": []
+  }
+ ],
+ "gap_cards": [
+  {
+   "id": "gap-safety",
+   "title": "Is it safe?",
+   "body": "Our papers don't answer this well. This is one to ask a doctor, with your own history."
+  },
+  {
+   "id": "gap-diabetics",
+   "title": "Is this only for diabetics?",
+   "body": "Our papers don't answer this well. This is one to ask a doctor, with your own history."
+  }
+ ],
+ "readout": {
+  "under": "You underestimated {n} of {m}",
+  "over": "You overestimated {n} of {m}",
+  "close": "You were close on {n} of {m}",
+  "meaning_title": "What the studies found"
+ },
+ "doctor_questions": {
+  "is_it_for_me": [
+   "Should my lab tests be read differently because I am South Asian?"
+  ],
+  "will_weight_come_back": [
+   "What would a planned exit look like for me?"
+  ],
+  "will_i_lose_muscle": [
+   "How do we protect my muscle while I lose weight?"
+  ],
+  "is_it_safe": [
+   "Which screening tests should come before any medicine?"
+  ],
+  "only_for_diabetics": [
+   "Does my risk call for care before diabetes?"
+  ]
+ },
+ "cta": {
+  "primary": {
+   "label": "See if the programme fits you",
+   "url": "https://steerclub.com/?utm_source=ps1&utm_medium=quiz"
+  },
+  "secondary": {
+   "label": "Talk to a Steer doctor",
+   "url": "https://steerclub.com/?utm_source=ps1&utm_medium=quiz&utm_content=doctor"
+  }
+ },
+ "warm_lead": {
+  "title": "What Steer's team would see",
+  "note": "Shown, not sent: this page makes no network call and has no form.",
+  "doubts_label": "Questions picked",
+  "guesses_label": "Guesses and the real numbers"
+ }
+}
