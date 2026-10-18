@@ -356,3 +356,89 @@ def test_a_400_character_clearance_wraps_inside_its_card(tmp_path, width, height
             return {sw: blk.scrollWidth, cw: blk.clientWidth, inside: x.left >= a.left && x.right <= a.right && x.top >= a.top && x.bottom <= a.bottom}; }""")
         b.close()
     assert r["sw"] <= r["cw"] and r["inside"], r
+
+
+def test_revoke_returns_the_claim_to_needs_check_and_a_new_clearance_verifies_it(tmp_path):
+    con = store.connect(tmp_path / "s.db")
+    c = claim("c7", "needs_check", ["CONTEXT_NOT_IN_QUOTE"], flags=[{"code": "CONTEXT_NOT_IN_QUOTE"}], gate={"status": "pass"})
+    cs = {"r1/c7": c}
+    kw = dict(reviewer="Test editor", target="r1/c7")
+    first = do(con, TEST, cs, {}, action="check_cleared", clears="CONTEXT_NOT_IN_QUOTE", reason=OK_WHY, **kw)
+    assert studio.claim_status(c, store.actions(con))["usable"]
+    assert refused(con, TEST, cs, {}, action="clearance_revoked", revokes=first["id"], reason="sd", **kw).http == 400
+    assert refused(con, TEST, cs, {}, action="clearance_revoked", revokes=999, reason=OK_WHY, **kw).http == 404
+    assert refused(con, TEST, {"r1/c7": c, "r1/c8": claim("c8")}, {}, action="clearance_revoked", revokes=first["id"],
+                   reason=OK_WHY, reviewer="Test editor", target="r1/c8").http == 404       # another claim's clearance id
+    rev = do(con, TEST, cs, {}, action="clearance_revoked", revokes=first["id"], reason="the quote does not name the population after all", **kw)
+    assert rev["clears"] == "CONTEXT_NOT_IN_QUOTE" and rev["revokes"] == first["id"]
+    st = studio.claim_status(c, store.actions(con))
+    assert not st["usable"] and st["words"] == "needs check (CONTEXT_NOT_IN_QUOTE)"
+    assert not studio.fully_cleared(c, store.actions(con))
+    e = refused(con, TEST, cs, {}, action="clearance_revoked", revokes=first["id"], reason=OK_WHY, **kw)
+    assert (e.http, e.stage) == (409, "check")                                             # revoking a revoked one
+    do(con, TEST, cs, {}, action="check_cleared", clears="CONTEXT_NOT_IN_QUOTE", reason=OK_WHY, **kw)
+    acts = store.actions(con)
+    assert studio.claim_status(c, acts)["usable"] and studio.fully_cleared(c, acts)
+    assert [a["action"] for a in acts] == ["check_cleared", "clearance_revoked", "check_cleared"]   # history order kept
+    h = studio.clearance_history(c, acts)
+    assert [x["id"] for x in h] == [1, 3] and h[0]["revoked"]["reviewer"] == "Test editor" and "revoked" not in h[1]
+    snap = studio.data(con, {"r1": {"citation": {"pmcid": "PMC1"}, "warnings": [{"code": "NO_PAGE_LAYOUT"}], "source": {},
+                                    "sentences": [], "pages": []}}, cs, {}, TEST)
+    assert [x["id"] for x in snap["claims"][0]["clearances"]] == [3]                        # only the active one
+    import sqlite3
+    with pytest.raises(sqlite3.DatabaseError, match="append-only"):
+        con.execute("UPDATE review_action SET reason = 'x'")
+
+
+def test_a_v4_store_upgrades_to_v5_keeping_every_action(tmp_path):
+    import sqlite3
+    path = tmp_path / "v4.db"
+    old = store.REVIEW_ACTION.replace(",\n                                           'clearance_revoked'", "").replace(
+        "    revokes INTEGER,                 -- clearance_revoked: the id of the check_cleared row it revokes\n", "")
+    assert "clearance_revoked" not in old and "revokes" not in old
+    con = sqlite3.connect(path)
+    con.executescript(store.SCHEMA + store.SCHEMA_V3.replace(store.REVIEW_ACTION, old))
+    con.execute("INSERT INTO review_action (at, reviewer, role, target_kind, target, stage, action, clears, reason) "
+                "VALUES ('t', 'Ed', 'editor', 'claim', 'r/c', 'check', 'check_cleared', 'X', 'why')")
+    con.commit()
+    con.close()
+    con = store.connect(path)
+    a = store.actions(con)
+    assert [(x["id"], x["action"], x["clears"], x["revokes"]) for x in a] == [(1, "check_cleared", "X", None)]
+    store.add_action(con, {"at": "t2", "reviewer": "Ed", "role": "editor", "target_kind": "claim", "target": "r/c",
+                           "stage": "check", "action": "clearance_revoked", "revokes": 1, "reason": "r"})
+    with pytest.raises(sqlite3.DatabaseError, match="append-only"):
+        con.execute("DELETE FROM review_action")
+
+
+@pytest.mark.parametrize("width,height", [(390, 844), (1440, 900)])
+def test_revoke_button_and_a_revoked_history_line_render(tmp_path, width, height):
+    import shutil
+
+    from playwright.sync_api import sync_playwright
+
+    con = store.connect(tmp_path / "s.db")
+    c = claim("c1", "needs_check", ["CONTEXT_NOT_IN_QUOTE"], flags=[{"code": "CONTEXT_NOT_IN_QUOTE"}], gate={"status": "pass"})
+    cs = {"r1/c1": c}
+    kw = dict(reviewer="Test editor", target="r1/c1")
+    a = do(con, TEST, cs, {}, action="check_cleared", clears="CONTEXT_NOT_IN_QUOTE", reason=OK_WHY, **kw)
+    do(con, TEST, cs, {}, action="clearance_revoked", revokes=a["id"], reason="x " * 3 + "second look found the population missing here", **kw)
+    do(con, TEST, cs, {}, action="check_cleared", clears="CONTEXT_NOT_IN_QUOTE", reason=OK_WHY, **kw)
+    doc = {"citation": {"pmcid": "PMC1", "authors": ["West S"], "year": 2026, "title": "T", "journal": "J", "doi": "10.1/x",
+                        "license": "CC BY"}, "warnings": [{"code": "NO_PAGE_LAYOUT"}], "source": {},
+           "sentences": [{"sid": "p0001-s0001", "text": "a sentence"}], "pages": []}
+    out = tmp_path / "site"
+    shutil.copytree(studio.Path(studio.__file__).parent / "studio_ui" / "static", out)
+    for public in (True, False):
+        snap = studio.data(con, {"r1": doc}, cs, {}, TEST, public=public)
+        (out / "data.js").write_text("window.STEER_DATA = " + json.dumps(snap, default=str) + ";\n")
+        with sync_playwright() as pw:
+            b = pw.chromium.launch()
+            pg = b.new_page(viewport={"width": width, "height": height})
+            pg.goto((out / "claim.html").as_uri() + "#" + "PMC1%2Fc1")
+            pg.wait_for_selector(".review-status .clearances p")
+            text = pg.inner_text(".review-status .clearances")
+            assert "revoked by Test editor (editor)" in text and text.index("cleared by") < text.index("revoked by")
+            assert pg.locator("button.revoke").count() == (0 if public else 1)            # only the active one, live only
+            assert pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            b.close()

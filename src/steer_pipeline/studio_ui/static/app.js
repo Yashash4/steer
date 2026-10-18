@@ -59,10 +59,20 @@
   // any ISO time inside a stored status text, shown in IST like the rest of the page
   function istText(t) { return String(t).replace(/\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)/g, ist); }
   function statusPill(c) { return '<span class="chip ' + stClass(c) + '">' + esc(c.status_word) + "</span>"; }
+  // one clearance as recorded; a revoked one keeps its line and gains "revoked by ..." (append-only history)
+  function histLine(k) {
+    var t = "<strong>" + esc(k.code) + "</strong> cleared by " + esc(k.reviewer) + " (" + esc(k.role) + ") &middot; " + esc(ist(k.at)) + " &mdash; " + esc(k.reason);
+    if (k.revoked) return '<span class="revoked">' + t + " &mdash; revoked by " + esc(k.revoked.reviewer) + " (" + esc(k.revoked.role) + ") &middot; " + esc(ist(k.revoked.at)) + " &mdash; " + esc(k.revoked.reason) + "</span>";
+    return t;
+  }
+  function revokeBox(k) {
+    return LIVE && !k.revoked ? '<div class="revoke-box"><label class="small muted">Why revoke (at least 40 characters and 6 words)<br><textarea class="rv-why" rows="2" style="width:100%"></textarea></label>' +
+      '<button type="button" class="revoke" data-id="' + k.id + '">Revoke</button> <span class="small rv-out" aria-live="polite"></span></div>' : "";
+  }
   function reviewStatus(c) {
-    var cl = c.clearances || [];
+    var cl = c.clearance_history || [];
     return '<div class="card review-status" style="margin-top:14px"><h3>Review status</h3><p class="small">Current status: ' + statusPill(c) + "</p>" +
-      (cl.length ? '<div class="clearances">' + cl.map(function (k) { return "<p class=\"small\"><strong>" + esc(k.code) + "</strong> cleared by " + esc(k.reviewer) + " (" + esc(k.role) + ") &middot; " + esc(ist(k.at)) + " &mdash; " + esc(k.reason) + "</p>"; }).join("") + "</div>"
+      (cl.length ? '<div class="clearances">' + cl.map(function (k) { return '<p class="small" data-clearance="' + k.id + '">' + histLine(k) + "</p>" + revokeBox(k); }).join("") + "</div>"
         : '<p class="small muted">No flag has been cleared yet.</p>') + "</div>";
   }
   function pageText(c) { return c.pages ? "page " + c.pages.join(", ") : "NO_PAGE_LAYOUT (no page exists for this source; locate by sentence)"; }
@@ -98,8 +108,7 @@
   }
   // a cleared flag stays listed with its clearance: an editorial disposition, never clinical approval
   function clearedNote(c, code) {
-    var k = (c.clearances || []).filter(function (x) { return x.code === code; })[0];
-    return k ? '<div class="small cleared-note">' + esc(code) + " cleared by " + esc(k.reviewer) + " (" + esc(k.role) + ") &middot; " + esc(ist(k.at)) + " &mdash; " + esc(k.reason) + "</div>" : "";
+    return (c.clearance_history || []).filter(function (x) { return x.code === code; }).map(function (k) { return '<div class="small cleared-note">' + histLine(k) + "</div>"; }).join("");
   }
   function counts(xs, fn) { var o = {}; xs.forEach(function (c) { fn(c).forEach(function (k) { o[k] = (o[k] || 0) + 1; }); }); return o; }
   function rowsOf(o) { return Object.keys(o).sort(function (a, b) { return o[b] - o[a]; }).map(function (k) { return "<tr><td>" + esc(rc(k)) + '</td><td class="n">' + o[k] + "</td></tr>"; }).join(""); }
@@ -224,6 +233,12 @@
       if (im.complete && !im.naturalWidth) miss(); else im.addEventListener("error", miss);
     });
     $("#pick").addEventListener("change", function (e) { location.hash = "#" + encodeURIComponent(e.target.value); location.reload(); });
+    document.querySelectorAll("button.revoke").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var box = b.parentNode, out = $(".rv-out", box);
+        act({ action: "clearance_revoked", target: c.target, revokes: Number(b.dataset.id), reason: $(".rv-why", box).value }, out);
+      });
+    });
     var clr = $("#clr-ok");
     if (clr) clr.addEventListener("click", function () { act({ action: "check_cleared", target: c.target, clears: $("#clr-code").value, reason: $("#clr-why").value }, $("#clr-out")); });
     if (can) {

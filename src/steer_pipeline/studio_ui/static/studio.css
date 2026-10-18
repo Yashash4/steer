@@ -130,3 +130,4 @@ table.lines .chip{white-space:nowrap}
 .review-status .clearances p{margin:6px 0;overflow-wrap:anywhere;white-space:normal}
 .review-status .chip{white-space:nowrap}
 .cleared-note{margin:4px 0;overflow-wrap:anywhere;white-space:normal}
+.revoked{opacity:.85}.revoked strong{text-decoration:line-through}.revoke-box{margin:0 0 10px}

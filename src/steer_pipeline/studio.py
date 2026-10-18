@@ -23,7 +23,7 @@ from . import store
 
 LAYOUT = "LAYOUT_CHECK_NEEDED"
 REASON_CATEGORIES = ("inaccurate", "overstated", "missing context", "tone/brand", "other")
-STAGE_OF = {"layout_checked": "layout", "layout_unresolved": "layout", "check_cleared": "check", "editorial_approved": "editorial",
+STAGE_OF = {"layout_checked": "layout", "layout_unresolved": "layout", "check_cleared": "check", "clearance_revoked": "check", "editorial_approved": "editorial",
             "editorial_rejected": "editorial", "clinically_approved": "clinical", "clinically_rejected": "clinical"}
 REVIEW_GAP_S = 600   # estimated review time: gaps over 10 min between actions are not counted
 DPI = 130
@@ -79,8 +79,25 @@ def to_clear(c: dict) -> set[str]:
 
 
 def clearances(c: dict, acts: list[dict]) -> dict[str, dict]:
+    """The ACTIVE clearances by code: a clearance a later clearance_revoked points at no longer counts (it stays in
+    the log, see clearance_history)."""
     key = f"{c['run_id']}/{c['claim_id']}"
-    return {a["clears"]: a for a in acts if a["target_kind"] == "claim" and a["target"] == key and a["action"] == "check_cleared"}
+    gone = {a["revokes"] for a in acts if a["action"] == "clearance_revoked"}
+    return {a["clears"]: a for a in acts if a["target_kind"] == "claim" and a["target"] == key
+            and a["action"] == "check_cleared" and a.get("id") not in gone}
+
+
+def clearance_history(c: dict, acts: list[dict]) -> list[dict]:
+    """Every clearance and revocation on the claim, in the order they happened (append-only, nothing dropped)."""
+    key = f"{c['run_id']}/{c['claim_id']}"
+    mine = [a for a in acts if a["target_kind"] == "claim" and a["target"] == key
+            and a["action"] in ("check_cleared", "clearance_revoked")]
+    revoked = {a["revokes"]: a for a in mine if a["action"] == "clearance_revoked"}
+    return [{"id": a["id"], "code": a["clears"], "reviewer": a["reviewer"], "role": a["role"], "at": a["at"],
+             "reason": a["reason"]} | ({"revoked": {"reviewer": revoked[a["id"]]["reviewer"], "role": revoked[a["id"]]["role"],
+                                                     "at": revoked[a["id"]]["at"], "reason": revoked[a["id"]]["reason"]}}
+                                       if a["id"] in revoked else {})
+            for a in mine if a["action"] == "check_cleared"]
 
 
 def fully_cleared(c: dict, acts: list[dict]) -> bool:
@@ -215,7 +232,7 @@ def act(con, reviewers: dict[str, str], body: dict, claims: dict[str, dict], pos
             raise Refused(409, "this claim needs no layout check", "layout")
         if action == "layout_checked" and not thick(reason):
             raise Refused(400, THIN_REASON, "layout")
-        if stage == "check":
+        if stage == "check" and action == "check_cleared":
             if c["status"] == "rejected":   # the gate's rejection is final: a rejected claim is re-extracted, not cleared
                 raise Refused(409, "a claim rejected by the gate cannot be cleared", "check")
             if c.get("excluded"):
@@ -227,6 +244,16 @@ def act(con, reviewers: dict[str, str], body: dict, claims: dict[str, dict], pos
                 raise Refused(409, f"{clears} is already cleared", "check")
             if not thick(reason):
                 raise Refused(400, THIN_REASON, "check")
+        if action == "clearance_revoked":
+            rid = body.get("revokes")
+            tgt = next((a for a in acts if a["id"] == rid and a["action"] == "check_cleared" and a["target"] == target), None)
+            if not tgt:
+                raise Refused(404, f"no clearance {rid!r} on {target!r}", "check")
+            if rid in {a["revokes"] for a in acts if a["action"] == "clearance_revoked"}:
+                raise Refused(409, f"clearance {rid} is already revoked", "check")
+            if not thick(reason):
+                raise Refused(400, THIN_REASON, "check")
+            clears = tgt["clears"]
         kind = "claim"
     else:
         p = posts.get(target)
@@ -242,7 +269,7 @@ def act(con, reviewers: dict[str, str], body: dict, claims: dict[str, dict], pos
         before = {"words": st["words"]}
         kind = "post"
     row = {"at": now(), "reviewer": name, "role": role, "target_kind": kind, "target": target, "stage": stage,
-           "action": action, "clears": clears, "reason": reason, "reason_category": category if rejecting else None,
+           "action": action, "clears": clears, "revokes": body.get("revokes") if action == "clearance_revoked" else None, "reason": reason, "reason_category": category if rejecting else None,
            "before_status": before["words"]}
     acts_after = acts + [row | {"id": None}]
     row["after_status"] = (claim_status(claims[target], acts_after)["words"] if kind == "claim"
@@ -435,7 +462,8 @@ def data(con, docs: dict, claims: dict, posts: dict, reviewers: dict[str, str], 
             "labels": c.get("labels"), "crosscheck": c.get("crosscheck"), "excluded": c.get("excluded"),
             "open": st["open"], "clearable": sorted(to_clear(c) - set(clearances(c, acts))) if bucket != "rejected"
             and not c.get("excluded") else [],
-            "clearances": [{"code": code, "reviewer": a["reviewer"], "role": a["role"], "at": a["at"], "reason": a["reason"]}
+            "clearance_history": clearance_history(c, acts),
+            "clearances": [{"id": a["id"], "code": code, "reviewer": a["reviewer"], "role": a["role"], "at": a["at"], "reason": a["reason"]}
                            for code, a in sorted(clearances(c, acts).items())],
             "used_in": used_by.get(key, []),
             "page_note": None if paper["page_images"] or paper["no_page_layout"] else f"page image not shown: {paper['license']}"})

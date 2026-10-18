@@ -7,7 +7,7 @@ from steer_pipeline import store
 
 def test_review_actions_are_append_only_by_the_database(tmp_path):
     con = store.connect(tmp_path / "s.db")
-    assert con.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone() == ("4",)
+    assert con.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone() == ("5",)
     a = {"at": "2026-10-18T13:30:00", "reviewer": "Ed", "role": "editor", "target_kind": "claim", "target": "r1/c1",
          "stage": "layout", "action": "layout_checked", "reason": None, "reason_category": None,
          "before_status": "needs check (LAYOUT_CHECK_NEEDED)", "after_status": "layout checked"}

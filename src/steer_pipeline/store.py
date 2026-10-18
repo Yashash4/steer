@@ -8,7 +8,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS documents (
@@ -82,8 +82,10 @@ REVIEW_ACTION = """CREATE TABLE IF NOT EXISTS review_action (
     target TEXT NOT NULL,            -- '<run_id>/<claim_id>' or '<post_id>'
     stage TEXT NOT NULL CHECK (stage IN ('layout', 'check', 'editorial', 'clinical')),
     action TEXT NOT NULL CHECK (action IN ('layout_checked', 'layout_unresolved', 'check_cleared', 'editorial_approved',
-                                           'editorial_rejected', 'clinically_approved', 'clinically_rejected')),
+                                           'editorial_rejected', 'clinically_approved', 'clinically_rejected',
+                                           'clearance_revoked')),
     clears TEXT,                     -- check_cleared: the review reason code this clearance clears
+    revokes INTEGER,                 -- clearance_revoked: the id of the check_cleared row it revokes
     reason TEXT,
     reason_category TEXT CHECK (reason_category IS NULL OR reason_category IN
                                 ('inaccurate', 'overstated', 'missing context', 'tone/brand', 'other')),
@@ -111,12 +113,13 @@ STATUSES = {"passed": "passed", "needs_check": "needs_check", "rejected": "rejec
 
 
 def _upgrade_review_action(con: sqlite3.Connection) -> None:
-    """v3 -> v4: review_action gains the check_cleared action and the clears column. SQLite cannot change a CHECK
-    constraint, so the table is rebuilt: every row is copied first, then the append-only triggers are restored."""
+    """v3/v4 -> v5: review_action gains check_cleared + clears (v4) and clearance_revoked + revokes (v5). SQLite cannot
+    change a CHECK constraint, so the table is rebuilt: every row is copied first, then the append-only triggers are
+    restored."""
     row = con.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'review_action'").fetchone()
-    if not row or "check_cleared" in row[0]:
+    if not row or "clearance_revoked" in row[0]:
         return
-    cols = "id, at, reviewer, role, target_kind, target, stage, action, reason, reason_category, before_status, after_status"
+    cols = "id, at, reviewer, role, target_kind, target, stage, action, reason, reason_category, before_status, after_status" + (", clears" if "clears" in row[0] else "")
     con.executescript(f"""
         BEGIN;
         DROP TRIGGER IF EXISTS review_action_no_update;
@@ -149,7 +152,7 @@ def save_post(con: sqlite3.Connection, record: dict, folder: str | Path, written
                     (record["post_id"], record["run_id"], str(folder), record["status"], written_at, _j(record)))
 
 
-ACTION_COLUMNS = ("at", "reviewer", "role", "target_kind", "target", "stage", "action", "clears", "reason",
+ACTION_COLUMNS = ("at", "reviewer", "role", "target_kind", "target", "stage", "action", "clears", "revokes", "reason",
                   "reason_category", "before_status", "after_status")
 
 
