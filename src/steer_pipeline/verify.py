@@ -12,7 +12,7 @@ from .numbers import UNITS, find_numbers
 
 GATE_VERSION = "gate-1"
 # a pass carrying any of these is not clean: a reviewer must look before it counts as verified
-REVIEW_WARNINGS = ("LAYOUT_CHECK_NEEDED", "SHORT_QUOTE", "HEDGE_DROPPED")
+REVIEW_WARNINGS = ("LAYOUT_CHECK_NEEDED", "SHORT_QUOTE", "HEDGE_DROPPED", "TABLE_TEXT")
 MIN_WORDS = 5
 
 
@@ -130,6 +130,8 @@ def check_claim(claim: dict, docs: dict[str, _Doc], min_words: int = MIN_WORDS) 
     }
     if not reasons:
         result["from_table_text"] = all(m["from_table_text"] for m in matches)
+        if result["from_table_text"]:  # a row alone cannot show which column is which group or what is measured
+            warnings.append(_reason("TABLE_TEXT", "matched only in table text: check the column headers on the page"))
         for m in matches:
             for w in d.layout_warnings(m["line_ids"]):
                 if w not in warnings:
@@ -145,13 +147,14 @@ def verify(claims: list[dict], documents: list[dict], min_words: int = MIN_WORDS
     layout = sum(flagged(r, "LAYOUT_CHECK_NEEDED") for r in results)
     short = sum(flagged(r, "SHORT_QUOTE") for r in results)
     hedge = sum(flagged(r, "HEDGE_DROPPED") for r in results)
+    table = sum(flagged(r, "TABLE_TEXT") for r in results)
     review = sum(any(flagged(r, c) for c in REVIEW_WARNINGS) for r in results)
     return {
         "gate_version": GATE_VERSION,
         "min_words": min_words,
         # a pass that needs a layout check is not a verified claim until a reviewer compares it with the page
         "summary": {"claims": len(results), "passed": passed, "passed_clean": passed - review,
-                    "needs_layout_check": layout, "short_quote": short, "hedge_dropped": hedge,
+                    "needs_layout_check": layout, "short_quote": short, "hedge_dropped": hedge, "table_text": table,
                     "rejected": len(results) - passed},
         "results": results,
     }

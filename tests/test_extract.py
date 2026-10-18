@@ -182,6 +182,20 @@ def test_narayan_context_fields_and_gate():
 
 
 @pytest.mark.network
+def test_narayan_table_row_is_not_clean():
+    from steer_pipeline.fetch import fetch
+    from steer_pipeline.verify import verify
+    doc = fetch("PMC8006839", "evidence")
+    q = "Log HOMA-­IR (per SD) 2.67 (2.05 to 3.48) 14.55 (11.11 to 19.07) 34.64 (27.63 to 43.42)"
+    c = {"claim_id": "t", "text": "Log HOMA-IR per SD: 2.67 (2.05 to 3.48), 14.55 (11.11 to 19.07), 34.64 (27.63 to 43.42).",
+         "document_id": doc["document_id"], "quote": q}
+    r = verify([c], [doc])
+    assert r["results"][0]["status"] == "pass" and r["results"][0]["from_table_text"] is True
+    assert "TABLE_TEXT" in [w["code"] for w in r["results"][0]["warnings"]]
+    assert r["summary"]["passed_clean"] == 0
+
+
+@pytest.mark.network
 def test_narayan_same_statistic_from_two_sentences():
     # the men's 2.09 to 4.28 interval: the abstract sentence names no comparator for men; the results
     # sentence does ("as compared with US whites"). comparison_group may only come from the quoted sentence.
@@ -207,3 +221,15 @@ def test_narayan_same_statistic_from_two_sentences():
     assert r0["comparison_group"] == "US whites" and r0["flags"] == []       # the results sentence does
     assert a0["gate"]["matches"][0]["sids"] == ["p0001-s0027"]
     assert r0["gate"]["matches"][0]["sids"] == ["p0005-s0003"]
+
+
+def test_context_fields_are_checked_word_by_word():
+    q = "After 52 weeks, the change in lean mass as a proportion of total weight was higher 2.53%."
+    ok = claim("Lean mass share rose 2.53%.", q, outcome="lean mass as a proportion of total weight", time_point="52 weeks")
+    assert ex.code_flags(ok) == []
+    made_up = claim("Lean mass share rose 2.53%.", q, time_point="median 8.8 years")
+    assert [f["code"] for f in ex.code_flags(made_up)] == ["CONTEXT_NOT_IN_QUOTE"]
+    # the D-018 case: "white men" against a quote that says "US whites" (the word "men" is missing)
+    d018 = claim("Men had 2.99 times the risk.", "risk of diabetes in men was 3 times higher in South Asians "
+                 "(IRR 2.99 (2.09 to 4.28)) as compared with US whites.", comparison_group="white men")
+    assert [f["code"] for f in ex.code_flags(d018)] == ["CONTEXT_NOT_IN_QUOTE"]

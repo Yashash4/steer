@@ -54,7 +54,7 @@ Rules:
   set hedged to true and keep the hedge in claim_text.
 - population: who was studied, as the quote or section says; null if not stated.
 - outcome, comparison_group, time_point, limitations: fill ONLY when the quote itself states them,
-  otherwise null. Never infer a comparison group the quote does not name.
+  using the quote's own words, otherwise null. Never infer a comparison group the quote does not name.
 - Skip references, author lists, funding, figure labels and table headers. Prefer results, numbers,
   limitations and populations.
 - If the section has no claims worth keeping, return an empty list."""
@@ -102,6 +102,16 @@ def chunk_prompt(doc: dict, chunk: list[dict]) -> str:
     return f"Paper: {title}\nSection ({where}):\n\n{body}"
 
 
+def missing_words(value: str, text: str) -> list[str]:
+    """Words of `value` (3+ letters, or numbers) that do not occur in `text`, both in canonical form.
+
+    Word-level, so a field may reorder or paraphrase the text's own words ("lean mass as a proportion
+    of total weight") but may not add any ("white men" against a quote that says "US whites").
+    """
+    have = set(re.findall(r"[^\W_]+", canonical(text)[0]))
+    return [w for w in re.findall(r"[^\W_]+", canonical(value)[0]) if (len(w) >= 3 or w.isdigit()) and w not in have]
+
+
 def quote_hedged(quote: str) -> bool:
     return bool(MODAL_HEDGE.search(quote) or NUMBER_HEDGE.search(quote))
 
@@ -120,20 +130,14 @@ def code_flags(claim: dict, section: str | None = None) -> list[dict]:
                       "detail": f"the claim says {CAUSAL.search(text).group(0)!r}; the quote states no cause"})
     if quote_hedged(quote) and not claim["hedged"]:  # only the dangerous direction: a hedge the model missed
         flags.append({"code": "HEDGE_MISMATCH", "detail": "the quote is hedged; the model says hedged=false"})
-    cq = canonical(quote)[0]
     for f in CONTEXT_FIELDS:
         v = claim.get(f)
-        if v and canonical(v)[0] not in cq:
-            flags.append({"code": "CONTEXT_NOT_IN_QUOTE", "detail": f"{f} {v!r} is not stated in the quote"})
+        if v and (missing := missing_words(v, quote)):
+            flags.append({"code": "CONTEXT_NOT_IN_QUOTE", "detail": f"{f} {v!r}: {', '.join(missing)} not in the quote"})
     pop = claim.get("population")
-    if pop and section is not None:
-        # word-level: every word of 3+ letters (and every number) in the population must occur in the section,
-        # so "South Asian men with BMI <25 kg/m2" passes a section that says "BMI <25 kg/m2 ... South Asian men"
-        sec = set(re.findall(r"[^\W_]+", canonical(section)[0]))
-        missing = [w for w in re.findall(r"[^\W_]+", canonical(pop)[0]) if (len(w) >= 3 or w.isdigit()) and w not in sec]
-        if missing:
-            flags.append({"code": "POPULATION_NOT_IN_SECTION",
-                          "detail": f"population {pop!r}: {', '.join(missing)} not found in the section"})
+    if pop and section is not None and (missing := missing_words(pop, section)):
+        flags.append({"code": "POPULATION_NOT_IN_SECTION",
+                      "detail": f"population {pop!r}: {', '.join(missing)} not found in the section"})
     return flags
 
 
