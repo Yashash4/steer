@@ -9,6 +9,8 @@ the ladders together until nothing overflows (scrollHeight <= clientHeight, scro
 ladders stop at the floors (body 28 px, sources 24 px): if the text still overflows there, render QA fails.
 Render QA (fails the render): no overflow, body >= 28 px, sources >= 24 px, <= 35 body words per slide (counted
 from the post's lines), <= 3 sources per sources slide, every claim used is on a sources slide, PNG size exact.
+Line art (lineart.py) is decoration chosen by code per slide; render QA fails if its box touches a text box
+(LINEART_OVER_TEXT) or a food drawing sits on a slide with a health line or a number (LINEART_FOOD_ON_HEALTH).
 Labels (draft mark, wordmark, slide number, the short source under a health card) are not body text.
 
 The browser lives in code/.browsers (PLAYWRIGHT_BROWSERS_PATH), installed with
@@ -22,6 +24,8 @@ import re
 import struct
 import tempfile
 from pathlib import Path
+
+from . import lineart
 
 CODE = Path(__file__).resolve().parents[2]
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(CODE / ".browsers"))
@@ -53,6 +57,22 @@ FIT_JS = """() => {
   return {step: i, overflow: !fits(),
           boxes: boxes.map(b => ({kind: b.dataset.kind, px: parseFloat(getComputedStyle(b).fontSize)}))};
 }"""
+
+
+TEXT_BOXES_JS = """() => { const out = [], w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n; (n = w.nextNode());) { if (!n.textContent.trim()) continue; const r = document.createRange(); r.selectNodeContents(n);
+    for (const q of r.getClientRects()) if (q.width > 0) out.push([q.left, q.top, q.right, q.bottom]); }
+  document.querySelectorAll('.card, .rule').forEach(e => { const q = e.getBoundingClientRect(); out.push([q.left, q.top, q.right, q.bottom]); });
+  return out; }"""
+ADD_ART_JS = """([src, box]) => { const i = document.createElement('img'); i.src = src; i.className = 'lineart';
+  i.style.cssText = `position:absolute;left:${box[0]}px;top:${box[1]}px;width:${box[2] - box[0]}px;height:${box[3] - box[1]}px;pointer-events:none`;
+  document.body.insertBefore(i, document.body.firstChild); return i.decode(); }"""
+
+
+def _art(lines: list[dict], unit: dict, bold: bool) -> dict:
+    """What lineart.choose needs from a slide: its words (incl. the key number), whether it has a health line."""
+    texts = [ln["text"] for ln in lines] + [unit[k] for k in ("key_number", "key_label") if unit.get(k)]
+    return {"texts": texts, "has_health": any(ln["kind"] == "health" for ln in lines), "eligible": True, "bold": bold}
 
 
 def _css(p: dict, w: int = W, h: int = H) -> str:
@@ -215,6 +235,7 @@ def build_pages(record: dict, brand: dict, draft: bool = True) -> list[dict]:
             pages.append({"name": f"slide-{i + 1:02}.png", "kind": "slide",
                           "words": sum(len(ln["text"].split()) for ln in sl["lines"]),
                           "claim_ids": sorted({c for ln in sl["lines"] for c in ln["claim_ids"]}),
+                          "art": _art(sl["lines"], sl, sl["role"] == "brand"),
                           "html": _page(p, _lines_html(sl["lines"], sl, by_claim, sl["role"] == "hook"), i + 1, total,
                                         bold=sl["role"] == "brand")})
         for j, chunk in enumerate(chunks):
@@ -232,7 +253,7 @@ def build_pages(record: dict, brand: dict, draft: bool = True) -> list[dict]:
         content = (_lines_html(lines, st, by_claim, hook=st["headline"]["kind"] == "framing")
                    + _fit("sources", "srcline", "Source: " + src))
         pages.append({"name": "static.png", "kind": "static", "words": sum(len(ln["text"].split()) for ln in lines),
-                      "claim_ids": sorted({c for e in entries for c in e["claim_ids"]}),
+                      "claim_ids": sorted({c for e in entries for c in e["claim_ids"]}), "art": _art(lines, st, False),
                       "html": _page(p, content, 1, 1)})
     if not draft:   # the publishable re-render: no draft mark, the reviewed footnote
         for pg in pages:
@@ -258,6 +279,9 @@ def render(record: dict, brand: dict, out_dir: Path, draft: bool = True) -> dict
                   | {i for ln in ([record["post"]["static"]["headline"], *record["post"]["static"]["supporting"]]
                                   if record["post"].get("static") else []) for i in ln["claim_ids"]})
     listed = {c for pg in pages if pg["kind"] in ("sources", "static") for c in pg["claim_ids"]}
+    brief = record.get("brief") or {}
+    art = lineart.choose([pg["art"] if "art" in pg else {"texts": [], "has_health": False, "eligible": False} for pg in pages],
+                         brief.get("theme") or "", brief.get("doubt") or "")
     report = []
     with tempfile.TemporaryDirectory(prefix="steer-render-") as tmp, sync_playwright() as pw:
         tmp = Path(tmp)
@@ -272,8 +296,25 @@ def render(record: dict, brand: dict, out_dir: Path, draft: bool = True) -> dict
             page.evaluate("document.fonts.ready")
             fit = page.evaluate(FIT_JS)
             png = out_dir / pg["name"]
+            fails, drawn = [], None
+            if pages.index(pg) in art:
+                id_, boxes = art[pages.index(pg)], page.evaluate(TEXT_BOXES_JS)
+                d = lineart.drawing(id_)
+                x0, y0, x1, y1 = lineart.bbox(d)
+                box = lineart.place((y1 - y0) / (x1 - x0), boxes, W, H)
+                if box:
+                    pal = brand["palette"]; ink = pal["cream"] if pg["art"]["bold"] else pal["ink"]
+                    art_png = tmp / f"{pg['name']}.lineart.png"
+                    lineart.draw_png(pw, [(id_, ink, round(box[2] - box[0]), art_png)])
+                    pad = 12   # the PNG's margin around the drawing's own bounding box (lineart.draw_png)
+                    page.evaluate(ADD_ART_JS, [art_png.as_uri(), [box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad]])
+                    drawn = {"id": id_, "box": box, "ink": ink}
+                    if lineart.overlaps(box, page.evaluate(TEXT_BOXES_JS)):
+                        fails.append("LINEART_OVER_TEXT")
+                    if next(e for e in lineart.index() if e["id"] == id_)["food"] and not lineart.food_allowed(
+                            pg["art"]["texts"], pg["art"]["has_health"]):
+                        fails.append("LINEART_FOOD_ON_HEALTH")
             page.screenshot(path=str(png))
-            fails = []
             if fit["overflow"]:
                 fails.append("TEXT_OVERFLOW")
             for kind, floor in FLOORS.items():
@@ -290,7 +331,7 @@ def render(record: dict, brand: dict, out_dir: Path, draft: bool = True) -> dict
             report.append({"png": pg["name"], "kind": pg["kind"], "words": pg["words"], "min_body_px": px("body"),
                            "min_sources_px": px("sources"), "min_headline_px": px("headline"),
                            "fit_step": fit["step"], "overflow": fit["overflow"], "size": list(png_size(png)),
-                           "failures": fails})
+                           "lineart": drawn, "failures": fails})
         browser.close()
     missing = [i for i in used if i not in listed]
     result = {"status": "failed" if missing or any(r["failures"] for r in report) else "passed",

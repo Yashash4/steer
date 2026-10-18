@@ -119,7 +119,8 @@ def render_post(folder: str | Path, brand: dict | None = None) -> dict:
     record = json.loads((folder / "post.json").read_text())
     qa = draw(record, brand or load_brand(), folder)
     record["render"] = {"status": qa["status"], "missing_sources": qa["missing_sources"],
-                        "pngs": [r["png"] for r in qa["pages"]]}
+                        "pngs": [r["png"] for r in qa["pages"]],
+                        "lineart": {r["png"]: r["lineart"] for r in qa["pages"] if r.get("lineart")}}
     (folder / "post.json").write_text(json.dumps(record, ensure_ascii=False, indent=1), encoding="utf-8")
     return record["render"]
 

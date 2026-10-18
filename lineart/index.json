@@ -6,7 +6,7 @@
   {"id": "thali", "file": "thali.json", "topic_tags": ["meal", "diet", "thali", "nutrition", "lunch"], "food": true},
   {"id": "walking_shoes", "file": "walking_shoes.json", "topic_tags": ["walking", "exercise", "steps", "activity"], "food": false},
   {"id": "family_table", "file": "family_table.json", "topic_tags": ["family", "dinner", "meal", "eating together"], "food": true},
-  {"id": "doctor_tablet", "file": "doctor_tablet.json", "topic_tags": ["doctor", "records", "checkup", "screening", "digital health"], "food": false},
+  {"id": "doctor_tablet", "file": "doctor_tablet.json", "topic_tags": ["doctor", "records", "checkup", "screening", "blood test", "digital health"], "food": false},
   {"id": "two_hands", "file": "two_hands.json", "topic_tags": ["support", "care", "community", "trust"], "food": false},
   {"id": "stethoscope", "file": "stethoscope.json", "topic_tags": ["doctor", "heart", "checkup", "clinic"], "food": false}
 ]
