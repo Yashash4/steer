@@ -191,6 +191,8 @@ def write_prompt(brief: dict, claims: list[dict], brand: dict, boundaries: dict)
             lines.append(f"- the why line: {reel['why']}")
         if reel.get("meaning"):
             lines.append(f"- the meaning line: {reel['meaning']}")
+        if reel.get("message"):
+            lines.append(f"- the message and caption: {reel['message']}")
         if reel.get("brand_line"):
             lines.append(f"- the brand line must be exactly: {reel['brand_line']}")
     lines += ["", "Brand lines (copy exactly): " + " | ".join(brand["whitelist"]),
