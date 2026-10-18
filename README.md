@@ -228,6 +228,10 @@ A model proposes claims from the paper, and the gate decides which ones are kept
   - `HEDGE_MISMATCH`: the quote is hedged but the model says it is not. Modal words ("may", "suggests",
     "likely"...) count anywhere; "about", "around", "roughly", "nearly", "approximately", "~" count only right
     before a number. A model more cautious than the quote gets a note, not a flag;
+  - `CLAIM_EXCEEDS_QUOTE`: more than 30% of the claim's content words (3+ letters, not stopwords, crudely
+    stemmed) are not in the quote. The claim adds scope, context from elsewhere or interpretation. An
+    abbreviation the paper defines ("weight management medications (WMMs)", initials must match) counts as its
+    long form. The threshold was measured on the first live run: it caught all 4 known overreaches;
   - `CONTEXT_NOT_IN_QUOTE`: a context field the quote does not state;
   - `POPULATION_NOT_IN_SECTION`: a population word not found in the chunk's text. The population may come
     from the section, not only the quote.

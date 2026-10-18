@@ -25,7 +25,8 @@ def claim(text, quote, **kw):
 PAGE2 = [
     claim("352 participants completed the study.", "A total of 352 participants completed the study.",
           claim_type="number"),
-    claim("Total cholesterol changed by −5.4 mg/dl with almonds.",  # "lowered by 5.4" would fail: the sign must match
+    claim("Total cholesterol changed by −5.4 mg/dl in the intervention group compared to the control group.",
+          # "lowered by 5.4" would fail: the sign must match
           "total cholesterol (−5.4 mg/dl (−10.2, −0.6); p = 0.03) in the intervention group compared to the control group",
           direction="decrease", comparison_group="control group"),
     claim("325 participants completed the study.", "A total of 352 participants completed the study."),   # changed number
@@ -62,15 +63,16 @@ def test_extract_keeps_only_verified_claims(two):
                          PAGE2[5]["claim_text"]}
     first = kept[PAGE2[0]["claim_text"]]
     assert first["gate"]["matches"][0]["sids"] == ["p0002-s0002"] and first["flags"] == []
-    assert [f["code"] for f in kept[PAGE2[4]["claim_text"]]["flags"]] == ["CAUSAL_WORDING"]
+    assert [f["code"] for f in kept[PAGE2[4]["claim_text"]]["flags"]] == ["CLAIM_EXCEEDS_QUOTE", "CAUSAL_WORDING"]
     ctx = [f["code"] for f in kept[PAGE2[5]["claim_text"]]["flags"]]
-    assert ctx == ["CONTEXT_NOT_IN_QUOTE"]
+    assert ctx == ["CLAIM_EXCEEDS_QUOTE", "CONTEXT_NOT_IN_QUOTE"]
     # passed means clean: flagged claims are in needs_check with their reasons, never in passed
     passed = {c["claim_text"] for c in run["passed"]}
     assert PAGE2[4]["claim_text"] not in passed and PAGE2[5]["claim_text"] not in passed
     nc = {c["claim_text"]: c["review_reasons"] for c in run["needs_check"]}
-    assert nc[PAGE2[4]["claim_text"]] == ["CAUSAL_WORDING"] and nc[PAGE2[5]["claim_text"]] == ["CONTEXT_NOT_IN_QUOTE"]
-    assert s["needs_check_by_reason"] == {"CAUSAL_WORDING": 1, "CONTEXT_NOT_IN_QUOTE": 1}
+    assert nc[PAGE2[4]["claim_text"]] == ["CAUSAL_WORDING", "CLAIM_EXCEEDS_QUOTE"]
+    assert nc[PAGE2[5]["claim_text"]] == ["CLAIM_EXCEEDS_QUOTE", "CONTEXT_NOT_IN_QUOTE"]
+    assert s["needs_check_by_reason"] == {"CAUSAL_WORDING": 1, "CLAIM_EXCEEDS_QUOTE": 2, "CONTEXT_NOT_IN_QUOTE": 1}
     assert passed == {PAGE2[0]["claim_text"], PAGE2[1]["claim_text"]}
     assert kept[PAGE2[1]["claim_text"]]["flags"] == []  # "control group" is stated in the quote
     # nothing unverified is stored as passed
@@ -102,10 +104,14 @@ def test_oversize_chunk_is_split_never_sent(two, monkeypatch):
     assert max(seen) <= 2000 + 4000  # chunk text plus the short title/header
 
 
+def others(flags):
+    """Flag codes other than CLAIM_EXCEEDS_QUOTE (tests of the other flags use short paraphrases)."""
+    return [f["code"] for f in flags if f["code"] != "CLAIM_EXCEEDS_QUOTE"]
+
+
 def test_hedge_mismatch_and_lean_mass_flags():
     c = claim("Weight training may protect muscle.", "approximately 20% of the lost weight was lean mass", hedged=False)
-    codes = [f["code"] for f in ex.code_flags(c)]
-    assert codes == ["LEAN_MASS_WORDING", "HEDGE_MISMATCH"]
+    assert others(ex.code_flags(c)) == ["LEAN_MASS_WORDING", "HEDGE_MISMATCH"]
     ok = claim("About 20% of the lost weight was lean mass.", "approximately 20% of the lost weight was lean mass",
                hedged=True)
     assert ex.code_flags(ok) == []
@@ -125,17 +131,16 @@ def test_hedge_words_only_before_numbers():
 def test_population_must_come_from_the_section():
     c = claim("352 adults completed the study.", "A total of 352 participants completed the study.",
               population="Asian Indian adults")
-    assert ex.code_flags(c, "Among Asian Indian adults with overweight, a total of 352 participants completed.") == []
-    assert ex.code_flags(c, "Adults (all Asian Indian) took part; a total of 352 participants completed.") == []
-    assert [f["code"] for f in ex.code_flags(c, "A total of 352 participants completed the study.")] == [
-        "POPULATION_NOT_IN_SECTION"]
+    assert others(ex.code_flags(c, "Among Asian Indian adults with overweight, a total of 352 participants completed.")) == []
+    assert others(ex.code_flags(c, "Adults (all Asian Indian) took part; a total of 352 participants completed.")) == []
+    assert others(ex.code_flags(c, "A total of 352 participants completed the study.")) == ["POPULATION_NOT_IN_SECTION"]
 
 
 def test_causal_wording_without_association_word():
     # planted error E3: the quote states a rate ratio, not a cause, and never says "associated"
     q = "and 5.3 times (3.64 to 7.54) in South Asian women than in white women."
     flags = ex.code_flags(claim("South Asian ethnicity causes diabetes, 5.3 times (3.64 to 7.54) more often.", q))
-    assert [f["code"] for f in flags] == ["CAUSAL_WORDING"]
+    assert others(flags) == ["CAUSAL_WORDING"]
 
 
 def test_failed_chunk_is_recorded_not_hidden(two):
@@ -226,10 +231,35 @@ def test_narayan_same_statistic_from_two_sentences():
 def test_context_fields_are_checked_word_by_word():
     q = "After 52 weeks, the change in lean mass as a proportion of total weight was higher 2.53%."
     ok = claim("Lean mass share rose 2.53%.", q, outcome="lean mass as a proportion of total weight", time_point="52 weeks")
-    assert ex.code_flags(ok) == []
+    assert others(ex.code_flags(ok)) == []
     made_up = claim("Lean mass share rose 2.53%.", q, time_point="median 8.8 years")
-    assert [f["code"] for f in ex.code_flags(made_up)] == ["CONTEXT_NOT_IN_QUOTE"]
+    assert others(ex.code_flags(made_up)) == ["CONTEXT_NOT_IN_QUOTE"]
     # the D-018 case: "white men" against a quote that says "US whites" (the word "men" is missing)
     d018 = claim("Men had 2.99 times the risk.", "risk of diabetes in men was 3 times higher in South Asians "
                  "(IRR 2.99 (2.09 to 4.28)) as compared with US whites.", comparison_group="white men")
-    assert [f["code"] for f in ex.code_flags(d018)] == ["CONTEXT_NOT_IN_QUOTE"]
+    assert others(ex.code_flags(d018)) == ["CONTEXT_NOT_IN_QUOTE"]
+
+
+def test_claim_exceeding_its_quote_is_flagged():
+    q = "We suggest that lean mass loss should not be considered a limitation for the use of these drugs in patients with obesity."
+    faithful = claim("Lean mass loss should not be considered a limitation for the use of these drugs in patients with obesity.",
+                     q, hedged=True)
+    assert ex.code_flags(faithful) == []
+    added = claim("The authors suggest lean mass loss should not be considered a limitation for using these drugs in "
+                  "patients with obesity, but that drug treatment should be accompanied by nutritional and physical "
+                  "exercise interventions.", q, hedged=True)  # Laverde 2 from the first live run
+    assert "CLAIM_EXCEEDS_QUOTE" in [f["code"] for f in ex.code_flags(added)]
+
+
+def test_defined_acronyms_count_as_their_long_form():
+    text = ("Real world use of weight management medications (WMMs) is rising. Behavioural weight management "
+            "programmes (BWMPs) are common. Fake things here (FTX) do not match.")
+    defined = ex.acronyms(text)
+    assert defined.keys() == {"WMM", "BWMP"}  # FTX: the initials of "Fake things here" do not spell it
+    q = "Real world observations estimate that around 50% of people with obesity discontinue WMMs within 12 months"
+    c = "Real world observations estimate that around 50% of people with obesity discontinue weight management medications within 12 months"
+    assert ex.exceeds_quote(c, q, defined)[1] == []
+    assert ex.exceeds_quote(c, q)[1] == ["weight", "management", "medication"]  # without the definitions
+    undefined = "discontinue XYZ within 12 months"
+    assert ex.exceeds_quote("discontinue weight management medications within 12 months", undefined, defined)[1] == [
+        "weight", "management", "medication"]

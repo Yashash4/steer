@@ -16,6 +16,8 @@ from .verify import REVIEW_WARNINGS, _Doc, check_claim
 CHUNK_SENTENCES = 40      # sentences per chunk when a document has no pages
 CHUNK_MAX_CHARS = 30_000  # a chunk prompt above this is split; far below the CLI and API limits
 CONCURRENCY = 2           # parallel model calls (the Claude subscription limit is shared)
+EXCEEDS_QUOTE_RATIO = 0.30  # share of claim words missing from the quote above which the claim needs review
+                            # (measured on the first live run: the lowest of 4 known overreaches scored 0.31)
 
 CLAIM_TYPES = ["finding", "number", "limitation", "population", "method"]
 DIRECTIONS = ["increase", "decrease", "no_difference", "association", "other"]
@@ -44,6 +46,9 @@ SYSTEM = """You extract claims from one section of a scientific paper for a doct
 
 Rules:
 - Each claim is ONE fact stated in this section, rewritten in plain English as claim_text.
+- claim_text may only restate what the quote itself says: no added scope, no context taken from elsewhere
+  in the section, no interpretation. If the quote does not say what a number measures, choose a longer quote
+  that does, or skip the claim.
 - quote must be copied character for character from the section text: one contiguous passage, no ellipsis,
   no changes, long enough to show what any number measures (a full sentence is best).
 - Every number in claim_text must appear in the quote with the same value, sign, unit and comparison.
@@ -102,6 +107,53 @@ def chunk_prompt(doc: dict, chunk: list[dict]) -> str:
     return f"Paper: {title}\nSection ({where}):\n\n{body}"
 
 
+STOPWORDS = set("""the and for with that this from were was are been has have had its their there than then also
+into over under after before which while who whom what when where why how not but all any each per can may might
+could would should will one two three study studies""".split())
+
+
+def _stem(w: str) -> str:
+    for suf in ("ing", "ed", "es", "s", "ly"):
+        if len(w) > len(suf) + 3 and w.endswith(suf):
+            return w[:-len(suf)]
+    return w
+
+
+def _content_words(text: str) -> list[str]:
+    return [_stem(w) for w in re.findall(r"[^\W\d_]{3,}", canonical(text)[0]) if w not in STOPWORDS]
+
+
+DEFINITION = re.compile(r"((?:[A-Za-z][A-Za-z-]*\s+){1,8})\(([A-Z][A-Z]{1,8})s?\)")
+
+
+def acronyms(text: str) -> dict[str, set[str]]:
+    """The paper's own definitions, "Long Form (ABBR)": ABBR -> stemmed words of its long form.
+
+    Only definitions whose long-form word initials spell the abbreviation count
+    ("weight management medications (WMMs)" -> WMM); anything else is ignored.
+    """
+    out: dict[str, set[str]] = {}
+    for m in DEFINITION.finditer(text):
+        abbr, words = m.group(2), m.group(1).split()
+        long_form = words[-len(abbr):]
+        if len(long_form) == len(abbr) and "".join(w[0] for w in long_form).upper() == abbr:
+            out.setdefault(abbr, set()).update(_content_words(" ".join(long_form)))
+    return out
+
+
+def exceeds_quote(claim_text: str, quote: str, defined: dict[str, set[str]] | None = None) -> tuple[float, list[str]]:
+    """Share of the claim's content words (3+ letters, not stopwords, crudely stemmed) missing from the quote.
+
+    A word also counts as present when the quote uses an abbreviation the paper defines with it.
+    """
+    claim, have = _content_words(claim_text), set(_content_words(quote))
+    for abbr, words in (defined or {}).items():
+        if re.search(rf"\b{abbr}s?\b", quote):
+            have |= words
+    missing = [w for w in claim if w not in have]
+    return len(missing) / max(1, len(claim)), missing
+
+
 def missing_words(value: str, text: str) -> list[str]:
     """Words of `value` (3+ letters, or numbers) that do not occur in `text`, both in canonical form.
 
@@ -116,7 +168,7 @@ def quote_hedged(quote: str) -> bool:
     return bool(MODAL_HEDGE.search(quote) or NUMBER_HEDGE.search(quote))
 
 
-def code_flags(claim: dict, section: str | None = None) -> list[dict]:
+def code_flags(claim: dict, section: str | None = None, defined: dict[str, set[str]] | None = None) -> list[dict]:
     """Flags code adds to a passed claim (never rejections): wording the quote does not support.
 
     `section` is the chunk text; population is the one field allowed from the section, not the quote.
@@ -125,6 +177,10 @@ def code_flags(claim: dict, section: str | None = None) -> list[dict]:
     flags = []
     if MUSCLE.search(text) and LEAN.search(quote) and not MUSCLE.search(quote):
         flags.append({"code": "LEAN_MASS_WORDING", "detail": "the claim says muscle; the quote says lean or fat-free mass"})
+    ratio, extra = exceeds_quote(text, quote, defined)
+    if ratio > EXCEEDS_QUOTE_RATIO:
+        flags.append({"code": "CLAIM_EXCEEDS_QUOTE",
+                      "detail": f"{ratio:.0%} of the claim's words are not in the quote: {', '.join(extra[:12])}"})
     if CAUSAL.search(text) and not CAUSAL.search(quote):
         flags.append({"code": "CAUSAL_WORDING",
                       "detail": f"the claim says {CAUSAL.search(text).group(0)!r}; the quote states no cause"})
@@ -154,6 +210,7 @@ def extract(doc: dict, router: Router, concurrency: int = CONCURRENCY) -> dict:
         raise ValueError(f"extraction needs an evidence document, got role {doc['source']['role']!r}")
     chunks = chunk_sentences(doc)
     prepared = _Doc(doc)
+    defined = acronyms(doc["text"])
 
     def run_chunk(i: int) -> dict:
         prompt = chunk_prompt(doc, chunks[i])
@@ -180,7 +237,7 @@ def extract(doc: dict, router: Router, concurrency: int = CONCURRENCY) -> dict:
             if gate["status"] == "reject":
                 rejected.append(item)
                 continue
-            item["flags"] = code_flags(c, " ".join(s["text"] for s in chunks[rec["index"]]))
+            item["flags"] = code_flags(c, " ".join(s["text"] for s in chunks[rec["index"]]), defined)
             if note := hedge_note(c):
                 item["note"] = note
             # passed means clean: no review warning from the gate and no code flag
