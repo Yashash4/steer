@@ -15,7 +15,7 @@ CODE = Path(__file__).resolve().parents[2]
 LA = CODE / "lineart"
 MAX_PER_POST = 2
 WIDTHS = (520, 440, 370, 310, 260)   # displayed width of the drawing's own bounding box, largest first
-PAD = 30                             # clear space between the drawing and any text box
+PAD = 48                             # min gap between the drawing and any text box (footer wordmark and page counter included)
 BLEED = 0.15                         # at most this share of the drawing may run off the slide edge
 STEP = 20
 
@@ -39,9 +39,22 @@ def _words(text: str) -> str:
     return " " + " ".join(re.findall(r"[a-z]+", text.lower())) + " "
 
 
+# Words that name a health outcome. One list, shared: a food drawing never sits beside a line that uses one
+# (it would imply a cause), and the reel can reuse names_outcome(). Prefix match on whole words ("diabet" = diabetes, diabetic).
+OUTCOME_WORDS = ("diabet", "weight", "obes", "bmi", "body mass", "blood sugar", "sugar level", "glucose", "insulin", "hba1c",
+                 "cholesterol", "blood pressure", "hypertension", "heart", "stroke", "cancer", "kidney", "liver", "risk",
+                 "side effect", "disease", "mortality", "death", "lean mass", "muscle", "fat mass", "inflammation", "fatty")
+
+
+def names_outcome(text: str) -> bool:
+    words = _words(text)
+    return any(re.search(r"\b" + w + r"\w*\b", words) for w in OUTCOME_WORDS)
+
+
 def food_allowed(texts: list[str], has_health: bool) -> bool:
-    """A food drawing next to a health line or a number would imply a cause: it goes only on number-free, health-free slides."""
-    return not has_health and not any(re.search(r"\d", t) for t in texts)
+    """A food drawing next to a health line, a number or any line naming a health outcome would imply a cause: it goes
+    only on slides with no health line, no digit and no outcome word."""
+    return not has_health and not any(re.search(r"\d", t) or names_outcome(t) for t in texts)
 
 
 def score(entry: dict, theme_words: str, slide_text: str) -> int:
@@ -52,17 +65,23 @@ def score(entry: dict, theme_words: str, slide_text: str) -> int:
 
 def choose(slides: list[dict], theme: str = "", doubt: str = "") -> dict[int, str]:
     """{slide index: drawing id}. slides: [{"texts": [...], "has_health": bool, "eligible": bool}]. Deterministic:
-    best score (> 0), ties by id, each drawing at most once per post, at most MAX_PER_POST drawings."""
+    every (slide, drawing) pair with a tag hit is ranked by score, then slide order, then drawing id; take pairs in
+    that order, at most one drawing per slide, each drawing once per post, at most MAX_PER_POST drawings."""
     theme_words = _words(f"{theme} {doubt}")
-    out: dict[int, str] = {}
+    pairs = []
     for i, sl in enumerate(slides):
-        if not sl["eligible"] or len(out) >= MAX_PER_POST:
+        if not sl["eligible"]:
             continue
         text = _words(" ".join(sl["texts"]))
-        ok = [e for e in index() if (not e["food"] or food_allowed(sl["texts"], sl["has_health"])) and e["id"] not in out.values()]
-        ranked = sorted(((-score(e, theme_words, text), e["id"]) for e in ok))
-        if ranked and ranked[0][0] < 0:
-            out[i] = ranked[0][1]
+        for e in index():
+            if e["food"] and not food_allowed(sl["texts"], sl["has_health"]):
+                continue
+            if (n := score(e, theme_words, text)) > 0:
+                pairs.append((-n, i, e["id"]))
+    out: dict[int, str] = {}
+    for _, i, id_ in sorted(pairs):
+        if len(out) < MAX_PER_POST and i not in out and id_ not in out.values():
+            out[i] = id_
     return out
 
 

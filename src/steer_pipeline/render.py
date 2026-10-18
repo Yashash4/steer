@@ -72,7 +72,8 @@ ADD_ART_JS = """([src, box]) => { const i = document.createElement('img'); i.src
 def _art(lines: list[dict], unit: dict, bold: bool) -> dict:
     """What lineart.choose needs from a slide: its words (incl. the key number), whether it has a health line."""
     texts = [ln["text"] for ln in lines] + [unit[k] for k in ("key_number", "key_label") if unit.get(k)]
-    return {"texts": texts, "has_health": any(ln["kind"] == "health" for ln in lines), "eligible": True, "bold": bold}
+    return {"texts": texts, "has_health": any(ln["kind"] == "health" for ln in lines), "bold": bold,
+            "eligible": not any(ln["kind"] == "health" for ln in lines)}   # the evidence card stays clean: art goes on framing/brand/cta slides
 
 
 def _css(p: dict, w: int = W, h: int = H) -> str:
@@ -309,7 +310,7 @@ def render(record: dict, brand: dict, out_dir: Path, draft: bool = True) -> dict
                     pad = 12   # the PNG's margin around the drawing's own bounding box (lineart.draw_png)
                     page.evaluate(ADD_ART_JS, [art_png.as_uri(), [box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad]])
                     drawn = {"id": id_, "box": box, "ink": ink}
-                    if lineart.overlaps(box, page.evaluate(TEXT_BOXES_JS)):
+                    if lineart.overlaps(box, page.evaluate(TEXT_BOXES_JS), lineart.PAD):   # min gap, not just no touching
                         fails.append("LINEART_OVER_TEXT")
                     if next(e for e in lineart.index() if e["id"] == id_)["food"] and not lineart.food_allowed(
                             pg["art"]["texts"], pg["art"]["has_health"]):

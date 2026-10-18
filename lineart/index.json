@@ -1,12 +1,12 @@
 [
-  {"id": "dna", "file": "dna.json", "topic_tags": ["genetics", "dna", "inheritance", "biology"], "food": false},
-  {"id": "cells", "file": "cells.json", "topic_tags": ["cells", "biology", "immune", "cancer"], "food": false},
-  {"id": "chai", "file": "chai.json", "topic_tags": ["tea", "chai", "caffeine", "sugar", "morning"], "food": true},
-  {"id": "roti_stack", "file": "roti_stack.json", "topic_tags": ["roti", "bread", "carbohydrate", "wheat", "diet"], "food": true},
-  {"id": "thali", "file": "thali.json", "topic_tags": ["meal", "diet", "thali", "nutrition", "lunch"], "food": true},
-  {"id": "walking_shoes", "file": "walking_shoes.json", "topic_tags": ["walking", "exercise", "steps", "activity"], "food": false},
-  {"id": "family_table", "file": "family_table.json", "topic_tags": ["family", "dinner", "meal", "eating together"], "food": true},
-  {"id": "doctor_tablet", "file": "doctor_tablet.json", "topic_tags": ["doctor", "records", "checkup", "screening", "blood test", "digital health"], "food": false},
-  {"id": "two_hands", "file": "two_hands.json", "topic_tags": ["support", "care", "community", "trust"], "food": false},
-  {"id": "stethoscope", "file": "stethoscope.json", "topic_tags": ["doctor", "heart", "checkup", "clinic"], "food": false}
+  {"id": "dna", "file": "dna.json", "topic_tags": ["genetics", "dna", "gene", "genes", "inheritance", "inherited", "family history", "south asian", "biology", "born"], "food": false},
+  {"id": "cells", "file": "cells.json", "topic_tags": ["cells", "cell", "biology", "immune", "cancer", "insulin", "resistance", "metabolism", "body", "fat"], "food": false},
+  {"id": "chai", "file": "chai.json", "topic_tags": ["tea", "chai", "caffeine", "sugar", "morning", "habit", "habits", "break", "india", "indian"], "food": true},
+  {"id": "roti_stack", "file": "roti_stack.json", "topic_tags": ["roti", "bread", "carbohydrate", "wheat", "diet", "india", "indian", "home", "cook", "kitchen"], "food": true},
+  {"id": "thali", "file": "thali.json", "topic_tags": ["meal", "meals", "diet", "thali", "nutrition", "lunch", "plate", "eat", "eating", "food", "india", "indian"], "food": true},
+  {"id": "walking_shoes", "file": "walking_shoes.json", "topic_tags": ["walking", "walk", "exercise", "steps", "step", "activity", "move", "moving", "routine", "start", "habit", "habits", "plan"], "food": false},
+  {"id": "family_table", "file": "family_table.json", "topic_tags": ["family", "dinner", "meal", "together", "eating together", "home", "table", "share"], "food": true},
+  {"id": "doctor_tablet", "file": "doctor_tablet.json", "topic_tags": ["doctor", "records", "checkup", "check", "screening", "blood test", "test", "tests", "digital health", "data", "track", "wondering", "plan"], "food": false},
+  {"id": "two_hands", "file": "two_hands.json", "topic_tags": ["support", "care", "community", "trust", "together", "help", "programme", "program", "join", "question", "questions", "worry", "worried", "ask"], "food": false},
+  {"id": "stethoscope", "file": "stethoscope.json", "topic_tags": ["doctor", "heart", "checkup", "check", "clinic", "clinical", "listen", "advice", "ask", "question"], "food": false}
 ]

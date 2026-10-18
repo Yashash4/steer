@@ -13,7 +13,7 @@ def slide(*texts, health=False):
 
 def test_choice_is_deterministic_by_tags_and_never_a_model():
     s = [slide("Ask a doctor about your checkup"), slide("Nothing relevant here")]
-    assert lineart.choose(s, "x", "y") == lineart.choose(s, "x", "y") == {0: "doctor_tablet"}   # ties go by id
+    assert lineart.choose(s, "x", "y") == lineart.choose(s, "x", "y") == {0: "stethoscope"}   # doctor + checkup + ask beat doctor_tablet; ties go by id
 
 
 def test_food_never_on_a_health_line_or_a_number():
@@ -24,12 +24,32 @@ def test_food_never_on_a_health_line_or_a_number():
     assert not (set(lineart.choose([slide(tea + " 2 times a day")]).values()) & FOOD)   # ... a number: never
 
 
-def test_place_clears_every_text_box_and_goes_to_an_edge():
-    text = [[96, 600, 900, 760], [96, 1240, 200, 1290], [940, 1240, 990, 1290]]
-    box = lineart.place(1.4, text)
-    assert box and not lineart.overlaps(box, text, lineart.PAD)
-    assert box[3] > 1350 * 0.6 or box[0] < 0 or box[2] > 1080 - 1                  # bottom or a side
-    assert lineart.place(1.0, [[0, 0, 1080, 1350]]) is None                         # no room: no drawing
+def test_food_never_beside_a_line_naming_a_health_outcome():
+    for line in ("Normal BMI, so diabetes is far away?", "Chai and lunch: what about your cholesterol?",
+                 "Tea in the morning and your blood sugar", "Is it a heart risk? Roti for dinner", "Side effects of a family meal"):
+        assert lineart.names_outcome(line)
+        assert not (set(lineart.choose([slide(line)], "chai roti meal", "family").values()) & FOOD), line
+        assert not lineart.food_allowed([line], False)
+    for line in ("Chai with the family at home", "Wondering what to cook tonight?"):   # no outcome named: food may
+        assert not lineart.names_outcome(line) and lineart.food_allowed([line], False)
+    assert set(lineart.choose([slide("Chai with the family at home")]).values()) & FOOD
+
+
+def test_more_framing_and_cta_words_find_a_drawing_deterministically():
+    for text, want in [("See if the programme fits you", "two_hands"), ("Wondering what to ask your doctor?", None),
+                       ("Start with a walk after dinner", "walking_shoes"), ("Check your genes and DNA", "dna")]:
+        got = lineart.choose([slide(text)])
+        assert 0 in got and (want is None or got[0] == want), (text, got)
+
+
+def test_the_min_gap_is_48px_to_every_text_box_footer_included():
+    foot = [96, 1240, 200, 1290]                                  # the wordmark
+    assert lineart.PAD == 48
+    assert lineart.overlaps([300, 1100, 600, 1150], [foot], lineart.PAD) == []        # far above
+    assert lineart.overlaps([200 + 40, 1100, 600, 1350], [foot], lineart.PAD)                           # 40 px right of it: too close
+    assert not lineart.overlaps([200 + 49, 1100, 600, 1350], [foot], lineart.PAD)                       # 49 px: fine
+    box = lineart.place(1.0, [foot])
+    assert box and not lineart.overlaps(box, [foot], lineart.PAD)
 
 
 def _record(theme="doctor"):
