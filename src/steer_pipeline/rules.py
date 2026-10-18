@@ -28,6 +28,11 @@ PROMISE_PATTERNS = [  # fixed, simple patterns with numbers
     re.compile(rf"\b(lose|losing|drop|dropping|shed|shedding|burn|melt)\s+(up to\s+)?\d+(\.\d+)?\s*{_UNIT}\b", re.I),
     re.compile(r"\bin (just )?\d+\s*(days?|weeks?|months?),? you('ll| will)\b", re.I),
     re.compile(rf"\b\d+(\.\d+)?\s*{_UNIT} in (just )?\d+\s*(days?|weeks?|months?)\b", re.I),
+    # second person: a weight-loss outcome promised to the reader ("you could lose ...")
+    re.compile(r"\byou(?:'ll| will| could| can| may| might| would)?\s+(?:easily\s+)?(?:lose|drop|shed|burn)\b", re.I),
+    # percentages promised to the reader ("lose up to 15%", "lose 15% of your weight")
+    re.compile(r"\b(lose|drop|shed)\s+up to\s+\d+(\.\d+)?\s*%", re.I),
+    re.compile(r"\b(lose|drop|shed)\s+\d+(\.\d+)?\s*%\s+of\s+your\b", re.I),
 ]
 # causal wording: one list for claims (extract) and posts (here)
 CAUSAL = re.compile(r"(?<![\w-])(causes?|caused|causing|leads? to|led to|results? in|resulted in|makes? you|"
@@ -46,7 +51,11 @@ def _words(items: list[str]) -> re.Pattern | None:
 
 def check(text: str, profile: str, rules: dict, source_quote: str | None = None,
           steer_source: bool = False) -> list[dict]:
-    """Every rule hit in `text` as {code, profile, action, match, rules_version}."""
+    """Every rule hit in `text` as {code, profile, action, match, rules_version}.
+
+    Steer's own brand and call-to-action lines ("Talk to a Steer doctor") must be checked with
+    steer_source=True, or they block as STEER_TEAM_CLAIM.
+    """
     if profile not in PROFILES:
         raise ValueError(f"profile must be one of {PROFILES}, got {profile!r}")
     hits: list[tuple[str, str]] = []

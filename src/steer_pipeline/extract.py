@@ -61,6 +61,8 @@ Rules:
 - population: who was studied, as the quote or section says; null if not stated.
 - outcome, comparison_group, time_point, limitations: fill ONLY when the quote itself states them,
   using the quote's own words, otherwise null. Never infer a comparison group the quote does not name.
+  If claim_text compares with a group ("than ...", "compared with ..."), that group must be the quote's own
+  comparison_group; if the quote names no comparison group, claim_text must not name one either.
 - Skip references, author lists, funding, figure labels and table headers. Prefer results, numbers,
   limitations and populations.
 - If the section has no claims worth keeping, return an empty list."""
@@ -167,6 +169,23 @@ def quote_hedged(quote: str) -> bool:
     return bool(MODAL_HEDGE.search(quote) or NUMBER_HEDGE.search(quote))
 
 
+COMPARATOR = re.compile(r"\b(?:than|compared (?:with|to)|versus|vs\.?|relative to)\s+([^,;.()\[\]]+)", re.I)
+
+
+def comparator_phrases(text: str) -> list[str]:
+    """The noun phrases after "than / compared with / versus / vs / relative to", up to , ; . or a bracket.
+
+    A phrase starting with a number ("more than 30") is a comparison of values, not of groups: skipped.
+    """
+    return [m.group(1).strip() for m in COMPARATOR.finditer(text) if not re.match(r"[\d<>≤≥~+\-−]", m.group(1).strip())]
+
+
+def _in_sequence(value: str, text: str) -> bool:
+    """True when the value's content words occur next to each other, in order, among the text's content words."""
+    want, have = _content_words(value), _content_words(text)
+    return any(have[i:i + len(want)] == want for i in range(len(have) - len(want) + 1)) if want else True
+
+
 def code_flags(claim: dict, section: str | None = None, defined: dict[str, set[str]] | None = None) -> list[dict]:
     """Flags code adds to a passed claim (never rejections): wording the quote does not support.
 
@@ -180,6 +199,12 @@ def code_flags(claim: dict, section: str | None = None, defined: dict[str, set[s
     if ratio > EXCEEDS_QUOTE_RATIO:
         flags.append({"code": "CLAIM_EXCEEDS_QUOTE",
                       "detail": f"{ratio:.0%} of the claim's words are not in the quote: {', '.join(extra[:12])}"})
+    group = claim.get("comparison_group")
+    for phrase in comparator_phrases(text):
+        words = _content_words(phrase)
+        if words and (not group or not set(words) <= set(_content_words(group))):
+            flags.append({"code": "COMPARATOR_NOT_IN_QUOTE",
+                          "detail": f"the claim compares with {phrase!r}; comparison_group is {group!r}"})
     if CAUSAL.search(text) and not CAUSAL.search(quote):
         flags.append({"code": "CAUSAL_WORDING",
                       "detail": f"the claim says {CAUSAL.search(text).group(0)!r}; the quote states no cause"})
@@ -189,6 +214,9 @@ def code_flags(claim: dict, section: str | None = None, defined: dict[str, set[s
         v = claim.get(f)
         if v and (missing := missing_words(v, quote)):
             flags.append({"code": "CONTEXT_NOT_IN_QUOTE", "detail": f"{f} {v!r}: {', '.join(missing)} not in the quote"})
+        elif v and f == "comparison_group" and not _in_sequence(v, quote):
+            # a group must appear as a phrase: "white men" is not stated by "...South Asian men ... white women"
+            flags.append({"code": "CONTEXT_NOT_IN_QUOTE", "detail": f"{f} {v!r} is not stated as a phrase in the quote"})
     pop = claim.get("population")
     if pop and section is not None and (missing := missing_words(pop, section)):
         flags.append({"code": "POPULATION_NOT_IN_SECTION",

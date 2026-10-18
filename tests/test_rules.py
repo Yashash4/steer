@@ -59,3 +59,14 @@ def test_list_entries_are_literal_not_regex():
     assert codes("a.b", "publication") == []
     custom = {"version": "t", "hype_words": [".*"]}
     assert rules.check("anything at all", "publication", custom) == []
+
+
+def test_second_person_and_percentage_promises():
+    assert codes("You could lose 15% of your weight")[0][:2] == ("PROMISE", "block")
+    assert any(c[0] == "PROMISE" for c in codes("With this you will drop weight"))
+    assert any(c[0] == "PROMISE" for c in codes("Lose up to 20% with the programme"))
+    assert any(c[0] == "PROMISE" for c in codes("Shed 10% of your body weight"))
+    # a reported finding in the third person, past tense, is not a promise
+    finding = "Participants in clinical trials of semaglutide and tirzepatide lost 15-20% of their baseline body weight."
+    assert [c[0] for c in codes(finding)] == ["DRUG_NAME", "DRUG_NAME"]
+    assert codes("Weight fell by 5% in the trial group.") == []

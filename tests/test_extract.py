@@ -263,3 +263,30 @@ def test_defined_acronyms_count_as_their_long_form():
     undefined = "discontinue XYZ within 12 months"
     assert ex.exceeds_quote("discontinue weight management medications within 12 months", undefined, defined)[1] == [
         "weight", "management", "medication"]
+
+
+def test_comparator_must_be_the_quotes_comparison_group():
+    abstract = ("In normal weight (BMI <25 kg/m2), diabetes incidence adjusted for age was 2.9 times higher (2.09 to 4.28) "
+                "in South Asian men, and 5.3 times (3.64 to 7.54) in South Asian women than in white women.")
+    men = claim("Diabetes incidence was 2.9 times higher (2.09 to 4.28) in South Asian men than in white men.", abstract)
+    assert "COMPARATOR_NOT_IN_QUOTE" in [f["code"] for f in ex.code_flags(men)]
+    women = claim("Diabetes incidence was 5.3 times (3.64 to 7.54) higher in South Asian women than in white women.",
+                  abstract, comparison_group="white women")
+    assert "COMPARATOR_NOT_IN_QUOTE" not in [f["code"] for f in ex.code_flags(women)]
+    results = ("In those with BMI <25 kg/m2 (table 3), risk of diabetes in men was 3 times higher in South Asians "
+               "(IRR (95% CI) 2.99 (2.09 to 4.28)) as compared with US whites.")
+    r = claim("Risk of diabetes in men was 2.99 (2.09 to 4.28) times higher in South Asians compared with US whites.",
+              results, comparison_group="US whites")
+    assert "COMPARATOR_NOT_IN_QUOTE" not in [f["code"] for f in ex.code_flags(r)]
+    # control: a comparison of values, not of groups
+    values = claim("Adults with BMI more than 30 kg/m2 were included.", "Adults with BMI more than 30 kg/m2 were included.")
+    assert "COMPARATOR_NOT_IN_QUOTE" not in [f["code"] for f in ex.code_flags(values)]
+
+
+def test_comparison_group_must_be_a_phrase_of_the_quote():
+    abstract = ("In normal weight (BMI <25 kg/m2), diabetes incidence adjusted for age was 2.9 times higher (2.09 to 4.28) "
+                "in South Asian men, and 5.3 times (3.64 to 7.54) in South Asian women than in white women.")
+    bad = claim("2.9 times higher (2.09 to 4.28) in South Asian men than in white men.", abstract, comparison_group="white men")
+    assert "CONTEXT_NOT_IN_QUOTE" in [f["code"] for f in ex.code_flags(bad)]
+    ok = claim("5.3 times (3.64 to 7.54) in South Asian women than in white women.", abstract, comparison_group="white women")
+    assert ex.code_flags(ok) == []

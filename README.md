@@ -232,7 +232,10 @@ A model proposes claims from the paper, and the gate decides which ones are kept
     stemmed) are not in the quote. The claim adds scope, context from elsewhere or interpretation. An
     abbreviation the paper defines ("weight management medications (WMMs)", initials must match) counts as its
     long form. The threshold was measured on the first live run: it caught all 4 known overreaches;
-  - `CONTEXT_NOT_IN_QUOTE`: a context field the quote does not state;
+  - `COMPARATOR_NOT_IN_QUOTE`: the claim compares with a group ("than ...", "compared with ...", "versus ...")
+    that is not its `comparison_group` (a comparison of values such as "more than 30" is not a group);
+  - `CONTEXT_NOT_IN_QUOTE`: a context field the quote does not state (a comparison group must appear as a
+    phrase: "white men" is not stated by "... South Asian men ... white women");
   - `POPULATION_NOT_IN_SECTION`: a population word not found in the chunk's text. The population may come
     from the section, not only the quote.
 
@@ -249,7 +252,7 @@ A model proposes claims from the paper, and the gate decides which ones are kept
 |---|---|---|
 | `DRUG_BRAND` (Ozempic, Wegovy, Mounjaro...) | flag | block |
 | `DRUG_NAME` (semaglutide, tirzepatide...) | flag | flag |
-| `PROMISE` (guaranteed, miracle, "lose N kg", "N kg in N weeks"...) | flag | block |
+| `PROMISE` (guaranteed, miracle, "lose N kg", "N kg in N weeks", "you could lose...", "lose up to N%", "lose N% of your...") | flag | block |
 | `HYPE` (secret, shocking, breakthrough...) | flag | flag |
 | `STEER_TEAM_CLAIM` (statements about Steer's doctors, team or results, unless from a Steer source) | flag | block |
 | `BEFORE_AFTER` | flag | block |
