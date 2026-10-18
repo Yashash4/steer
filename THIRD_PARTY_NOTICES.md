@@ -79,3 +79,9 @@ are labelled "AI presenter · placeholder" (presenter) and pass a frame-sheet re
 
 The research papers in `tests/fixtures/` are published under CC BY 4.0. Their credits are listed in
 `tests/fixtures/ATTRIBUTION.md`.
+
+## Vendored files
+
+| File | Version | Licence | Project |
+|---|---|---|---|
+| `vendor/p5brush/brush.js` (p5.brush standalone build, copied unchanged) | 2.2.2 (tag `v2.2.2`) | MIT | https://github.com/acamposuribe/p5.brush |

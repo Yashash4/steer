@@ -1,0 +1,1 @@
+p5.brush standalone build (no p5.js needed, WebGL2 only). Source: https://github.com/acamposuribe/p5.brush , tag v2.2.2 (commit 88c811f9163f00bac95718368262a2d277a717fe), file dist/brush.js, MIT (see LICENSE). sha256 of brush.js: c680e8d27836f7c12e77a2d84decdfc6505a82144b515658ff32cd246b47e55a
