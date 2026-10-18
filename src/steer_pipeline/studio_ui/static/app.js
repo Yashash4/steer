@@ -233,11 +233,15 @@
   /* ---------- 4. post review ---------- */
   var STAGE_NAMES = { code: "Code checks", layout: "Layout check", editorial: "Editorial review", clinical: "Clinical approval" };
   function stageChip(s) { return '<span class="chip ' + (s.done ? "st-passed" : "st-needs") + '">' + esc(s.words) + "</span>"; }
+  var human = rc;   // "different_provider" -> "different provider"; the raw code stays in the badge's title
+  function badge(text, cls, title) { return '<span class="chip ' + (cls || "") + '"' + (title ? ' title="' + esc(title) + '"' : "") + ">" + esc(text) + "</span>"; }
   function lineRow(po, ln, i) {
-    var claims = ln.claim_ids.map(function (id) { var c = byKey[po.paper + "/" + id]; return c ? '<a href="claim.html#' + encodeURIComponent(c.key) + '">' + esc(id) + "</a> " + chip(c) : esc(id); }).join("<br>") || "none";
-    var cc = ln.crosscheck ? esc(ln.crosscheck.verdict) + (ln.crosscheck.independence ? " (" + esc(ln.crosscheck.independence) + ")" : "") : '<span class="muted">not cross-checked (' + esc(ln.kind) + " line)</span>";
-    var fails = ln.failures.length ? ln.failures.map(function (f) { return esc(rc(f.code)); }).join(", ") : "passed";
-    return '<tr><td data-l="#">' + (i + 1) + '</td><td data-l="Where">' + esc(ln.path) + '</td><td data-l="Kind">' + esc(ln.kind) + '</td><td data-l="Text" class="wide">' + esc(ln.text) + '</td><td data-l="Claims">' + claims + '</td><td data-l="Code checks">' + fails + '</td><td data-l="Cross-check">' + cc + "</td></tr>";
+    var claims = ln.claim_ids.map(function (id) { var c = byKey[po.paper + "/" + id]; return c ? '<a href="claim.html#' + encodeURIComponent(c.key) + '">' + esc(id) + "</a>" : esc(id); }).join(" ") || '<span class="muted">none</span>';
+    var x = ln.crosscheck;
+    var cc = x ? badge(human(x.verdict) + (x.independence ? " · " + human(x.independence) : ""), x.verdict === "supported" ? "st-passed" : "st-rejected", x.verdict + (x.independence ? " / " + x.independence : "") + (x.model ? " / " + x.model : ""))
+      : badge("not cross-checked", "", ln.kind + " lines are not cross-checked");
+    var fails = ln.failures.length ? ln.failures.map(function (f) { return badge(human(f.code), "st-rejected", f.code + (f.detail ? ": " + f.detail : "")); }).join("") : badge("passed", "st-passed");
+    return '<tr><td data-l="#">' + (i + 1) + '</td><td data-l="Where" class="small muted">' + esc(ln.path) + '</td><td data-l="Kind">' + badge(ln.kind) + '</td><td data-l="Text" class="wide">' + esc(ln.text) + '</td><td data-l="Claims">' + claims + '</td><td data-l="Code checks">' + fails + '</td><td data-l="Cross-check">' + cc + "</td></tr>";
   }
   function posts() {
     var only = location.hash.slice(1);
@@ -259,7 +263,7 @@
         "<p>Post status: " + '<span class="chip ' + (po.first_open ? "st-needs" : "st-passed") + '">' + esc(po.status) + "</span></p>" + gallery +
         "<h3>Message</h3><p>" + esc(po.message) + "</p><h3>Reasoning</h3><p>" + esc(po.reasoning) + "</p>" +
         '<h3>Four stages</h3><ol class="stages">' + ["code", "layout", "editorial", "clinical"].map(function (k) { return "<li><b>" + STAGE_NAMES[k] + "</b>: " + stageChip(st[k]) + "</li>"; }).join("") + "</ol>" +
-        '<div class="tablewrap"><table class="stack2" style="margin-top:14px"><caption>Every line, its claims and its checks</caption><thead><tr><th>#</th><th>Where</th><th>Kind</th><th>Text</th><th>Claims</th><th>Code checks</th><th>Cross-check</th></tr></thead><tbody>' + po.lines.map(function (ln, i) { return lineRow(po, ln, i); }).join("") + "</tbody></table></div>" + acts + "</section>";
+        '<div class="tablewrap"><table class="stack2 lines" style="margin-top:14px"><caption>Every line, its claims and its checks</caption><thead><tr><th>#</th><th>Where</th><th>Kind</th><th>Text</th><th>Claims</th><th>Code checks</th><th>Cross-check</th></tr></thead><tbody>' + po.lines.map(function (ln, i) { return lineRow(po, ln, i); }).join("") + "</tbody></table></div>" + acts + "</section>";
     });
     $("#main").innerHTML = html;
     if (!LIVE) return;

@@ -120,3 +120,10 @@ footer b{font:400 20px var(--serif);color:var(--rust)}
  table.stack2 td{display:block;border:0;padding:3px 0;text-align:left}
  table.stack2 td::before{content:attr(data-l);display:block;color:var(--clay-text);font-size:13px}
 }
+
+/* the post's line table: short columns as badges that never break mid-word, the text takes the remaining width */
+table.lines{width:100%;table-layout:auto}
+table.lines td,table.lines th{white-space:nowrap;vertical-align:top}
+table.lines td.wide{white-space:normal;width:100%;min-width:280px;overflow-wrap:normal;word-break:normal}
+table.lines .chip{white-space:nowrap}
+@media(max-width:600px){table.lines td,table.lines td.wide{white-space:normal;min-width:0;width:auto}}
