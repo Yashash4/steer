@@ -147,6 +147,10 @@ CTA slide, and among the static's supporting lines.
 Leave them out when nothing deserves it.
 The reel script is spoken in about 25-40 seconds: 55-85 words in all its lines together. Each reel line has at most 22
 words (a whole line is on screen at once); split a longer one into two lines that each make sense on their own.
+The reel opens on a framing line of at most 8 words (spoken in under 4 seconds). In the reel, one health line may state
+two claims together when they share the same population and qualifiers (list both claim_ids; each number exactly as
+its own claim gives it), for example "Aged 45+ in Chennai, Delhi and Karachi, with BMI under 25 kg/m2: diabetes risk was
+5.27 times higher in South Asian women and 2.99 times in men than in US whites."
 State the message (the one thing the audience should take away) and the reasoning (why this post, for whom,
 which doubt it answers). Both are published with the post and checked like health lines: the message may only
 combine what the claims used say, and may end with one call-to-action line copied exactly; no other mention

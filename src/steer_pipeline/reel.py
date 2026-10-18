@@ -68,6 +68,8 @@ def _speak_token(tok: str) -> str:
     for sym, word in PREFIX:
         if core.startswith(sym) and core[len(sym):][:1].isdigit():
             return lead + word + _speak_token(core[len(sym):] + tail)
+    if re.match(r"^\d+\+$", core):                                       # 45+ -> 45 and over
+        return f"{lead}{core[:-1]} and over{tail}"
     if re.match(r"^\d+(?:\.\d+)?%$", core):
         return f"{lead}{core[:-1]} per cent{tail}"
     m = re.match(r"^(\d+(?:\.\d+)?)(kg|g|cm|mg)$", core)                  # 0.4kg -> 0.4 kilograms
@@ -77,8 +79,22 @@ def _speak_token(tok: str) -> str:
 
 
 def spoken(text: str) -> tuple[str, list[str]]:
-    """(the text to voice, the spoken form of each display word) - same word order, so captions can be timed."""
-    per_word = [_speak_token(t) for t in text.split()]
+    """(the text to voice, the spoken form of each display word) - same word order, so captions can be timed.
+    Shorter speech, same numbers: the BMI unit is not voiced right after "BMI" ("BMI under 25 kg/m2" or "BMI <25 kg/m2"
+    -> "BMI under 25"; the unit stays on screen), and "45+" is voiced "45 and over"."""
+    words = text.split()
+    core = lambda t: t.strip("(),.;:!?")
+    per_word = []
+    for i, t in enumerate(words):
+        after_bmi = "BMI" in [core(w) for w in words[max(0, i - 3):i]]
+        if after_bmi and re.match(r"^(kg/m2|kg/m²)$", core(t)):
+            per_word.append("")
+            if per_word[:-1]:   # its trailing punctuation moves to the word before, for the voice's pause
+                per_word[-2] += t[len(t.rstrip(".,;:!?)")):]
+        elif after_bmi and re.match(r"^<\d", t):
+            per_word.append("under " + _speak_token(t[1:]))
+        else:
+            per_word.append(_speak_token(t))
     return " ".join(w for w in per_word if w), per_word
 
 
@@ -444,7 +460,8 @@ def build_timeline(script: dict, voice: dict, tts, health_hold: float = 0.0, end
 # --- Remotion props (reel_props.json v2, code/reel/props.schema.json) ---
 
 REEL_DIR = rd.CODE / "reel"
-REMOTION_DURATION = (25.0, 40.0)
+REMOTION_DURATION = (20.0, 45.0)
+HOOK_MAX = 4.0   # the hook line is spoken within 4 s of the reel's start
 REMOTION_END_CARD, HEALTH_HOLD = 5.0, 0.8   # the sources card holds >= 5 s (its text >= 40 px)
 PRESENTER_LABEL = "AI presenter · placeholder"   # D-026: on every frame a presenter clip is on screen
 LABEL_BOX = (60, 72, 220, 34)   # x, y, w, h inside the label pill (top left; Reel.tsx LABEL_BG / LABEL_INK)
@@ -756,6 +773,9 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
     timings["transcribe_seconds"] = round(time.perf_counter() - t0, 2)
 
     lo, hi = REMOTION_DURATION if remotion else DURATION
+    hook = scenes[0]
+    if remotion and hook["kind"] == "hook" and hook["lines"][0]["end"] - hook["start"] > HOOK_MAX + 1e-6:
+        fails.append({"code": "HOOK_TOO_LONG", "detail": round(hook["lines"][0]["end"] - hook["start"], 2)})
     probe = probe_mp4(mp4) if mp4 and mp4.exists() else {}
     if probe:
         if (probe["width"], probe["height"]) != (W, H):

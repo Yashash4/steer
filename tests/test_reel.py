@@ -12,17 +12,23 @@ BRAND = posts.load_brand()
 def test_spoken_form_expands_units_and_symbols_by_code_only():
     say = lambda t: reel.spoken(t)[0]
     assert say("0.4 kg a month") == "0.4 kilograms a month"
-    assert say("BMI under 25 kg/m2.") == "BMI under 25 kilograms per square metre."
+    assert say("under 25 kg/m2.") == "under 25 kilograms per square metre."
     assert say("rose by 1.81%") == "rose by 1.81 per cent"
     assert say("fell by −1.74 kg") == "fell by minus 1.74 kilograms"
     assert say("aged ≥45 years") == "aged at least 45 years"
-    assert say("BMI <25") == "BMI less than 25"
+    assert say("BMI <25") == "BMI under 25"
     assert say("±0.3") == "plus or minus 0.3"
     assert say("(95% CI 2.09–4.28)") == "(95 per cent confidence interval 2.09 to 4.28)"
     assert say("I² = 98%") == "I squared = 98 per cent"
     assert say("120 mm Hg") == "120 millimetres of mercury"
     assert say("steerclub.com") == "steer club dot com"
     assert say("Talk to a Steer doctor") == "Talk to a Steer doctor"          # words are never reworded
+    # shorter speech, same numbers (WIN, reel v3): no BMI unit voiced right after "BMI"; 45+ is "45 and over"
+    assert say("BMI under 25 kg/m2, aged 45+ in Chennai") == "BMI under 25, aged 45 and over in Chennai"
+    assert say("BMI <25 kg/m2.") == "BMI under 25."
+    assert say("a waist of 25 kg/m2") == "a waist of 25 kilograms per square metre"     # not after BMI: voiced
+    assert reel.audio_numbers_match("BMI under 25 kg/m2, aged 45+", "BMI under twenty five, aged forty five and over")["ok"]
+    assert len(reel.spoken("BMI under 25 kg/m2, aged 45+")[1]) == 6                      # still one entry per display word
     text, per_word = reel.spoken("0.4 kg a month")
     assert per_word == ["0.4", "kilograms", "a", "month"]                     # one entry per display word
 
