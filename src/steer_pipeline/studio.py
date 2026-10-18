@@ -23,7 +23,7 @@ from . import store
 
 LAYOUT = "LAYOUT_CHECK_NEEDED"
 REASON_CATEGORIES = ("inaccurate", "overstated", "missing context", "tone/brand", "other")
-STAGE_OF = {"layout_checked": "layout", "layout_unresolved": "layout", "editorial_approved": "editorial",
+STAGE_OF = {"layout_checked": "layout", "layout_unresolved": "layout", "check_cleared": "check", "editorial_approved": "editorial",
             "editorial_rejected": "editorial", "clinically_approved": "clinical", "clinically_rejected": "clinical"}
 REVIEW_GAP_S = 600   # estimated review time: gaps over 10 min between actions are not counted
 DPI = 130
@@ -63,6 +63,26 @@ def who(a: dict) -> str:
     return f"{a['reviewer']} ({a['role']}), {a['at']}"
 
 
+def to_clear(c: dict) -> set[str]:
+    """The review reasons and code flags a reviewer must clear (layout has its own check)."""
+    return (set(c.get("review_reasons") or []) | {f["code"] for f in c.get("flags") or []}) - {LAYOUT}
+
+
+def clearances(c: dict, acts: list[dict]) -> dict[str, dict]:
+    key = f"{c['run_id']}/{c['claim_id']}"
+    return {a["clears"]: a for a in acts if a["target_kind"] == "claim" and a["target"] == key and a["action"] == "check_cleared"}
+
+
+def fully_cleared(c: dict, acts: list[dict]) -> bool:
+    """Every review reason and flag has a named reviewer's clearance and any layout check is done (S4). The caller
+    still requires the independent supported cross-check and that the claim is not excluded."""
+    key = f"{c['run_id']}/{c['claim_id']}"
+    need, done = to_clear(c), clearances(c, acts)
+    lay = latest(acts, "claim", key, "layout")
+    layout_ok = LAYOUT not in (c.get("review_reasons") or []) or bool(lay and lay["action"] == "layout_checked")
+    return c["status"] != "rejected" and bool(need) and need <= set(done) and layout_ok
+
+
 def claim_status(c: dict, acts: list[dict]) -> dict:
     """The claim's status words and what they allow. c: a stored claim with its latest library cross-check."""
     key = f"{c['run_id']}/{c['claim_id']}"
@@ -72,20 +92,23 @@ def claim_status(c: dict, acts: list[dict]) -> dict:
                                                                                    "different_model_same_provider")
     lay = latest(acts, "claim", key, "layout")
     needs_layout = LAYOUT in reasons
+    base = {"needs_layout": needs_layout, "layout": lay, "open": []}
     if c["status"] == "rejected":
-        return {"words": "rejected by the gate", "usable": False, "needs_layout": False, "layout": None}
+        return base | {"words": "rejected by the gate", "usable": False, "needs_layout": False}
     if c.get("excluded"):   # the paper's boundaries file keeps it out of every post (it stays in the library)
-        return {"words": f"excluded from posts ({c['excluded']})", "usable": False, "needs_layout": False, "layout": None}
+        return base | {"words": f"excluded from posts ({c['excluded']})", "usable": False, "needs_layout": False}
     if lay and lay["action"] == "layout_unresolved":
-        return {"words": f"layout unresolved ({lay['reason']})", "usable": False, "needs_layout": True, "layout": lay}
-    other = [r for r in reasons if r != LAYOUT]
-    if other or c["status"] == "needs_check" and not needs_layout:
-        return {"words": f"needs check ({', '.join(reasons)})", "usable": False, "needs_layout": needs_layout, "layout": lay}
-    if needs_layout and not lay:
-        return {"words": f"needs check ({LAYOUT})", "usable": False, "needs_layout": True, "layout": None}
-    base = "verified" if independent else "passed code checks"
-    words = f"layout checked by {who(lay)}; {base}" if needs_layout else base
-    return {"words": words, "usable": independent, "needs_layout": needs_layout, "layout": lay}
+        return base | {"words": f"layout unresolved ({lay['reason']})", "usable": False}
+    done = clearances(c, acts)
+    open_ = sorted(to_clear(c) - set(done)) + ([LAYOUT] if needs_layout and not (lay and lay["action"] == "layout_checked") else [])
+    notes = [f"{code} cleared by {who(a)}: {a['reason']}" for code, a in sorted(done.items())]
+    if lay and lay["action"] == "layout_checked":
+        notes.append(f"layout checked by {who(lay)}")
+    tail = ("; " + "; ".join(notes)) if notes else ""
+    if open_:
+        return base | {"words": f"needs check ({', '.join(open_)}){tail}", "usable": False, "open": open_}
+    head = "verified" if independent else "passed code checks"
+    return base | {"words": head + tail, "usable": independent}
 
 
 def post_stages(post: dict, claims: dict[str, dict], acts: list[dict]) -> dict:
@@ -163,13 +186,26 @@ def act(con, reviewers: dict[str, str], body: dict, claims: dict[str, dict], pos
         raise Refused(400, f"reason_category must be one of {list(REASON_CATEGORIES)}")
     acts = store.actions(con)
     target = body.get("target") or ""
-    if stage == "layout":
+    clears = None
+    if stage in ("layout", "check"):
         c = claims.get(target)
         if not c:
             raise Refused(404, f"no claim {target!r}")
         before = claim_status(c, acts)
-        if not before["needs_layout"]:
+        if stage == "layout" and not before["needs_layout"]:
             raise Refused(409, "this claim needs no layout check", "layout")
+        if stage == "check":
+            if c["status"] == "rejected":   # the gate's rejection is final: a rejected claim is re-extracted, not cleared
+                raise Refused(409, "a claim rejected by the gate cannot be cleared", "check")
+            if c.get("excluded"):
+                raise Refused(409, f"this claim is excluded from posts: {c['excluded']}", "check")
+            clears = body.get("clears")
+            if clears not in to_clear(c):
+                raise Refused(400, f"clears must name one of this claim's open reasons: {sorted(to_clear(c))}")
+            if clears in clearances(c, acts):
+                raise Refused(409, f"{clears} is already cleared", "check")
+            if not reason:
+                raise Refused(400, "a reason is required: why the flag is a false alarm")
         kind = "claim"
     else:
         p = posts.get(target)
@@ -185,7 +221,7 @@ def act(con, reviewers: dict[str, str], body: dict, claims: dict[str, dict], pos
         before = {"words": st["words"]}
         kind = "post"
     row = {"at": now(), "reviewer": name, "role": role, "target_kind": kind, "target": target, "stage": stage,
-           "action": action, "reason": reason, "reason_category": category if rejecting else None,
+           "action": action, "clears": clears, "reason": reason, "reason_category": category if rejecting else None,
            "before_status": before["words"]}
     acts_after = acts + [row | {"id": None}]
     row["after_status"] = (claim_status(claims[target], acts_after)["words"] if kind == "claim"
@@ -297,47 +333,105 @@ def load(con, post_dirs: list[Path]) -> tuple[dict, dict, dict]:
     return docs, claims, posts
 
 
+def _paper_facts(con, run: str, doc: dict) -> dict:
+    """Run and ingest facts for the overview, read from the stored run and document (nothing estimated)."""
+    from collections import Counter
+
+    row = con.execute("SELECT summary, timings, chunks, model_calls FROM runs WHERE run_id = ?", (run,)).fetchone()
+    summary, timings, chunks, calls = (json.loads(x) if x else None for x in row) if row else (None,) * 4
+    calls = calls or []
+    in_chunks = {s for c in chunks or [] for s in c.get("sids", [])}
+    no_layout = any(w["code"] == "NO_PAGE_LAYOUT" for w in doc["warnings"])
+    prov = doc["source"].get("provenance") or {}
+    tok = lambda k: sum((a.get("tokens") or {}).get(k) or 0 for a in calls)
+    return {"summary": summary or {}, "timing_seconds": timings or {}, "chunks": len(chunks or []),
+            "sentences_in_document": len(doc.get("sentences") or []), "sentences_in_chunks": len(in_chunks),
+            "all_sentences_covered": bool(doc.get("sentences")) and len(in_chunks) >= len(doc["sentences"]),
+            "model_calls": len(calls), "call_outcomes": dict(Counter(a["outcome"] for a in calls)),
+            "models": sorted({f"{a['endpoint']} ({a.get('model')})" for a in calls}),
+            "tokens_in": tok("input_tokens"), "tokens_out": tok("output_tokens"),
+            "pages": None if no_layout else len(doc["pages"]),
+            "layouts": dict(Counter(pg.get("layout") for pg in doc["pages"])) if not no_layout else {},
+            "page_sizes_pt": {} if no_layout else {str(pg["page"]): [pg["width"], pg["height"]] for pg in doc["pages"]},
+            "ingest_warnings": dict(Counter(w["code"] for w in doc["warnings"])),
+            "access": doc["source"].get("access"), "fetched_via": prov.get("fetched_via"), "no_page_layout": no_layout}
+
+
 def data(con, docs: dict, claims: dict, posts: dict, reviewers: dict[str, str], public: bool = False) -> dict:
-    """Everything the screens show. public=True (the static copy): page images only for CC BY papers."""
+    """Everything the studio screens show, in the screens' shape (papers keyed by PMCID, claims keyed 'PMCID/claim').
+    Each claim also carries `target` ('run/claim'), the key reviewer actions use. public=True (the read-only copy):
+    page images only for CC BY papers."""
     acts = store.actions(con)
     run_of = lambda a: a["target"].split("/")[0] if a["target_kind"] == "claim" else posts.get(a["target"], {}).get("run_id")
     minutes = review_minutes(acts, run_of)
+    pm_of = {run: doc["citation"].get("pmcid") or run for run, doc in docs.items()}
     papers = {}
     for run, doc in docs.items():
         cit = doc["citation"]
-        papers[run] = {"run_id": run, "pmcid": cit.get("pmcid"), "citation": cit, "license": cit.get("license"),
-                       "page_images": (not public) or cc_by(cit),
-                       "no_page_layout": any(w["code"] == "NO_PAGE_LAYOUT" for w in doc["warnings"]),
-                       "pmc_url": f"https://pmc.ncbi.nlm.nih.gov/articles/{cit.get('pmcid')}/" if cit.get("pmcid") else None,
-                       "estimated_review_minutes": minutes.get(run, 0.0)}
-    out_claims = []
-    used_by: dict[str, list[str]] = {}
+        authors = cit.get("authors") or ["Unknown"]
+        papers[pm_of[run]] = {"run_id": run, "pmcid": cit.get("pmcid"), "citation": cit, "license": cit.get("license"),
+                              "short": f"{authors[0].split()[0]} {cit.get('year') or 'n.d.'}",
+                              "page_images": (not public) or cc_by(cit),
+                              "pmc_url": f"https://pmc.ncbi.nlm.nih.gov/articles/{cit.get('pmcid')}/" if cit.get("pmcid") else None,
+                              "estimated_review_minutes": minutes.get(run, 0.0)} | _paper_facts(con, run, doc)
+    used_by: dict[str, list[dict]] = {}
     for pid, p in posts.items():
         for ln in _post_lines(p):
             for i in ln.get("claim_ids", []):
-                used_by.setdefault(f"{p['run_id']}/{i}", []).append(pid)
+                used_by.setdefault(f"{p['run_id']}/{i}", []).append({"post": pid, "line_text": ln["text"]})
     line_maps = {run: {ln["line_id"]: ln for pg in doc.get("pages") or [] for ln in pg.get("lines", [])}
                  for run, doc in docs.items()}
+    sents = {run: {x["sid"]: x for x in doc.get("sentences") or []} for run, doc in docs.items()}
+    order = {run: [x["sid"] for x in doc.get("sentences") or []] for run, doc in docs.items()}
+    out_claims = []
     for key, c in claims.items():
-        s = claim_status(c, acts)
-        lines = line_maps.get(c["run_id"], {})
+        run, st = c["run_id"], claim_status(c, acts)
+        pm, paper = pm_of[run], papers[pm_of[run]]
+        lines = line_maps.get(run, {})
         boxes: dict[str, list] = {}   # the highlight is drawn only from S1 line boxes, never invented
         for lid in c.get("line_ids") or []:
             if lid in lines and lines[lid].get("bbox"):
                 boxes.setdefault(str(int(lid[1:5])), []).append({"line_id": lid, "bbox": lines[lid]["bbox"]})
-        out_claims.append({"key": key, "run_id": c["run_id"], "claim_id": c["claim_id"], "status": s["words"],
-                           "usable": s["usable"], "needs_layout": s["needs_layout"], "claim_text": c["claim_text"],
-                           "quote": c["quote"], "sids": c.get("sids"), "line_ids": c.get("line_ids"),
-                           "review_reasons": c.get("review_reasons"), "flags": c.get("flags"),
-                           "crosscheck": c.get("crosscheck"), "used_in": sorted(set(used_by.get(key, []))),
-                           "boxes": boxes})
+        gate = c.get("gate") if isinstance(c.get("gate"), dict) else json.loads(c.get("gate") or "{}")
+        sids = c.get("sids") or []
+        ctx = None
+        if paper["no_page_layout"] and sids and sids[0] in order[run]:
+            i, j = order[run].index(sids[0]), order[run].index(sids[-1])
+            ctx = [{"sid": x, "text": sents[run][x]["text"], "hit": x in sids} for x in order[run][max(0, i - 2): j + 3]]
+        bucket = c["status"]
+        out_claims.append({
+            "key": f"{pm}/{c['claim_id']}", "target": key, "paper": pm, "run_id": run, "claim_id": c["claim_id"],
+            "bucket": bucket, "status": st["words"], "usable": st["usable"], "needs_layout": st["needs_layout"],
+            "reasons": [r["code"] for r in gate.get("reasons", [])] if bucket == "rejected" else (c.get("review_reasons") or []),
+            "claim_text": c["claim_text"], "quote": c["quote"], "claim_type": c.get("claim_type"),
+            "population": c.get("population"), "comparison_group": c.get("comparison_group"), "outcome": c.get("outcome"),
+            "time_point": c.get("time_point"), "limitations": c.get("limitations"), "hedged": c.get("hedged"),
+            "direction": c.get("direction"), "sids": sids, "line_ids": c.get("line_ids") or [],
+            "pages": None if paper["no_page_layout"] else sorted({int(l[1:5]) for l in c.get("line_ids") or []}),
+            "sentences": [{"sid": x, "text": sents[run][x]["text"]} for x in sids if x in sents[run]], "context": ctx,
+            "gate_status": gate.get("status"), "gate_reasons": gate.get("reasons", []), "gate_warnings": gate.get("warnings", []),
+            "flags": c.get("flags") or [], "numbers_checked": gate.get("numbers_checked", []), "boxes": boxes,
+            "labels": c.get("labels"), "crosscheck": c.get("crosscheck"), "excluded": c.get("excluded"),
+            "open": st["open"], "clearable": sorted(to_clear(c) - set(clearances(c, acts))) if bucket != "rejected"
+            and not c.get("excluded") else [],
+            "clearances": [{"code": code, "reviewer": a["reviewer"], "role": a["role"], "at": a["at"], "reason": a["reason"]}
+                           for code, a in sorted(clearances(c, acts).items())],
+            "used_in": used_by.get(key, []),
+            "page_note": None if paper["page_images"] or paper["no_page_layout"] else f"page image not shown: {paper['license']}"})
     out_posts = []
     for pid, p in posts.items():
         st = post_stages(p, claims, acts)
-        out_posts.append({"post_id": pid, "run_id": p["run_id"], "format": p.get("format"), "status": st["words"],
-                          "stages": st["stages"], "claims": st["claims"], "message": p.get("message"),
-                          "reasoning": p.get("reasoning"), "pngs": (p.get("render") or {}).get("pngs", []),
-                          "folder": p["folder"]})
+        trace = Path(p["folder"]) / "trace.json"
+        lines = json.loads(trace.read_text())["lines"] if trace.exists() else []
+        out_posts.append({"id": pid, "post_id": pid, "run_id": p["run_id"], "paper": pm_of.get(p["run_id"]),
+                          "format": p.get("format"), "status": st["words"], "first_open": st["first_open"],
+                          "stages": st["stages"], "claim_status": st["claims"], "message": p.get("message"),
+                          "reasoning": p.get("reasoning"), "brief": p.get("brief"),
+                          "pngs": [f"files/{pid}/{n}" for n in (p.get("render") or {}).get("pngs", [])],
+                          "has_reel": (Path(p["folder"]) / "reel.mp4").exists(), "folder": p["folder"],
+                          "lines": [{"path": ln["path"], "kind": ln["kind"], "text": ln["text"], "claim_ids": ln["claim_ids"],
+                                     "failures": ln.get("failures", []), "crosscheck": ln.get("crosscheck")} for ln in lines],
+                          "current_failures": p.get("current_failures") or [], "write_failures": p.get("write_failures") or []})
     return {"generated_at": now(), "public": public, "papers": papers, "claims": out_claims, "posts": out_posts,
             "reviewers": {"names": sorted(reviewers), "has_clinician": "clinician" in reviewers.values(),
                           "note": "self-identified (prototype, no login)"},
@@ -353,7 +447,11 @@ def _manifest(post: dict, st: dict, claims: dict, acts: list[dict]) -> dict:
     used = sorted({i for ln in _post_lines(post) for i in ln.get("claim_ids", [])})
     return {"post_id": post["post_id"], "run_id": run, "stages": {k: v["words"] for k, v in st["stages"].items()},
             "claims": [{"claim_id": i, "quote": claims[f"{run}/{i}"]["quote"], "sids": claims[f"{run}/{i}"].get("sids"),
-                        "status": st["claims"].get(i)} for i in used if f"{run}/{i}" in claims],
+                        "status": st["claims"].get(i),
+                        "automated_flags": sorted(to_clear(claims[f"{run}/{i}"])),   # kept, even when cleared
+                        "clearances": [{"code": k, "reviewer": a["reviewer"], "role": a["role"], "at": a["at"],
+                                        "reason": a["reason"]} for k, a in sorted(clearances(claims[f"{run}/{i}"], acts).items())]}
+                       for i in used if f"{run}/{i}" in claims],
             "sources": post.get("sources"),
             "actions": [a for a in acts if (a["target_kind"] == "post" and a["target"] == post["post_id"])
                         or (a["target_kind"] == "claim" and a["target"].split("/")[1] in used and a["target"].startswith(run + "/"))]}
@@ -510,22 +608,20 @@ def export_site(db: str | Path, post_dirs: list[Path], reviewers_path: str | Pat
     for p in snap["posts"]:
         dest = out / "files" / p["post_id"]
         dest.mkdir(parents=True, exist_ok=True)
-        for name in p["pngs"]:
-            src = Path(p["folder"]) / name
+        for url in p["pngs"]:
+            src = Path(p["folder"]) / Path(url).name
             if src.exists():
-                shutil.copy(src, dest / name)
+                shutil.copy(src, dest / src.name)
         p["folder"] = f"files/{p['post_id']}"
     pages = []
     for c in snap["claims"]:
-        paper = snap["papers"][c["run_id"]]
+        paper = snap["papers"][c["paper"]]
         if paper["page_images"] and not paper["no_page_layout"]:
-            for n in sorted({int(l[1:5]) for l in c.get("line_ids") or []}):
+            for n in c["pages"] or []:
                 f = page_image(docs[c["run_id"]], n, Path(db).parent / "studio-cache")
                 (out / "pages").mkdir(exist_ok=True)
                 shutil.copy(f, out / "pages" / f.name)
                 pages.append(f.name)
-        elif not paper["page_images"]:
-            c["page_note"] = f"page image not shown: {paper['license']}"
     (out / "data.js").write_text("window.STEER_DATA = " + json.dumps(snap, ensure_ascii=False, default=str) + ";\n",
                                  encoding="utf-8")
     return {"posts": len(snap["posts"]), "claims": len(snap["claims"]), "page_images": sorted(set(pages))}

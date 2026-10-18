@@ -26,7 +26,10 @@ def load_brand(path: Path = BRAND_PATH) -> dict:
 
 def claims_from_store(con, run_id: str) -> tuple[dict, dict]:
     """The run's kept claims as dicts (with their latest library cross-check) and the document row."""
+    from .studio import fully_cleared
+
     data = store.export_run(con, run_id)
+    acts = store.actions(con)
     latest = {}
     for c in data["crosschecks"]:
         latest[c["claim_id"]] = c
@@ -37,6 +40,7 @@ def claims_from_store(con, run_id: str) -> tuple[dict, dict]:
         c["gate"] = c["gate"] if isinstance(c["gate"], dict) else json.loads(c["gate"])
         c["crosscheck"] = latest.get(c["claim_id"])
         c["labels"] = {"theme": c.get("theme"), "doubts": c.get("doubts") or []}
+        c["s4_cleared"] = fully_cleared(c | {"run_id": run_id}, acts)   # cleared by a named reviewer in the studio
         claims[c["claim_id"]] = c
     doc = json.loads(con.execute("SELECT document FROM documents WHERE document_id = ?",
                                  (data["run"]["document_id"],)).fetchone()[0])

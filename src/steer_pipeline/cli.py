@@ -67,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("--db", required=True)
     st.add_argument("--posts", nargs="*", default=[], help="folders holding written posts (out/...)")
     st.add_argument("--reviewers", default=str(Path(__file__).resolve().parents[2] / "reviewers.toml"))
-    st.add_argument("--static", help="the studio's HTML/CSS/JS folder")
+    st.add_argument("--static", default=str(Path(__file__).resolve().parent / "studio_ui" / "static"),
+                    help="the studio's HTML/CSS/JS folder (default: the bundled one)")
     st.add_argument("--serve", action="store_true")
     st.add_argument("--port", type=int, default=8765)
     st.add_argument("--export", help="write a read-only copy (no actions) to this folder")

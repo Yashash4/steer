@@ -98,8 +98,10 @@ def writable(claim: dict, boundaries: dict | None = None) -> bool:
     """A claim the writer may use: gate pass, no code flag, only layout review pending, an independent
     'supported' library cross-check, and not excluded from posts by the paper's boundaries file."""
     cc = claim.get("crosscheck") or {}
-    return (claim["gate"]["status"] == "pass" and not claim.get("flags") and not excluded(claim, boundaries or {})
-            and set(claim.get("review_reasons", [])) <= WRITABLE_REVIEW
+    clean = not claim.get("flags") and set(claim.get("review_reasons", [])) <= WRITABLE_REVIEW
+    # s4_cleared: every review reason and flag cleared by a named reviewer in the studio (posts.claims_from_store)
+    return (claim["gate"]["status"] == "pass" and not excluded(claim, boundaries or {})
+            and (clean or bool(claim.get("s4_cleared")))
             and cc.get("verdict") == "supported" and cc.get("independence") in COUNTS)
 
 

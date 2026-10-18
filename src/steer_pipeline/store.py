@@ -8,7 +8,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS documents (
@@ -73,6 +73,24 @@ CREATE TABLE IF NOT EXISTS crosschecks (
 """
 # version 3 adds these tables only (add-only again). review_action is append-only, enforced by the database: a
 # reviewer's decision is never edited or deleted; statuses are derived from the latest action (studio.py).
+REVIEW_ACTION = """CREATE TABLE IF NOT EXISTS review_action (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    reviewer TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('editor', 'clinician')),   -- resolved by the server from reviewers.toml
+    target_kind TEXT NOT NULL CHECK (target_kind IN ('claim', 'post')),
+    target TEXT NOT NULL,            -- '<run_id>/<claim_id>' or '<post_id>'
+    stage TEXT NOT NULL CHECK (stage IN ('layout', 'check', 'editorial', 'clinical')),
+    action TEXT NOT NULL CHECK (action IN ('layout_checked', 'layout_unresolved', 'check_cleared', 'editorial_approved',
+                                           'editorial_rejected', 'clinically_approved', 'clinically_rejected')),
+    clears TEXT,                     -- check_cleared: the review reason code this clearance clears
+    reason TEXT,
+    reason_category TEXT CHECK (reason_category IS NULL OR reason_category IN
+                                ('inaccurate', 'overstated', 'missing context', 'tone/brand', 'other')),
+    before_status TEXT,
+    after_status TEXT
+);
+"""
 SCHEMA_V3 = """
 CREATE TABLE IF NOT EXISTS posts (
     post_id TEXT PRIMARY KEY,
@@ -82,29 +100,33 @@ CREATE TABLE IF NOT EXISTS posts (
     written_at TEXT NOT NULL,
     record TEXT NOT NULL             -- post.json as written, JSON
 );
-CREATE TABLE IF NOT EXISTS review_action (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    at TEXT NOT NULL,
-    reviewer TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('editor', 'clinician')),   -- resolved by the server from reviewers.toml
-    target_kind TEXT NOT NULL CHECK (target_kind IN ('claim', 'post')),
-    target TEXT NOT NULL,            -- '<run_id>/<claim_id>' or '<post_id>'
-    stage TEXT NOT NULL CHECK (stage IN ('layout', 'editorial', 'clinical')),
-    action TEXT NOT NULL CHECK (action IN ('layout_checked', 'layout_unresolved', 'editorial_approved',
-                                           'editorial_rejected', 'clinically_approved', 'clinically_rejected')),
-    reason TEXT,
-    reason_category TEXT CHECK (reason_category IS NULL OR reason_category IN
-                                ('inaccurate', 'overstated', 'missing context', 'tone/brand', 'other')),
-    before_status TEXT,
-    after_status TEXT
-);
+{REVIEW_ACTION}
 CREATE INDEX IF NOT EXISTS review_action_by_target ON review_action (target_kind, target, id);
 CREATE TRIGGER IF NOT EXISTS review_action_no_update BEFORE UPDATE ON review_action
     BEGIN SELECT RAISE(ABORT, 'review_action is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS review_action_no_delete BEFORE DELETE ON review_action
     BEGIN SELECT RAISE(ABORT, 'review_action is append-only'); END;
-"""
+""".replace("{REVIEW_ACTION}", REVIEW_ACTION)
 STATUSES = {"passed": "passed", "needs_check": "needs_check", "rejected": "rejected"}
+
+
+def _upgrade_review_action(con: sqlite3.Connection) -> None:
+    """v3 -> v4: review_action gains the check_cleared action and the clears column. SQLite cannot change a CHECK
+    constraint, so the table is rebuilt: every row is copied first, then the append-only triggers are restored."""
+    row = con.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'review_action'").fetchone()
+    if not row or "check_cleared" in row[0]:
+        return
+    cols = "id, at, reviewer, role, target_kind, target, stage, action, reason, reason_category, before_status, after_status"
+    con.executescript(f"""
+        BEGIN;
+        DROP TRIGGER IF EXISTS review_action_no_update;
+        DROP TRIGGER IF EXISTS review_action_no_delete;
+        ALTER TABLE review_action RENAME TO review_action_v3;
+        {REVIEW_ACTION}
+        INSERT INTO review_action ({cols}) SELECT {cols} FROM review_action_v3;
+        DROP TABLE review_action_v3;
+        COMMIT;
+    """)
 
 
 def connect(path: str | Path, check_same_thread: bool = True) -> sqlite3.Connection:
@@ -113,6 +135,7 @@ def connect(path: str | Path, check_same_thread: bool = True) -> sqlite3.Connect
     con.executescript(SCHEMA)
     con.execute("INSERT OR IGNORE INTO meta VALUES ('schema_version', '1')")
     con.executescript(SCHEMA_V2)
+    _upgrade_review_action(con)
     con.executescript(SCHEMA_V3)
     with con:
         con.execute("UPDATE meta SET value = ? WHERE key = 'schema_version'", (str(SCHEMA_VERSION),))
@@ -126,8 +149,8 @@ def save_post(con: sqlite3.Connection, record: dict, folder: str | Path, written
                     (record["post_id"], record["run_id"], str(folder), record["status"], written_at, _j(record)))
 
 
-ACTION_COLUMNS = ("at", "reviewer", "role", "target_kind", "target", "stage", "action", "reason", "reason_category",
-                  "before_status", "after_status")
+ACTION_COLUMNS = ("at", "reviewer", "role", "target_kind", "target", "stage", "action", "clears", "reason",
+                  "reason_category", "before_status", "after_status")
 
 
 def add_action(con: sqlite3.Connection, action: dict) -> int:

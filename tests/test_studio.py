@@ -83,7 +83,7 @@ def test_each_stage_waits_for_the_one_before_it(tmp_path):
     e = refused(con, TEST, claims, posts, reviewer=cl, action="clinically_approved", target="post-00000001")
     assert (e.http, e.stage) == (409, "layout")
     row = do(con, TEST, claims, posts, reviewer=ed, action="layout_checked", target="r1/c1")
-    assert row["before_status"].startswith("needs check") and row["after_status"].startswith("layout checked by Test editor")
+    assert row["before_status"].startswith("needs check") and row["after_status"].startswith("verified; layout checked by Test editor")
     e = refused(con, TEST, claims, posts, reviewer=cl, action="clinically_approved", target="post-00000001")
     assert (e.http, e.stage) == (409, "editorial")
     do(con, TEST, claims, posts, reviewer=ed, action="editorial_approved", target="post-00000001")
@@ -162,12 +162,14 @@ def test_page_images_in_a_public_copy_only_for_cc_by(tmp_path):
     assert not studio.cc_by({"license": "CC BY-NC"}) and not studio.cc_by({"license": None})
     con, claims, posts = world(tmp_path)
     for lic, shown in (("CC BY", True), ("CC BY-NC", False)):
-        docs = {"r1": {"citation": {"pmcid": "PMC1", "license": lic}, "warnings": [],
-                       "pages": [{"lines": [{"line_id": "p0001-l0001", "bbox": [10, 20, 300, 34]}]}]}}
+        docs = {"r1": {"citation": {"pmcid": "PMC1", "license": lic}, "warnings": [], "source": {"access": "full_text"},
+                       "pages": [{"page": 1, "width": 612, "height": 792, "layout": "single_column",
+                                  "lines": [{"line_id": "p0001-l0001", "bbox": [10, 20, 300, 34]}]}]}}
         snap = studio.data(con, docs, claims, posts, DEMO, public=True)
-        assert snap["papers"]["r1"]["page_images"] is shown
-        assert studio.data(con, docs, claims, posts, DEMO, public=False)["papers"]["r1"]["page_images"] is True
-        c1 = next(c for c in snap["claims"] if c["key"] == "r1/c1")
+        assert snap["papers"]["PMC1"]["page_images"] is shown
+        assert studio.data(con, docs, claims, posts, DEMO, public=False)["papers"]["PMC1"]["page_images"] is True
+        c1 = next(c for c in snap["claims"] if c["target"] == "r1/c1")
+        assert c1["page_note"] == (None if shown else "page image not shown: CC BY-NC")
         assert c1["boxes"] == {"1": [{"line_id": "p0001-l0001", "bbox": [10, 20, 300, 34]}]}   # S1 line boxes only
     assert "/api/" not in json.dumps(snap) and snap["reviewers"]["has_clinician"] is False
 
@@ -176,7 +178,8 @@ def test_the_server_ignores_a_browser_role_and_answers_with_the_gate(tmp_path):
     from http.server import HTTPServer
     _, claims, posts = world(tmp_path)
     con = store.connect(tmp_path / "s.db", check_same_thread=False)   # served from a second thread, one at a time
-    docs = {"r1": {"citation": {"pmcid": "PMC1", "license": "CC BY"}, "warnings": [], "pages": []}}
+    docs = {"r1": {"citation": {"pmcid": "PMC1", "license": "CC BY"}, "warnings": [], "pages": [],
+                   "source": {"access": "full_text"}}}
     srv = HTTPServer(("127.0.0.1", 0), studio.make_handler(con, lambda: (docs, claims, posts), DEMO, BRAND, tmp_path, None))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{srv.server_address[1]}"
@@ -225,3 +228,68 @@ def test_a_post_that_fails_todays_rules_is_not_reviewable(tmp_path):
     assert studio.post_stages(b, claims, [])["words"] == "blocked (NUMBER_NOT_IN_CLAIM, QUALIFIER_DROPPED)"
     ex = dict(claims) | {"r1/c2": claims["r1/c2"] | {"excluded": "harmful under family framing"}}
     assert studio.claim_status(ex["r1/c2"], [])["words"] == "excluded from posts (harmful under family framing)"
+
+
+def test_a_layout_check_does_not_clear_other_reasons(tmp_path):
+    con = store.connect(tmp_path / "s.db")
+    c = claim("c5", "needs_check", ["CONTEXT_NOT_IN_QUOTE", "LAYOUT_CHECK_NEEDED"])
+    do(con, TEST, {"r1/c5": c}, {}, reviewer="Test editor", action="layout_checked", target="r1/c5")
+    st = studio.claim_status(c, store.actions(con))
+    assert st["words"].startswith("needs check (CONTEXT_NOT_IN_QUOTE); layout checked by Test editor") and not st["usable"]
+
+
+def test_check_cleared_needs_a_reason_and_every_flag_cleared(tmp_path):
+    from steer_pipeline.checks import writable
+    con = store.connect(tmp_path / "s.db")
+    lean = claim("c7", "needs_check", ["CONTEXT_NOT_IN_QUOTE", "POPULATION_NOT_IN_SECTION"],
+                 flags=[{"code": "CONTEXT_NOT_IN_QUOTE"}, {"code": "POPULATION_NOT_IN_SECTION"}], gate={"status": "pass"})
+    cs = {"r1/c7": lean}
+    e = refused(con, TEST, cs, {}, reviewer="Test editor", action="check_cleared", target="r1/c7", clears="CONTEXT_NOT_IN_QUOTE")
+    assert e.http == 400                                                        # no reason, no clearance
+    e = refused(con, TEST, cs, {}, reviewer="Test editor", action="check_cleared", target="r1/c7", clears="CAUSAL_WORDING",
+                reason="x")
+    assert e.http == 400                                                        # only the claim's own open reasons
+    do(con, TEST, cs, {}, reviewer="Test editor", action="check_cleared", target="r1/c7", clears="CONTEXT_NOT_IN_QUOTE",
+       reason="the population is stated in the sentence before, same paragraph")
+    acts = store.actions(con)
+    st = studio.claim_status(lean, acts)
+    assert not st["usable"] and st["open"] == ["POPULATION_NOT_IN_SECTION"]   # partly cleared: still not writable
+    assert not writable(lean | {"s4_cleared": studio.fully_cleared(lean, acts)})
+    assert refused(con, TEST, cs, {}, reviewer="Test editor", action="check_cleared", target="r1/c7",
+                   clears="CONTEXT_NOT_IN_QUOTE", reason="again").http == 409
+    do(con, TEST, cs, {}, reviewer="Test editor", action="check_cleared", target="r1/c7", clears="POPULATION_NOT_IN_SECTION",
+       reason="the methods section names the population")
+    acts = store.actions(con)
+    st = studio.claim_status(lean, acts)
+    assert st["usable"] and st["words"].startswith("verified; CONTEXT_NOT_IN_QUOTE cleared by Test editor (editor)")
+    assert writable(lean | {"s4_cleared": studio.fully_cleared(lean, acts)})   # S3 may now write with it
+    no_cc = lean | {"crosscheck": {"verdict": "supported", "independence": "same_model"}}
+    assert not writable(no_cc | {"s4_cleared": studio.fully_cleared(no_cc, acts)})   # still needs the independent cross-check
+
+
+def test_excluded_or_rejected_claims_cannot_be_cleared(tmp_path):
+    con = store.connect(tmp_path / "s.db")
+    fam = claim("c8", "needs_check", ["CONTEXT_NOT_IN_QUOTE"], excluded="harmful under family framing")
+    rej = claim("c9", "rejected", ["NUMBER_NOT_IN_QUOTE"])
+    cs = {"r1/c8": fam, "r1/c9": rej}
+    for key, code in (("r1/c8", "CONTEXT_NOT_IN_QUOTE"), ("r1/c9", "NUMBER_NOT_IN_QUOTE")):
+        e = refused(con, TEST, cs, {}, reviewer="Test editor", action="check_cleared", target=key, clears=code, reason="r")
+        assert (e.http, e.stage) == (409, "check")
+    assert not studio.claim_status(fam, store.actions(con))["usable"]
+
+
+def test_a_v3_store_upgrades_to_v4_keeping_every_action(tmp_path):
+    import sqlite3
+    path = tmp_path / "v3.db"
+    old = store.REVIEW_ACTION.replace("'layout_unresolved', 'check_cleared', ", "'layout_unresolved', ").replace(
+        "    clears TEXT,                     -- check_cleared: the review reason code this clearance clears\n", "")
+    con = sqlite3.connect(path)
+    con.executescript(store.SCHEMA + store.SCHEMA_V3.replace(store.REVIEW_ACTION, old))
+    con.execute("INSERT INTO review_action (at, reviewer, role, target_kind, target, stage, action) "
+                "VALUES ('t', 'Ed', 'editor', 'claim', 'r/c', 'layout', 'layout_checked')")
+    con.commit()
+    con.close()
+    con = store.connect(path)
+    assert [a["action"] for a in store.actions(con)] == ["layout_checked"]
+    with pytest.raises(sqlite3.DatabaseError, match="append-only"):
+        con.execute("DELETE FROM review_action")
