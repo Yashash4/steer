@@ -310,8 +310,8 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
       {scene.checklist ? <ChecklistView c={scene.checklist} t={t} ink={c.ink} accent={props.palette.rust} low={media} /> : null}
       {scene.sources ? <SourcesCard s={scene.sources} c={c} t={t} artTop={scene.lineart ? L.lineart_sources.top : null} /> : null}
       {scene.lineart && t >= scene.lineart.at ? (
-        <ReelLineArt id={scene.lineart.id} frames={scene.lineart.frames} at={scene.lineart.at} dur={scene.lineart.dur} t={t}
-          top={L.lineart_sources.top} size={L.lineart_sources.height} />
+        <ReelLineArt box={scene.lineart.box} paths={scene.lineart.paths} at={scene.lineart.at} dur={scene.lineart.dur} t={t}
+          top={L.lineart_sources.top} size={L.lineart_sources.height} ink={c.ink} />
       ) : null}
       <div style={{
         position: "absolute", top: L.pill.top, right: 48, height: L.pill.height, boxSizing: "border-box", padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,

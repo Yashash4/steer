@@ -21,7 +21,7 @@ export type Presenter = { video: string; start: number; end: number; label: stri
 export type Scene = {
   kind: "hook" | "point" | "brand" | "cta" | "status" | "checklist" | "pullback" | "sources"; ground: Ground; start: number; end: number;
   transition_in: "wipe" | "none" | "zoom"; broll: Broll | null; presenter: Presenter | null; captions: boolean; zoom: Zoom[];
-  checklist: Checklist | null; pullback: string | null; sources_at: number | null; lineart?: { id: string; frames: number; at: number; dur: number } | null; lines: Line[]; sources: Sources | null;
+  checklist: Checklist | null; pullback: string | null; sources_at: number | null; lineart?: { id: string; at: number; dur: number; box: number[]; paths: number[][][] } | null; lines: Line[]; sources: Sources | null;
 };
 export type ReelProps = {
   version: 3; fps: 30; width: 1080; height: 1920; durationInFrames: number; audio: string;

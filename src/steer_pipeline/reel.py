@@ -1010,7 +1010,7 @@ def voice_problems(props: dict) -> list[dict]:
     return out
 
 
-LINEART_DRAW, LINEART_FRAMES, LINEART_WIDTH = 2.0, 24, 360   # v5: drawn on in 2 s (24 pre-rendered steps), then held
+LINEART_DRAW = 2.0   # v5: the CTA scene's drawing is drawn on, stroke by stroke, in 2 s from the sources card, then held
 
 
 def reel_lineart(props: dict, theme: str = "", doubt: str = "") -> dict:
@@ -1021,18 +1021,10 @@ def reel_lineart(props: dict, theme: str = "", doubt: str = "") -> dict:
             texts = [ln["text"] for ln in sc["lines"]] + [e["before"] + e["journal"] + e["after"] for e in sc["sources"]["entries"]]
             pick = lineart.choose([{"texts": texts, "has_health": False, "eligible": True}], theme, doubt)
             if pick:
-                sc["lineart"] = {"id": pick[0], "frames": LINEART_FRAMES, "at": sc["sources_at"], "dur": LINEART_DRAW}
+                d = lineart.drawing(pick[0])   # the same drawing data as the slides, drawn as SVG strokes (no WebGL)
+                sc["lineart"] = {"id": pick[0], "at": sc["sources_at"], "dur": LINEART_DRAW,
+                                 "box": [round(v, 1) for v in lineart.bbox(d)], "paths": d["paths"]}
     return props
-
-
-def lineart_frames(la: dict, ink: str) -> dict:
-    """{public name: PNG path}: lineart-<id>-<k>.png, the drawing after (k + 1) / frames of its path length."""
-    from playwright.sync_api import sync_playwright
-    tmp = Path(tempfile.mkdtemp(prefix="steer-reel-lineart-"))
-    names = {f"lineart-{la['id']}-{k}.png": tmp / f"{k}.png" for k in range(la["frames"])}
-    with sync_playwright() as pw:
-        lineart.draw_png(pw, [(la["id"], ink, LINEART_WIDTH, p, (k + 1) / la["frames"]) for k, p in enumerate(names.values())])
-    return names
 
 
 STATIC_MAX, URL_DELAY = 3.0, 1.5   # v5: no span over 3 s without a visual change; the URL enters 1.5 s after the card
@@ -1374,9 +1366,6 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
         extra = {f"broll-{n}.mp4": c for n, c in ((v4 or {}).get("broll") or {}).items()}
         if (v4 or {}).get("pullback"):
             extra["pullback.png"] = v4["pullback"]
-        for sc in props["scenes"]:   # the draw-on as PNG steps, drawn by the slides' own renderer (no WebGL in the reel)
-            if sc.get("lineart"):
-                extra |= lineart_frames(sc["lineart"], props["palette"]["ink"])
         if plan:
             import hashlib
             v4_trace = {"edit_plan": plan, "pullback": (v4 or {}).get("pullback_meta"), "assets_sha256": {n: hashlib.sha256(Path(c).read_bytes()).hexdigest()
