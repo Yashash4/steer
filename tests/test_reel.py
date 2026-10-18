@@ -279,7 +279,17 @@ def test_elevenlabs_voice_credit_fallback_and_no_fallback_under_a_presenter(tmp_
     assert pr["status"] == "failed" and [f["code"] for f in pr["failures"]] == ["VOICE_FAILED"]
     assert not (tmp_path / "presenter" / "reel.mp4").exists()
 
+def test_edge_tts_is_cached_so_a_re_render_gets_the_same_voice(tmp_path, monkeypatch):
+    monkeypatch.setattr(reel, "TTS_CACHE", tmp_path)
+    calls = []
+    monkeypatch.setattr(reel, "_edge_tts", lambda text, voice: (calls.append(text), fake_tts(text, voice))[1])
+    v = {"provider": "edge-tts", "name": "en-IN-NeerjaExpressiveNeural", "rate": "+8%"}
+    one, two = reel.edge_tts_voice("Lean, and still wondering?", v), reel.edge_tts_voice("Lean, and still wondering?", v)
+    assert one == two and calls == ["Lean, and still wondering?"]
+
+
 def test_an_edge_tts_failure_fails_the_reel_cleanly_with_or_without_a_presenter(tmp_path, monkeypatch):
+    monkeypatch.setattr(reel, "TTS_CACHE", tmp_path / "c")
     record = {"post_id": "p1", "run_id": "r1", "sources": []}
     script = {"scenes": [{"lines": [{"kind": "framing", "text": "Will the weight come back?", "claim_ids": []}]}]}
     def down(text, voice):

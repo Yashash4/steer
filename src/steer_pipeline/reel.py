@@ -155,12 +155,23 @@ def audio_numbers_match(line_text: str, transcript: str | None) -> dict:
 # --- voice and transcription (replaceable for tests) ---
 
 def edge_tts_voice(text: str, voice: dict) -> tuple[bytes, list[tuple[str, float, float]]]:
+    """Cached by sha256(text, voice name, rate): a re-render (e.g. with presenter clips animated from the first render's
+    audio) gets exactly the same voice track and word timings."""
+    import base64
+    import hashlib
+    key = hashlib.sha256(json.dumps(["edge-tts", text, voice.get("name"), voice.get("rate", "+0%")]).encode()).hexdigest()
+    f = TTS_CACHE / f"{key}.json"
+    if f.exists():
+        d = json.loads(f.read_text())
+        return base64.b64decode(d["audio"]), [tuple(w) for w in d["words"]]
     try:
         audio, words = _edge_tts(text, voice)
     except Exception as e:   # network, service: a clean voice failure, as for ElevenLabs
         raise VoiceError(f"edge-tts failed: {type(e).__name__}") from None
     if not audio:
         raise VoiceError("edge-tts returned no audio")
+    TTS_CACHE.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps({"audio": base64.b64encode(audio).decode(), "words": words}))
     return audio, words
 
 
