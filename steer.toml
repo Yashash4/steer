@@ -17,6 +17,10 @@ chain = ["claude_haiku", "claude_sonnet", "anthropic_haiku"]
 [jobs.crosscheck]
 chain = ["opencode_glm", "opencode_deepseek", "claude_opus"]
 
+# The learning loop's caption labels (theme, doubt): a small constrained call on a non-Claude model.
+[jobs.learn_label]
+chain = ["opencode_glm", "opencode_deepseek"]
+
 # Claude Code headless, on the logged-in Claude account (minimal context, no tools).
 [endpoints.claude_sonnet]
 connector = "claude_cli"

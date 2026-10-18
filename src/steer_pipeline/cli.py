@@ -93,6 +93,13 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("--out", required=True, help="folder for report-<date>.json and .md")
     ev.add_argument("--live", action="store_true", help="also run the model-judged items with the configured chain")
     ev.add_argument("--settings")
+    le = sub.add_parser("learn", help="weekly learning loop: benchmark ledger, labels, own output, score, one brief rule")
+    le.add_argument("--urls", required=True, help="a file with one public post URL per line")
+    le.add_argument("--db", required=True, help="the studio store (opened read-only)")
+    le.add_argument("--out", required=True)
+    le.add_argument("--posts", nargs="*", help="folders holding written posts (default: trials/*/out)")
+    le.add_argument("--offline", action="store_true", help="no fetch, no model call: ledger and cache only")
+    le.add_argument("--settings")
     d = sub.add_parser("render", help="render (again) the PNGs of a written post folder")
     d.add_argument("folder", help="out/<run_id>/<post_id>")
     args = ap.parse_args(argv)
@@ -121,6 +128,11 @@ def main(argv: list[str] | None = None) -> int:
         for k in ("1_verification_integrity", "2_error_detection", "3_false_alarms", "4_extraction_coverage"):
             print(f"{k}: {r[k]['wording']}", file=sys.stderr)
         print(f"self-test: {r['harness_self_test']['wording']}", file=sys.stderr)
+    if args.cmd == "learn":
+        from . import learn
+        r = learn.run(args.urls, args.db, args.out, args.posts, args.offline,
+                      router=None if args.offline else Router(load_settings(args.settings)))
+        print(f"learn: retrieval {r['tally']}, n={r['n']}; {r['why']} -> {args.out}", file=sys.stderr)
         return 0
 
     if args.cmd == "ps1":

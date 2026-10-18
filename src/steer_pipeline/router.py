@@ -131,12 +131,12 @@ def anthropic_api(endpoint: dict, system: str, prompt: str, schema: dict, *, key
 
 
 def openai_compatible(endpoint: dict, system: str, prompt: str, schema: dict, *, key: str,
-                      client: httpx.Client, run_id: str, **_) -> tuple[object, dict | None]:
+                      client: httpx.Client, run_id: str, options: dict | None = None, **_) -> tuple[object, dict | None]:
     data = _post(client, endpoint["base_url"].rstrip("/") + "/chat/completions",
                  {"Authorization": f"Bearer {key}", "x-opencode-session": run_id},
                  {"model": endpoint["model"],
                   "messages": [{"role": "system", "content": _schema_instruction(system, schema)},
-                               {"role": "user", "content": prompt}]} | endpoint.get("extra_body", {}),
+                               {"role": "user", "content": prompt}]} | endpoint.get("extra_body", {}) | (options or {}),
                  endpoint.get("timeout", 300))
     try:
         text = data["choices"][0]["message"]["content"] or ""
@@ -160,9 +160,11 @@ class Router:
         self.run_id = uuid.uuid4().hex  # one stable session id per run (sent as x-opencode-session)
         self.log: list[dict] = []
 
-    def call(self, job: str, system: str, prompt: str, schema: dict, skip: set[str] = frozenset()) -> dict:
+    def call(self, job: str, system: str, prompt: str, schema: dict, skip: set[str] = frozenset(),
+             options: dict | None = None) -> dict:
         """The first schema-valid output along the job's chain: {output, endpoint, model, usage}.
 
+        `options` (e.g. {"temperature": 0}) is merged into an OpenAI-compatible request body.
         Endpoints named in `skip` are not called (logged as skipped_ineligible), e.g. a checker that is the
         same model as the writer it would check.
         """
@@ -186,7 +188,7 @@ class Router:
                 entry = base | {"attempt": attempt, "tokens": None}
                 try:
                     output, usage = self.connectors[ep["connector"]](
-                        ep, system, prompt, schema, key=key, client=self.client, run_id=self.run_id)
+                        ep, system, prompt, schema, key=key, client=self.client, run_id=self.run_id, options=options or {})
                     try:
                         jsonschema.validate(output, schema)
                     except jsonschema.ValidationError as e:
