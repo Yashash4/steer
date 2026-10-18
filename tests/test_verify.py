@@ -250,3 +250,23 @@ def test_table_row_numbers_only_still_pass(two):
     summary = verify([{"claim_id": "t", "text": "Control body weight was 71.8 ± 11.3 at baseline",
                        "document_id": two["document_id"], "quote": q}], [two])["summary"]
     assert summary["table_text"] == 1 and summary["passed_clean"] == 0
+
+
+def test_live_run_notation_cases_now_pass(tmp_path):
+    from steer_pipeline.text import ingest_text
+    p = tmp_path / "n.txt"
+    p.write_text("After more than 52 weeks the results showed a decrease of −4.27% (95% confidence interval: −5.08 to "
+                 "−3.46; P < 0.00001). In South Asian men incidence was 1.21 (0.76, 1.84) times higher than in US white "
+                 "men. Participants aged ≥45 years were included. Studies lasting <52 weeks were pooled.\n")
+    doc = ingest_text(p, "evidence")
+    cases = [
+        ("Percentage lean mass changed by −4.27% (95% CI −5.08 to −3.46).",
+         "the results showed a decrease of −4.27% (95% confidence interval: −5.08 to −3.46; P < 0.00001)"),
+        ("Men had 1.21 (0.76 to 1.84) times higher incidence.",
+         "In South Asian men incidence was 1.21 (0.76, 1.84) times higher than in US white men."),
+        ("Participants aged 45 years or older were included.", "Participants aged ≥45 years were included."),
+        ("Studies lasting under 52 weeks were pooled.", "Studies lasting <52 weeks were pooled."),
+    ]
+    for text, quote in cases:
+        assert run(doc, text, quote)["status"] == "pass", text
+    assert run(doc, "Studies lasting 52 weeks were pooled.", "Studies lasting <52 weeks were pooled.")["status"] == "reject"

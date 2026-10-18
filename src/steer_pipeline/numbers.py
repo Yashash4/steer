@@ -45,6 +45,7 @@ TOKEN = re.compile(
     rf"(?:\s?(?P<u1>{_unit_alt})(?![A-Za-z]))?"
     rf"(?:\s?(?:-|\bto\b)\s?(?P<sign2>[+-])?(?P<n2>{_num})(?:\s?(?P<u2>{_unit_alt})(?![A-Za-z]))?)?"
     rf"(?P<ci>\s?CI\b)?"
+    rf"(?P<post>\s(?:or|and) (?:older|more|above|over|greater|higher|younger|less|below|under|fewer|lower)\b)?"
     rf"(?![\w])",
     re.IGNORECASE,
 )
@@ -58,9 +59,17 @@ class Num(NamedTuple):
     unit: str | None
     text: str
     hedged: bool = False  # "approximately", "about", "~"... right before the number (not part of equality)
+    alt_comparator: str | None = None  # "under 52 weeks": also equal to "<52 weeks" (a duration word)
 
     def key(self) -> tuple:
         return (self.comparator, self.plus_minus, self.low, self.high, self.unit)
+
+    def keys(self) -> set[tuple]:
+        """Every key this token is equal under: its own, and the comparator form of a duration word."""
+        k = {self.key()}
+        if self.alt_comparator:
+            k.add((self.alt_comparator, *self.key()[1:]))
+        return k
 
 
 def _value(digits: str, sign: str | None) -> Decimal:
@@ -73,9 +82,23 @@ def _words_to_digits(text: str) -> str:
                   text, flags=re.IGNORECASE)
 
 
+POSTFIX = {"older": "≥", "more": "≥", "above": "≥", "over": "≥", "greater": "≥", "higher": "≥",
+           "younger": "≤", "less": "≤", "below": "≤", "under": "≤", "fewer": "≤", "lower": "≤"}
+_n = r"[+-]?\d+(?:\.\d+)?"
+# exact notation equivalences, applied to claim and quote alike:
+CI_WORDS = re.compile(r"confidence intervals?(?:\s*\(CI\))?", re.I)           # "95% confidence interval" = "95% CI"
+# "(1.56, 2.74)" right after a number (optionally with its unit: "0.7 mmol/L (0.1, 1.3)") or after "CI"
+CI_PAIR = re.compile(rf"((?:\d(?:\s?[^\s\d(),;]{{1,10}})?|CI:?)\s*\(\s*|CI:?\s+)({_n})\s*,\s*({_n})(?=\s*[);])")
+
+
+def equivalent_notation(text: str) -> str:
+    text = CI_WORDS.sub("CI", text)
+    return CI_PAIR.sub(lambda m: f"{m.group(1)}{m.group(2)} to {m.group(3)}", text)
+
+
 def find_numbers(text: str) -> list[Num]:
     out = []
-    norm = _words_to_digits(basic(text))
+    norm = equivalent_notation(_words_to_digits(basic(text)))
     for m in TOKEN.finditer(norm):
         sign = m["sign"]
         if sign and sign.startswith("+/"):
@@ -87,10 +110,13 @@ def find_numbers(text: str) -> list[Num]:
         if m["ci"]:
             unit = f"{unit or ''} ci"
         comp = COMPARATORS[m["comp"].lower()] if m["comp"] else None
+        alt = None
         if m["comp"] and m["comp"].lower() in DURATION_WORDS and (unit or "").split("..")[0] in TIME_UNITS:
-            comp = None
+            comp, alt = None, comp  # "over 12 weeks" equals "12 weeks", and also ">12 weeks"
+        if m["post"] and comp is None:
+            comp = POSTFIX[m["post"].split()[-1].lower()]  # "45 years or older" equals "≥45 years"
         low = _value(m["n1"], sign if sign != "±" else None)
         high = _value(m["n2"], m["sign2"]) if m["n2"] else None
         hedged = bool(HEDGE.search(norm[max(0, m.start() - 20):m.start()]))
-        out.append(Num(comp, sign == "±", low, high, unit, m.group(0).strip(), hedged))
+        out.append(Num(comp, sign == "±", low, high, unit, m.group(0).strip(), hedged, alt))
     return out

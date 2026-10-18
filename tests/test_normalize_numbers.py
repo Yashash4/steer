@@ -70,3 +70,35 @@ def test_hedge_is_recorded_not_compared():
     a, b = find_numbers("approximately 55%–65%")[0], find_numbers("55% to 65%")[0]
     assert a.key() == b.key() and a.hedged and not b.hedged
     assert find_numbers("~ 20 kg")[0].hedged and find_numbers("about 3 days")[0].hedged
+
+
+def test_ci_pair_equals_ci_range_only_in_ci_context():
+    assert set(keys("1.21 (0.76, 1.84) times higher")) >= set(keys("1.21 (0.76 to 1.84)"))
+    assert set(keys("+ 0.7 mmol/L (0.1, 1.3); p")) == set(keys("0.7 mmol/l (0.1 to 1.3)"))
+    assert keys("95% CI 0.1, 1.3)") == keys("95% CI 0.1 to 1.3)")
+    # control: a reference list "(6, 7)" after text is not a range
+    assert keys("as shown before (6, 7) here") == keys("6 and 7")
+
+
+def test_confidence_interval_spelled_out_equals_ci():
+    assert keys("95% confidence interval: -5.08 to -3.46") == keys("95% CI: -5.08 to -3.46")
+    assert keys("95% confidence interval (CI) 0.3 to 0.5") == keys("95% CI 0.3 to 0.5")
+    assert keys("95% of the confidence") != keys("95% CI")  # control
+
+
+def test_postfix_comparators():
+    assert keys("aged 45 years or older") == keys("aged ≥45 years")
+    assert keys("6 or more") == keys("≥6")
+    assert keys("aged 30 years or younger") == keys("aged ≤30 years")
+    assert keys("aged 45 years") != keys("aged ≥45 years")  # control: no postfix, no comparator
+
+
+def test_duration_words_match_their_comparator_only_when_the_other_side_has_it():
+    under = find_numbers("studies lasting under 52 weeks")[0]
+    lt = find_numbers("studies lasting <52 weeks")[0]
+    bare = find_numbers("studies lasting 52 weeks")[0]
+    assert under.keys() & lt.keys()          # "under 52 weeks" = "<52 weeks"
+    assert under.keys() & bare.keys()        # and still = "52 weeks" (a duration)
+    assert not bare.keys() & lt.keys()       # a bare "52 weeks" never equals "<52 weeks"
+    over = find_numbers("over 12 weeks")[0]
+    assert over.keys() & find_numbers(">12 weeks")[0].keys()

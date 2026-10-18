@@ -96,21 +96,21 @@ def check_claim(claim: dict, docs: dict[str, _Doc], min_words: int = MIN_WORDS) 
             reasons.append(_reason("QUOTE_NOT_FOUND", "the quote does not occur in the document text"))
 
     claim_nums, quote_nums = find_numbers(claim.get("text", "")), find_numbers(quote)
-    quote_keys = {n.key() for n in quote_nums}
+    quote_keys = set().union(*(n.keys() for n in quote_nums)) if quote_nums else set()
     hedge_warnings = []
     for n in claim_nums:
-        if n.key() in quote_keys and not n.hedged and any(q.hedged and q.key() == n.key() for q in quote_nums):
+        if n.keys() & quote_keys and not n.hedged and any(q.hedged and q.keys() & n.keys() for q in quote_nums):
             hedge_warnings.append(_reason("HEDGE_DROPPED", f"the quote hedges {n.text!r} (for example 'approximately'); "
                                                      "the claim states it without a hedge"))
-        if n.key() not in quote_keys:
+        if not n.keys() & quote_keys:
             reasons.append(_reason("NUMBER_NOT_IN_QUOTE", f"{n.text!r} (value {n.low}"
                                    + (f" to {n.high}" if n.high is not None else "")
                                    + f", unit {n.unit}, comparator {n.comparator}) is not in the quote"))
     warnings = []  # filled below; kept even when the claim is rejected
     short = bool(quote) and len(quote.split()) < min_words
     if short:
-        claim_keys = {n.key() for n in claim_nums}
-        if not any(n.key() in claim_keys for n in quote_nums):
+        claim_keys = set().union(*(n.keys() for n in claim_nums)) if claim_nums else set()
+        if not any(n.keys() & claim_keys for n in quote_nums):
             reasons.append(_reason("QUOTE_TOO_SHORT",
                                    f"{len(quote.split())} words (minimum {min_words}, unless it holds a number of the claim)"))
         else:

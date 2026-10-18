@@ -190,8 +190,13 @@ Units ignore case (mg/dL = mg/dl, kg/m² = kg/m2 = kg/m^2). "Percentage points" 
 a confidence label. A claim token must equal a quote token in comparator, sign, value(s) and unit. There is
 no rounding: "about 1 in 5" never matches "21%".
 
-"over", "under", "above" and "below" before a duration ("over 12 weeks") mean a time span, not a
-comparison, so they are not comparators there.
+"over", "under", "above" and "below" before a duration ("over 12 weeks") equal the bare duration, and also
+equal the matching comparator (">12 weeks"), but a bare "52 weeks" never equals "<52 weeks".
+
+Exact notation equivalences, applied to claim and quote alike:
+- "95% confidence interval" equals "95% CI".
+- "(1.56, 2.74)" right after a number or after "CI" equals "1.56 to 2.74".
+- "45 years or older / or more / and above" equals "≥45 years"; "or younger / or less / and below" equals "≤".
 
 Numbers glued to letters are identifiers, not values (GLP-1, T2D, HbA1c). The words one to ten count as
 numbers. Hedges ("approximately", "about", "around", "roughly", "nearly", "~") are not part of the
