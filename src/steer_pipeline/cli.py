@@ -88,6 +88,11 @@ def main(argv: list[str] | None = None) -> int:
     q.add_argument("--rounds", help="rounds.toml (default: code/ps1/rounds.toml)")
     q.add_argument("--settings")
     q.add_argument("--no-crosscheck", action="store_true", help="skip the line cross-check (offline only; not for a release)")
+    ev = sub.add_parser("eval", help="measure the pipeline: planted errors, known-good items and stored runs, as a report")
+    ev.add_argument("--db", required=True, help="the SQLite store (opened read-only)")
+    ev.add_argument("--out", required=True, help="folder for report-<date>.json and .md")
+    ev.add_argument("--live", action="store_true", help="also run the model-judged items with the configured chain")
+    ev.add_argument("--settings")
     d = sub.add_parser("render", help="render (again) the PNGs of a written post folder")
     d.add_argument("folder", help="out/<run_id>/<post_id>")
     args = ap.parse_args(argv)
@@ -109,6 +114,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         print("say --serve or --export DIR", file=sys.stderr)
         return 2
+
+    if args.cmd == "eval":
+        from . import evalharness
+        r = evalharness.evaluate(args.db, args.out, args.live, load_settings(args.settings))
+        for k in ("1_verification_integrity", "2_error_detection", "3_false_alarms", "4_extraction_coverage"):
+            print(f"{k}: {r[k]['wording']}", file=sys.stderr)
+        print(f"self-test: {r['harness_self_test']['wording']}", file=sys.stderr)
+        return 0
 
     if args.cmd == "ps1":
         from . import ps1

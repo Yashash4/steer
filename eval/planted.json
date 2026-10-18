@@ -1,0 +1,201 @@
+{
+ "note": "Expected outcomes written before any run (2026-10-18). type: error = must be stopped; control = must pass (a block is a false alarm); synthetic = made up for the test.",
+ "items": [
+  {
+   "id": "E1",
+   "layer": "S1 gate",
+   "kind": "gate",
+   "type": "error",
+   "unsupported": true,
+   "paper": "PMC12776922",
+   "synthetic": false,
+   "base": "G1",
+   "mutation": "G1 claim says 0.8 kg, quote unchanged",
+   "claim_text": "Weight came back at 0.8 kg a month on average (95% CI 0.3 to 0.5)",
+   "expect": {
+    "category": "gate_reject",
+    "code": "NUMBER_NOT_IN_QUOTE"
+   }
+  },
+  {
+   "id": "E1-ctl",
+   "layer": "S1 gate",
+   "kind": "gate",
+   "type": "control",
+   "paper": "PMC12776922",
+   "synthetic": false,
+   "base": "G1",
+   "mutation": "the unmutated G1 claim",
+   "claim_text": "Weight came back at 0.4 kg a month on average (95% CI 0.3 to 0.5)",
+   "expect": {
+    "category": "gate_pass"
+   }
+  },
+  {
+   "id": "G2-ctl",
+   "layer": "S1 gate",
+   "kind": "gate",
+   "type": "control",
+   "paper": "PMC13461373",
+   "synthetic": false,
+   "base": "G2",
+   "mutation": "the unmutated G2 claim",
+   "claim_text": "Absolute lean mass changed by −1.74 kg (95% CI −3.04 to −0.45; p < 0.00001; I² = 98%)",
+   "expect": {
+    "category": "gate_pass"
+   }
+  },
+  {
+   "id": "G3-ctl",
+   "layer": "S1 gate",
+   "kind": "gate",
+   "type": "control",
+   "paper": "PMC8006839",
+   "synthetic": false,
+   "base": "G3",
+   "mutation": "the unmutated G3 claim",
+   "claim_text": "Diabetes incidence was 5.3 times (3.64 to 7.54) higher in South Asian women than in white women",
+   "expect": {
+    "category": "gate_pass"
+   }
+  },
+  {
+   "id": "E2",
+   "layer": "S1 gate",
+   "kind": "gate",
+   "type": "error",
+   "unsupported": true,
+   "paper": "PMC12776922",
+   "synthetic": true,
+   "mutation": "a plausible quote that is not in the paper (real document, invented quote)",
+   "claim_text": "Weight regain averaged 0.4 kg per month after stopping medication",
+   "quote": "Participants regained weight at a steady rate of 0.4 kg per month after stopping medication.",
+   "expect": {
+    "category": "gate_reject",
+    "code": "QUOTE_NOT_FOUND"
+   }
+  },
+  {
+   "id": "E3",
+   "layer": "S2 code flags",
+   "kind": "code_flag",
+   "type": "error",
+   "unsupported": true,
+   "paper": "PMC8006839",
+   "synthetic": false,
+   "base": "G3",
+   "mutation": "a causal claim on the G3 quote; its number matches, so only wording can stop it",
+   "claim_text": "South Asian ethnicity causes a 5.3 times higher diabetes risk",
+   "expect": {
+    "category": "code_flag",
+    "code": "CAUSAL_WORDING"
+   }
+  },
+  {
+   "id": "E4",
+   "layer": "S2 rules",
+   "kind": "rules",
+   "type": "error",
+   "unsupported": false,
+   "synthetic": true,
+   "mutation": "post text promising a result",
+   "text": "Lose 10 kg in 12 weeks—guaranteed",
+   "profile": "publication",
+   "expect": {
+    "category": "rule_block",
+    "code": "PROMISE"
+   }
+  },
+  {
+   "id": "E4-ctl",
+   "layer": "S2 rules",
+   "kind": "rules",
+   "type": "control",
+   "synthetic": true,
+   "mutation": "clean brand text",
+   "text": "Doctor-led care. Diagnostics first. Rotis, chai and steady habits.",
+   "profile": "publication",
+   "expect": {
+    "category": "rule_clean"
+   }
+  },
+  {
+   "id": "E5",
+   "layer": "S1 gate",
+   "kind": "gate",
+   "type": "error",
+   "unsupported": true,
+   "synthetic": true,
+   "mutation": "5 percentage points in the quote, 5% in the claim",
+   "doc_text": "In the trial, participants lost 5 percentage points of body weight at twelve weeks.",
+   "claim_text": "Participants lost 5% of body weight at twelve weeks",
+   "quote": "In the trial, participants lost 5 percentage points of body weight at twelve weeks.",
+   "expect": {
+    "category": "gate_reject",
+    "code": "NUMBER_NOT_IN_QUOTE"
+   },
+   "note": "the gold set leaves the code open ('unknown today'); NUMBER_NOT_IN_QUOTE is the gate's only number code"
+  },
+  {
+   "id": "E6",
+   "layer": "S1 gate",
+   "kind": "gate",
+   "type": "control",
+   "synthetic": true,
+   "mutation": "mg/dL in the quote, mg/dl in the claim, same value",
+   "doc_text": "Mean LDL cholesterol fell to 100 mg/dL after twelve weeks of treatment.",
+   "claim_text": "LDL cholesterol fell to 100 mg/dl after twelve weeks",
+   "quote": "Mean LDL cholesterol fell to 100 mg/dL after twelve weeks of treatment.",
+   "expect": {
+    "category": "gate_pass"
+   }
+  },
+  {
+   "id": "E7",
+   "layer": "S1 gate",
+   "kind": "gate",
+   "type": "error",
+   "unsupported": true,
+   "paper": "PMC12776922",
+   "synthetic": false,
+   "mutation": "the quote is exactly '0.4 kg'",
+   "claim_text": "Weight regain was 0.4 kg a month",
+   "quote": "0.4 kg",
+   "expect": {
+    "category": "gate_flag",
+    "code": "QUOTE_TOO_SHORT"
+   },
+   "note": "gold set: not rejected for being short, but flagged QUOTE_TOO_SHORT (proposed code)"
+  },
+  {
+   "id": "E8",
+   "layer": "S1 gate",
+   "kind": "gate",
+   "type": "control",
+   "paper": "PMC13461373",
+   "synthetic": false,
+   "mutation": "a number that sits only in table text (stored claim run-e4d5.../c003-01 re-gated)",
+   "claim_text": "The Jastreboff study does not specify how many of the 255 participants in this DXA subgroup received each tirzepatide dose (5 mg, 10 mg, or 15 mg) or how many were in the placebo group.",
+   "quote": "cThe Jastreboff study does not specify how many of these 255 participants received each individual dose of tirzepatide (5 mg, 10 mg, or 15 mg) or how many were in the placebo group within this specific DXA subgroup.",
+   "expect": {
+    "category": "gate_pass",
+    "code": "TABLE_TEXT"
+   }
+  },
+  {
+   "id": "E9",
+   "layer": "S1 gate",
+   "kind": "gate",
+   "type": "control",
+   "synthetic": true,
+   "mutation": "'approximately 55%' in the quote, '55%' in the claim",
+   "doc_text": "Body weight fell by approximately 55% in the treated group.",
+   "claim_text": "Body weight fell by 55% in the treated group",
+   "quote": "Body weight fell by approximately 55% in the treated group.",
+   "expect": {
+    "category": "gate_pass",
+    "code": "HEDGE_DROPPED"
+   }
+  }
+ ]
+}

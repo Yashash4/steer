@@ -1,0 +1,367 @@
+{
+ "note": "Post-level plants and known false alarms (s5-eval-harness.md 1.1, 1.3). Claims are the stored Narayan/Laverde claims named in claim_refs; the harness checks each quote_start against the store.",
+ "items": [
+  {
+   "id": "P1",
+   "layer": "S3 post checks",
+   "kind": "line",
+   "paper": "PMC8006839",
+   "type": "error",
+   "unsupported": true,
+   "synthetic": true,
+   "mutation": "a health line with a number that is not in its claim",
+   "line": {
+    "kind": "health",
+    "text": "In women with BMI under 25 kg/m2, diabetes risk was 3.5 times higher in South Asians.",
+    "claim_ids": [
+     "c004-01"
+    ]
+   },
+   "expect": {
+    "category": "line_check",
+    "code": "NUMBER_NOT_IN_CLAIM"
+   }
+  },
+  {
+   "id": "P1-ctl",
+   "layer": "S3 post checks",
+   "kind": "line",
+   "paper": "PMC8006839",
+   "type": "control",
+   "synthetic": true,
+   "mutation": "the same line with the numbers of its claim",
+   "line": {
+    "kind": "health",
+    "text": "In women with BMI under 25 kg/m2, diabetes risk was 5.3 times higher in South Asians (IRR 5.27, 95% CI 3.64 to 7.54).",
+    "claim_ids": [
+     "c004-01"
+    ]
+   },
+   "expect": {
+    "category": "line_clean"
+   }
+  },
+  {
+   "id": "P2",
+   "layer": "S3 post checks",
+   "kind": "line",
+   "paper": "PMC8006839",
+   "type": "error",
+   "unsupported": true,
+   "synthetic": true,
+   "mutation": "a framing line that carries a number",
+   "line": {
+    "kind": "framing",
+    "text": "3 in 4 South Asian adults will get it.",
+    "claim_ids": []
+   },
+   "expect": {
+    "category": "line_check",
+    "code": "FRAMING_HAS_NUMBER"
+   }
+  },
+  {
+   "id": "FA1",
+   "layer": "S3 post checks",
+   "kind": "line",
+   "paper": "PMC8006839",
+   "type": "control",
+   "synthetic": true,
+   "mutation": "known false alarm, fixed: 'No one' read as the number one",
+   "line": {
+    "kind": "framing",
+    "text": "No one at home has sugar problems.",
+    "claim_ids": []
+   },
+   "expect": {
+    "category": "line_clean"
+   }
+  },
+  {
+   "id": "P4",
+   "layer": "S3 post checks",
+   "kind": "line",
+   "paper": "PMC8006839",
+   "type": "error",
+   "unsupported": true,
+   "synthetic": true,
+   "mutation": "Narayan 'less insulin resistant' post without the incidence pair",
+   "lines": [
+    {
+     "kind": "health",
+     "text": "South Asians were less insulin resistant than blacks and whites.",
+     "claim_ids": [
+      "c002-01"
+     ]
+    }
+   ],
+   "expect": {
+    "category": "post_boundary",
+    "code": "REQUIRE_WITH_MISSING"
+   }
+  },
+  {
+   "id": "P6",
+   "layer": "S3 post checks",
+   "kind": "line",
+   "paper": "PMC13461373",
+   "type": "error",
+   "unsupported": true,
+   "synthetic": true,
+   "mutation": "'muscle' for a lean mass quote",
+   "line": {
+    "kind": "health",
+    "text": "Muscle as a share of total weight rose 1.81% (95% CI 1.1 to 2.52) with GLP-1 treatment.",
+    "claim_ids": [
+     "c000-00"
+    ]
+   },
+   "expect": {
+    "category": "line_check",
+    "code": "LEAN_MASS_WORDING"
+   }
+  },
+  {
+   "id": "P6-ctl",
+   "layer": "S3 post checks",
+   "kind": "line",
+   "paper": "PMC13461373",
+   "type": "control",
+   "synthetic": true,
+   "mutation": "the same line with 'lean mass'",
+   "line": {
+    "kind": "health",
+    "text": "Lean mass as a share of total weight rose 1.81% (95% CI 1.1 to 2.52) with GLP-1 treatment.",
+    "claim_ids": [
+     "c000-00"
+    ]
+   },
+   "expect": {
+    "category": "line_clean"
+   }
+  },
+  {
+   "id": "P3",
+   "layer": "S3 post checks",
+   "kind": "line",
+   "paper": "PMC8006839",
+   "type": "error",
+   "unsupported": true,
+   "synthetic": true,
+   "model_judged": true,
+   "mutation": "the post message with added advice",
+   "line": {
+    "kind": "message",
+    "text": "Among men with BMI under 25 kg/m2, diabetes risk was 2.99 times higher in South Asians than in US whites. Cut out rice to protect yourself. Talk to a Steer doctor",
+    "claim_ids": [
+     "c004-00"
+    ]
+   },
+   "expect": {
+    "category": "crosscheck",
+    "code": "unsupported"
+   }
+  },
+  {
+   "id": "P5",
+   "layer": "S3 post checks",
+   "kind": "line",
+   "paper": "PMC8006839",
+   "type": "error",
+   "unsupported": true,
+   "synthetic": true,
+   "model_judged": true,
+   "mutation": "a key number/label pair that drops the population",
+   "line": {
+    "kind": "key",
+    "text": "5.3 / higher diabetes risk",
+    "claim_ids": [
+     "c004-01"
+    ]
+   },
+   "expect": {
+    "category": "crosscheck",
+    "code": "population_generalised"
+   },
+   "accept": [
+    "qualifier_dropped",
+    "unsupported",
+    "overstated"
+   ]
+  },
+  {
+   "id": "FA2",
+   "layer": "S3 post checks",
+   "kind": "line",
+   "paper": "PMC8006839",
+   "type": "control",
+   "synthetic": false,
+   "model_judged": true,
+   "mutation": "known false alarm: message judged population_generalised (post-f940949b, recorded)",
+   "line": {
+    "kind": "message",
+    "text": "Among men with BMI under 25 kg/m2, diabetes risk was 2.99 times higher in South Asians than in US whites. Talk to a Steer doctor",
+    "claim_ids": [
+     "c004-00"
+    ]
+   },
+   "expect": {
+    "category": "crosscheck",
+    "code": "supported"
+   },
+   "recorded": {
+    "trace": "trials/s3-render-1/out/run-244d0fbd0c04/post-f940949b/trace.json",
+    "path": "message",
+    "verdict": "population_generalised"
+   }
+  },
+  {
+   "id": "X1",
+   "layer": "S2 library cross-check",
+   "kind": "claim_crosscheck",
+   "type": "error",
+   "unsupported": true,
+   "paper": "PMC8006839",
+   "synthetic": true,
+   "model_judged": true,
+   "base": "G3",
+   "mutation": "G3 claim generalised to all Indian women",
+   "claim_text": "Diabetes incidence was 5.3 times (3.64 to 7.54) higher in all Indian women than in white women",
+   "expect": {
+    "category": "crosscheck",
+    "code": "population_generalised"
+   },
+   "accept": [
+    "unsupported",
+    "overstated",
+    "wrong_comparison_group"
+   ]
+  },
+  {
+   "id": "X2",
+   "layer": "S2 library cross-check",
+   "kind": "claim_crosscheck",
+   "type": "error",
+   "unsupported": true,
+   "paper": "PMC13461373",
+   "synthetic": true,
+   "model_judged": true,
+   "base": "G2",
+   "mutation": "G2 claim made absolute and causal",
+   "claim_text": "GLP-1 drugs always cause a significant loss of lean mass (−1.74 kg)",
+   "expect": {
+    "category": "crosscheck",
+    "code": "overstated"
+   },
+   "accept": [
+    "association_as_cause",
+    "unsupported",
+    "qualifier_dropped"
+   ]
+  },
+  {
+   "id": "X3",
+   "layer": "S2 library cross-check",
+   "kind": "claim_crosscheck",
+   "type": "error",
+   "unsupported": true,
+   "paper": "PMC12776922",
+   "synthetic": true,
+   "model_judged": true,
+   "base": "G1",
+   "mutation": "G1 average turned into a personal promise",
+   "claim_text": "You will regain 0.4 kg every month after you stop weight-management medicines",
+   "expect": {
+    "category": "crosscheck",
+    "code": "qualifier_dropped"
+   },
+   "accept": [
+    "overstated",
+    "population_generalised",
+    "unsupported"
+   ]
+  },
+  {
+   "id": "XC-G1",
+   "layer": "S2 library cross-check",
+   "kind": "claim_crosscheck",
+   "type": "control",
+   "paper": "PMC12776922",
+   "synthetic": false,
+   "model_judged": true,
+   "base": "G1",
+   "mutation": "the unmutated G1 claim",
+   "claim_text": "The average monthly rate of weight regain was 0.4 kg (95% CI 0.3 to 0.5)",
+   "expect": {
+    "category": "crosscheck",
+    "code": "supported"
+   }
+  },
+  {
+   "id": "XC-G2",
+   "layer": "S2 library cross-check",
+   "kind": "claim_crosscheck",
+   "type": "control",
+   "paper": "PMC13461373",
+   "synthetic": false,
+   "model_judged": true,
+   "base": "G2",
+   "mutation": "the unmutated G2 claim",
+   "claim_text": "A significant decrease was observed in the absolute change in lean mass (−1.74 kg; 95% CI: −3.04 to −0.45; p < 0.00001; I² = 98%)",
+   "expect": {
+    "category": "crosscheck",
+    "code": "supported"
+   }
+  },
+  {
+   "id": "XC-G3",
+   "layer": "S2 library cross-check",
+   "kind": "claim_crosscheck",
+   "type": "control",
+   "paper": "PMC8006839",
+   "synthetic": false,
+   "model_judged": true,
+   "base": "G3",
+   "mutation": "the unmutated G3 claim",
+   "claim_text": "In normal weight, diabetes incidence was 5.3 times (3.64 to 7.54) higher in South Asian women than in white women",
+   "expect": {
+    "category": "crosscheck",
+    "code": "supported"
+   }
+  },
+  {
+   "id": "E10",
+   "layer": "PDF suite (regression, not AI accuracy)",
+   "kind": "regression",
+   "type": "regression",
+   "synthetic": true,
+   "mutation": "inner-split guard removed",
+   "tests": [
+    "tests/test_pdf_ingest.py::test_sidebar_plus_two_columns_under_a_wide_title",
+    "tests/test_pdf_ingest.py::test_word_table_inside_a_column_is_not_split"
+   ],
+   "expect": {
+    "category": "regression_test",
+    "code": "pass"
+   }
+  }
+ ],
+ "claim_refs": {
+  "c004-01": {
+   "paper": "PMC8006839",
+   "quote_start": "Similarly, in women, the risk of diabetes"
+  },
+  "c004-00": {
+   "paper": "PMC8006839",
+   "quote_start": "In those with BMI <25 kg/m2 (table 3), risk of diabetes in men"
+  },
+  "c002-01": {
+   "paper": "PMC8006839",
+   "quote_start": "South Asians were less insulin resistant than blacks and whites"
+  },
+  "c000-00": {
+   "paper": "PMC13461373",
+   "quote_start": "Seven studies (821 patients) were included"
+  }
+ }
+}

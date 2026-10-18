@@ -1,0 +1,50 @@
+{
+ "note": "Hand-checked quotes from docs/specs/s5-gold-set.md; the harness re-locates each in the stored document with the S1 gate and compares sids/PMID with the values recorded here (taken from the real stored S1 output). n = 3 is a smoke baseline.",
+ "claims": [
+  {
+   "id": "G1",
+   "pmcid": "PMC12776922",
+   "pmid": "41500720",
+   "author": "West",
+   "year": 2026,
+   "quote": "The average monthly rate of weight regain was 0.4 kg (95% confidence interval (CI) 0.3 to 0.5)",
+   "sid": "p0001-s0033",
+   "numbers": [
+    "0.4 kg"
+   ],
+   "expected_claim": "After stopping weight-management medicines, weight came back at about 0.4 kg a month on average (95% CI 0.3 to 0.5)",
+   "theme": "weight_regain",
+   "doubt": "will_weight_come_back"
+  },
+  {
+   "id": "G2",
+   "pmcid": "PMC13461373",
+   "pmid": "42321502",
+   "author": "Laverde",
+   "year": 2026,
+   "quote": "a significant decrease was observed in the absolute change in lean mass (−1.74 kg; 95% CI: −3.04 to −0.45; p < 0.00001; I² = 98%)",
+   "sid": "p0001-s0014",
+   "numbers": [
+    "−1.74 kg"
+   ],
+   "expected_claim": "Pooled absolute lean mass fell 1.74 kg (95% CI -3.04 to -0.45); 7 RCTs, 821 patients",
+   "theme": "lean_mass_during_weight_loss",
+   "doubt": "will_i_lose_muscle"
+  },
+  {
+   "id": "G3",
+   "pmcid": "PMC8006839",
+   "pmid": "33771764",
+   "author": "Narayan",
+   "year": 2021,
+   "quote": "and 5.3 times (3.64 to 7.54) in South Asian women than in white women.",
+   "sid": "p0001-s0027",
+   "numbers": [
+    "5.3 times"
+   ],
+   "expected_claim": "In normal-weight adults, diabetes incidence was 5.3 times higher in South Asian women than in white women (3.64 to 7.54)",
+   "theme": "indian_food_and_life",
+   "doubt": "is_it_for_me"
+  }
+ ]
+}
