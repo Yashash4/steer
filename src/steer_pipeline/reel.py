@@ -1012,7 +1012,7 @@ def timing_problems(props: dict) -> list[dict]:
                     if until - card["start"] < need - 1e-6:
                         out.append({"code": "STATISTIC_TOO_SHORT", "detail": {"line": ln["text"][:60], "card": i,
                                     "shown": round(until - card["start"], 2), "need": round(need, 2)}})
-            if sc["captions"] and not ln["cards"]:
+            if sc["captions"] and not ln["cards"] and ln["kind"] != "setting":   # a setting line is not spoken
                 starts = [b["start"] for b in ln["beats"]] + [ln["end"]]
                 for i, b in enumerate(ln["beats"]):
                     if starts[i + 1] - b["start"] < 0.45 - 1e-6:
