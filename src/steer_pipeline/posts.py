@@ -176,3 +176,69 @@ def reel_post(folder: str | Path, con, settings: dict, tts=None, transcribe=None
             v4 = v4 | {"pullback": str(shot), "pullback_meta": studio_pullback_shot(v4["db"], v4["pullback_claim"], shot)}
     return make_reel(record, script, load_brand(), folder, settings["voice"], tts=tts, transcribe=transcribe,
                      post_emphasis=emphasis, engine=engine, keys=checked_keys(post), presenter=presenter, v4=v4)
+
+
+HI_SYSTEM = """You translate the checked English Instagram caption of a health post into natural Hinglish (Hindi and English
+mixed, in Roman script, as Indians write on Instagram). Translate only; add no fact, advice, promise or number. Keep every
+number, unit, confidence interval, population and comparison group exactly as written. Keep each line's "keep" phrases in
+English, word for word, once each. Keep every number with its English unit and range words exactly as written ("0.4 kg",
+"1.4 years", "0.3 to 0.5", "95% confidence interval"). Return the same lines in the same order, each with its kind and
+claim_ids."""
+
+
+TRANSLATED = ("health", "framing")
+
+
+def _hi_schema(n: int) -> dict:
+    line = {"type": "object", "required": ["kind", "text", "claim_ids"], "additionalProperties": False,
+            "properties": {"kind": {"type": "string"}, "text": {"type": "string"}, "claim_ids": {"type": "array", "items": {"type": "string"}}}}
+    return {"type": "object", "required": ["lines"], "additionalProperties": False,
+            "properties": {"lines": {"type": "array", "items": line, "minItems": n, "maxItems": n}}}
+
+
+def hinglish_caption(folder: str | Path, con, settings: dict, router: Router | None = None) -> dict:
+    """caption-hinglish.txt beside caption.txt: the writer's Hinglish wording of the post's checked caption lines, then
+    the post's own checks again with that caption (numbers, wording, boundaries' qualifiers, the cross-check). The
+    qualifier phrases the English caption carries are kept in English (no Hinglish any_of entries exist). Every line's
+    numbers must equal its English line's. Nothing is written unless the post still passes."""
+    from .checks import _has
+    from .reel import number_values
+    folder, router = Path(folder), router or Router(settings)
+    record = json.loads((folder / "post.json").read_text())
+    claims, doc = claims_from_store(con, record["run_id"])
+    boundaries = load_boundaries(doc["citation"].get("pmcid") or "")
+    en = record["post"]["caption"]["lines"]
+    # per line: the first phrase of each qualifier rule that the English line carries stays in English
+    keeps = [[next(p for p in r.get("any_of", []) if _has(ln["text"], p)) for r in boundaries.get("require_qualifier", [])
+              if any(_has(ln["text"], p) for p in r.get("any_of", []))] for ln in en]
+    keep = sorted({p for k in keeps for p in k})
+    todo = [i for i, ln in enumerate(en) if ln["kind"] in TRANSLATED]   # cta / brand / sign-off: fixed lines, kept as they are
+    prompt = "English caption lines:\n" + json.dumps(
+        [{k: en[i][k] for k in ("kind", "text", "claim_ids")} | {"keep": keeps[i]} for i in todo], ensure_ascii=False, indent=1)
+    r = router.call("write", HI_SYSTEM, prompt, _hi_schema(len(todo)))
+    hi = [dict(ln) for ln in en]
+    for i, ln in zip(todo, r["output"]["lines"]):
+        hi[i] = ln
+    fails = [f"line {i}: kind or claims changed" for i, (a, b) in enumerate(zip(en, hi))
+             if a["kind"] != b["kind"] or a["claim_ids"] != b["claim_ids"]]
+    fails += [f"line {i}: numbers {number_values(b['text'])} != {number_values(a['text'])}" for i, (a, b) in enumerate(zip(en, hi))
+              if number_values(a["text"]) != number_values(b["text"])]
+    fails += [f"line {i}: qualifier {p!r} not kept" for i, k in enumerate(keeps) for p in k if not _has(hi[i]["text"], p)]
+    post = record["post"] | {"caption": record["post"]["caption"] | {"lines": hi}}
+    result = check_post(post, claims, load_brand(), settings["rules"], boundaries, router, r["endpoint"],
+                        record.get("study_context") or study_context(boundaries, doc))
+    cap = [ln for ln in result["lines"] if ln["path"].startswith("caption")]
+    fails += [f"{ln['path']}: {f['code']}" for ln in cap for f in ln["failures"]]
+    fails += [f"{ln['path']}: cross-check {ln['crosscheck']['verdict']}" for ln in cap
+              if ln.get("crosscheck") and ln["crosscheck"]["verdict"] != "supported"]
+    fails += [f"post: {f['code']}" for f in result["post_failures"]]
+    trace = {"post_id": record["post_id"], "writer": r["endpoint"], "keep_verbatim": keep, "failures": fails,
+             "lines": [{"path": ln["path"], "kind": ln["kind"], "text": ln["text"], "failures": ln["failures"],
+                        "crosscheck": ln.get("crosscheck")} for ln in cap]}
+    (folder / "caption-hinglish-trace.json").write_text(json.dumps(trace, ensure_ascii=False, indent=1), encoding="utf-8")
+    if fails:
+        return {"status": "failed", "failures": fails}
+    en_txt = (folder / "caption.txt").read_text(encoding="utf-8").split("\n\nSources: ", 1)
+    (folder / "caption-hinglish.txt").write_text("\n".join(ln["text"] for ln in hi) + "\n\nSources: " + en_txt[1],
+                                                 encoding="utf-8")
+    return {"status": "passed", "lines": len(hi), "keep_verbatim": keep}

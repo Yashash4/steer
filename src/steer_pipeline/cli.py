@@ -105,6 +105,10 @@ def main(argv: list[str] | None = None) -> int:
     le.add_argument("--posts", nargs="*", help="folders holding written posts (default: trials/*/out)")
     le.add_argument("--offline", action="store_true", help="no fetch, no model call: ledger and cache only")
     le.add_argument("--settings")
+    hi = sub.add_parser("caption-hi", help="a checked Hinglish caption (caption-hinglish.txt) for a written post folder")
+    hi.add_argument("folder", help="out/<run_id>/<post_id>")
+    hi.add_argument("--db", required=True)
+    hi.add_argument("--settings")
     d = sub.add_parser("render", help="render (again) the PNGs of a written post folder")
     d.add_argument("folder", help="out/<run_id>/<post_id>")
     args = ap.parse_args(argv)
@@ -175,6 +179,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"reel {t['status']}: {t['probe'].get('duration')} s, {t['probe'].get('bytes')} bytes; timings {t['timings']}; "
               f"failures {[f['code'] for f in t['failures']]}", file=sys.stderr)
         return 0 if t["status"] == "passed" else 1
+
+    if args.cmd == "caption-hi":
+        r = posts.hinglish_caption(args.folder, store.connect(args.db), load_settings(args.settings))
+        print(f"caption-hi {r['status']}" + (f": {r['failures']}" if r["status"] != "passed" else ""), file=sys.stderr)
+        return 0 if r["status"] == "passed" else 1
 
     if args.cmd == "render":
         from .render import qa_line
