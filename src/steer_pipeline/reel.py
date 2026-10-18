@@ -168,6 +168,85 @@ def edge_tts_voice(text: str, voice: dict) -> tuple[bytes, list[tuple[str, float
     return asyncio.run(run())
 
 
+VOICE_CREDIT = "Voice: AI-generated (ElevenLabs)"   # the free plan's required credit: caption footer, trace, README
+ELEVEN_KEY_FILE = Path.home() / "steer-secrets" / "elevenlabs.env"   # the key is read from here only, never logged
+TTS_CACHE = Path.home() / ".cache" / "steer-tts"   # re-renders reuse the audio: 0 credits
+
+
+class VoiceError(RuntimeError):
+    """The online voice failed (no key, quota, network, HTTP error). The message never holds the key."""
+
+
+def eleven_key() -> str:
+    try:
+        for row in ELEVEN_KEY_FILE.read_text().splitlines():
+            k, _, v = row.partition("=")
+            if k.strip() == "ELEVENLABS_API_KEY" and v.strip():
+                return v.strip().strip("'\"")
+    except OSError:
+        pass
+    raise VoiceError(f"ELEVENLABS_API_KEY not found in {ELEVEN_KEY_FILE}")
+
+
+def eleven_request(url: str, body: dict, key: str) -> dict:
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+                                 headers={"xi-api-key": key, "Content-Type": "application/json", "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:   # the status only: the response body or request could echo the key
+        raise VoiceError(f"ElevenLabs HTTP {e.code}") from None
+    except (urllib.error.URLError, TimeoutError) as e:
+        raise VoiceError(f"ElevenLabs unreachable: {getattr(e, 'reason', e)}") from None
+
+
+def words_from_alignment(al: dict) -> list[tuple[str, float, float]]:
+    """ElevenLabs' character timings -> (word, start, duration), the shape edge-tts' word boundaries have."""
+    words, cur, t0, t1 = [], "", 0.0, 0.0
+    for c, a, b in zip(al["characters"], al["character_start_times_seconds"], al["character_end_times_seconds"]):
+        if c.isspace():
+            if cur:
+                words.append((cur, t0, t1 - t0))
+            cur = ""
+            continue
+        if not cur:
+            t0 = a
+        cur, t1 = cur + c, b
+    if cur:
+        words.append((cur, t0, t1 - t0))
+    return words
+
+
+class ElevenLabs:
+    """tts(text, voice) -> (audio bytes, word boundaries) through ElevenLabs' with-timestamps endpoint, cached by
+    sha256(text, voice_id, model, settings). .log records each line: characters, cache key, hit or billed."""
+
+    def __init__(self, request=None):
+        self.request = request or eleven_request
+        self.log = []
+
+    def __call__(self, text: str, voice: dict):
+        import base64
+        import hashlib
+        model = voice.get("model", "eleven_multilingual_v2")
+        vs = {"stability": voice.get("stability", 0.5), "similarity_boost": voice.get("similarity", 0.75)}
+        key = hashlib.sha256(json.dumps([text, voice["voice_id"], model, vs], sort_keys=True).encode()).hexdigest()
+        f = TTS_CACHE / f"{key}.json"
+        hit = f.exists()
+        if hit:
+            d = json.loads(f.read_text())
+        else:
+            d = self.request(f"https://api.elevenlabs.io/v1/text-to-speech/{voice['voice_id']}/with-timestamps"
+                             f"?output_format=mp3_44100_128", {"text": text, "model_id": model, "voice_settings": vs},
+                             eleven_key())
+            TTS_CACHE.mkdir(parents=True, exist_ok=True)
+            f.write_text(json.dumps(d))
+        self.log.append({"characters": len(text), "cache_key": key[:16], "cache_hit": hit})
+        return base64.b64decode(d["audio_base64"]), words_from_alignment(d["alignment"])
+
+
 def whisper_transcribe(wav16k: Path) -> str:
     if not WHISPER.exists() or not WHISPER_MODEL.exists():
         raise RuntimeError("whisper.cpp is not set up: run code/tools/setup-whisper.sh")
@@ -734,14 +813,29 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
     """Write reel.mp4, reel.srt, reel_transcript.md and reel_trace.json into out_dir; returns the trace (status passed |
     failed). engine: "remotion" (kinetic type, code/reel) or "playwright" (the fallback). presenter (remotion only):
     {scene index: muted clip} for the AI presenter placeholder (D-026)."""
-    tts = tts or edge_tts_voice
+    eleven = voice.get("provider") == "elevenlabs"
+    tts = tts or (ElevenLabs() if eleven else edge_tts_voice)
     transcribe = transcribe or whisper_transcribe
     p = brand["palette"]
     by_claim = {s["claim_id"]: s for s in record["sources"]}
     entries = rd.source_entries(record["sources"])
     remotion = engine == "remotion"
-    scenes, pcm, timings = build_timeline(script, voice, tts, HEALTH_HOLD if remotion else 0.0,
-                                          REMOTION_END_CARD if remotion else END_CARD)
+    holds = (HEALTH_HOLD if remotion else 0.0, REMOTION_END_CARD if remotion else END_CARD)
+    fallback = None
+    try:
+        scenes, pcm, timings = build_timeline(script, voice, tts, *holds)
+    except VoiceError as e:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        if presenter:   # the presenter clips move to THIS voice: another voice under the face is not an option
+            trace = {"post_id": record["post_id"], "run_id": record["run_id"], "status": "failed", "engine": engine,
+                     "voice": {k: v for k, v in voice.items()},
+                     "failures": [{"code": "VOICE_FAILED", "detail": f"{e}; the reel has presenter clips animated from "
+                                   "this voice, so there is no edge-tts fallback"}]}
+            (out_dir / "reel_trace.json").write_text(json.dumps(trace, ensure_ascii=False, indent=1), encoding="utf-8")
+            return trace
+        fallback = {"error": str(e), "to": "edge-tts"}   # the whole reel in one voice, never mixed
+        voice, tts, eleven = voice | {"provider": "edge-tts"}, edge_tts_voice, False
+        scenes, pcm, timings = build_timeline(script, voice, tts, *holds)
     total = scenes[-1]["end"]
     out_dir.mkdir(parents=True, exist_ok=True)
     fails, scene_qa = [], []
@@ -825,7 +919,10 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
         "post_id": record["post_id"], "run_id": record["run_id"], "status": "failed" if fails else "passed",
         "engine": engine,
         "voice": voice | {"note": "edge-tts is Microsoft's online voice service; the spoken text leaves the box"
-                          if voice.get("provider") == "edge-tts" else ""},
+                          if voice.get("provider") == "edge-tts" else
+                          "ElevenLabs online service; the spoken text leaves the box" if eleven else "",
+                          "credit": VOICE_CREDIT if eleven else None, "fallback": fallback,
+                          "calls": getattr(tts, "log", None)},
         "transcriber": "whisper.cpp v1.9.1, ggml-base.en (local)", "timings": timings, "probe": probe,
         "scenes": [{"index": sc["index"], "kind": sc["kind"], "start": round(sc["start"], 3), "end": round(sc["end"], 3),
                     "lines": [{"kind": ln["kind"], "text": ln["text"], "spoken": ln["spoken"], "claim_ids": ln["claim_ids"],
@@ -836,5 +933,8 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
         "scene_qa": scene_qa, "audio_round_trip": rounds, "scene_round_trip": scene_rounds, "failures": fails,
     }
     (out_dir / "reel_transcript.md").write_text(transcript_table(scene_rounds), encoding="utf-8")
+    cap = out_dir / "caption.txt"
+    if eleven and cap.exists() and VOICE_CREDIT not in cap.read_text():   # the voice's credit in the caption footer
+        cap.write_text(cap.read_text().rstrip("\n") + "\n\n" + VOICE_CREDIT + "\n", encoding="utf-8")
     (out_dir / "reel_trace.json").write_text(json.dumps(trace, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     return trace

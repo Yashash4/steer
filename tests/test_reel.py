@@ -200,3 +200,76 @@ def test_checked_keys_come_from_the_posts_slides_and_static():
     post = {"static": {"headline": {"kind": "framing", "text": "Will it come back?", "claim_ids": []}, "supporting": [line],
                        "key_number": "0.4 kg a month", "key_label": "nothing like this"}}
     assert reel.checked_keys(post) == []                                       # a label not in its line is not a key
+
+
+def eleven_reply(text):
+    """What ElevenLabs' with-timestamps endpoint returns: base64 audio + per-character timings."""
+    import base64
+    audio, _ = fake_tts(text, None)
+    chars = list(text)
+    return {"audio_base64": base64.b64encode(audio).decode(), "alignment": {
+        "characters": chars, "character_start_times_seconds": [0.05 * i for i in range(len(chars))],
+        "character_end_times_seconds": [0.05 * i + 0.05 for i in range(len(chars))]}}
+
+
+def test_elevenlabs_alignment_becomes_word_boundaries_and_the_cache_saves_credits(tmp_path, monkeypatch):
+    monkeypatch.setattr(reel, "TTS_CACHE", tmp_path / "cache")
+    key = tmp_path / "eleven.env"
+    key.write_text("ELEVENLABS_API_KEY=sk-TESTSECRET\n")
+    monkeypatch.setattr(reel, "ELEVEN_KEY_FILE", key)
+    got = reel.words_from_alignment(eleven_reply("BMI under 25")["alignment"])
+    assert [(w, round(a, 2), round(d, 2)) for w, a, d in got] == [("BMI", 0.0, 0.15), ("under", 0.2, 0.25), ("25", 0.5, 0.1)]
+    calls = []
+    tts = reel.ElevenLabs(request=lambda url, body, k: (calls.append((url, body, k)), eleven_reply(body["text"]))[1])
+    voice = {"provider": "elevenlabs", "voice_id": "v1", "model": "eleven_multilingual_v2"}
+    audio, words = tts("Lean, and still wondering?", voice)
+    assert [w for w, _, _ in words] == ["Lean,", "and", "still", "wondering?"] and audio[:4] == b"RIFF"
+    assert calls[0][0].startswith("https://api.elevenlabs.io/v1/text-to-speech/v1/with-timestamps")
+    assert calls[0][2] == "sk-TESTSECRET" and calls[0][1]["model_id"] == "eleven_multilingual_v2"
+    tts("Lean, and still wondering?", voice)                     # the same line again: from the cache, no call
+    assert len(calls) == 1 and [c["cache_hit"] for c in tts.log] == [False, True]
+    assert tts.log[0]["cache_key"] == tts.log[1]["cache_key"] and tts.log[0]["characters"] == 26
+
+
+
+def test_elevenlabs_voice_credit_fallback_and_no_fallback_under_a_presenter(tmp_path, monkeypatch):
+    monkeypatch.setattr(reel, "TTS_CACHE", tmp_path / "cache")
+    key = tmp_path / "eleven.env"
+    key.write_text("ELEVENLABS_API_KEY=sk-TESTSECRET\n")
+    monkeypatch.setattr(reel, "ELEVEN_KEY_FILE", key)
+    record = {"post_id": "p1", "run_id": "r1", "sources": [
+        {"claim_id": "c1", "authors": "West S et al.", "title": "Weight regain", "journal": "J", "year": 2026,
+         "doi": "10.1/w", "location": "section text, no page layout"}]}
+    script = {"scenes": [{"lines": [{"kind": "framing", "text": "Will the weight come back?", "claim_ids": []}]},
+                         {"lines": [{"kind": "health", "text": "On average 0.4 kg a month.", "claim_ids": ["c1"]}]}]}
+    said = {}
+    def transcribe(wav):   # what was voiced, for the line or scene this wav holds
+        if wav.stem.startswith("scene"):
+            return " ".join(reel.spoken(ln["text"])[0] for ln in script["scenes"][int(wav.stem.split("-")[1])]["lines"])
+        return said["lines"].pop(0)
+    voice = {"provider": "elevenlabs", "voice_id": "v1", "name": "en-IN-NeerjaExpressiveNeural", "rate": "+8%"}
+
+    def run(folder, request, presenter=None):
+        folder.mkdir()
+        (folder / "caption.txt").write_text("A caption line.\n\nSources: West S et al. (2026) J, doi:10.1/w\n")
+        said["lines"] = [reel.spoken(ln["text"])[0] for sc in script["scenes"] for ln in sc["lines"]]
+        monkeypatch.setattr(reel, "eleven_request", request)
+        monkeypatch.setattr(reel, "edge_tts_voice", fake_tts)
+        return reel.make_reel(record, script, BRAND, folder, voice, transcribe=transcribe, presenter=presenter)
+
+    ok = run(tmp_path / "ok", lambda url, body, k: eleven_reply(body["text"]))
+    assert ok["voice"]["credit"] == "Voice: AI-generated (ElevenLabs)" and ok["voice"]["fallback"] is None
+    assert [c["cache_hit"] for c in ok["voice"]["calls"]] == [False, False]
+    assert (tmp_path / "ok" / "caption.txt").read_text().rstrip().endswith("Voice: AI-generated (ElevenLabs)")
+    for f in ("reel_trace.json", "caption.txt", "reel_transcript.md"):
+        assert "sk-TESTSECRET" not in (tmp_path / "ok" / f).read_text()      # the key is never written anywhere
+
+    def quota(url, body, k):
+        raise reel.VoiceError("ElevenLabs HTTP 429")
+    monkeypatch.setattr(reel, "TTS_CACHE", tmp_path / "cache-empty")
+    fb = run(tmp_path / "fallback", quota)                       # no presenter: the whole reel in edge-tts
+    assert fb["voice"]["provider"] == "edge-tts" and fb["voice"]["fallback"] == {"error": "ElevenLabs HTTP 429", "to": "edge-tts"}
+    assert fb["voice"]["credit"] is None and "ElevenLabs" not in (tmp_path / "fallback" / "caption.txt").read_text()
+    pr = run(tmp_path / "presenter", quota, presenter={0: "clip.mp4"})   # a presenter: no other voice, the reel fails
+    assert pr["status"] == "failed" and [f["code"] for f in pr["failures"]] == ["VOICE_FAILED"]
+    assert not (tmp_path / "presenter" / "reel.mp4").exists()

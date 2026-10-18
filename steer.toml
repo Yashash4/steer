@@ -100,7 +100,12 @@ brief_claims = 4   # claims picked for an automatic brief
 
 # The reel's voice (S7-min). A placeholder chosen for the build; the final voice is a settings change only.
 # edge-tts is Microsoft's online voice service: each line's text is sent to it.
+# provider = "elevenlabs": ElevenLabs' online voice (the text leaves the box), key ONLY from ~/steer-secrets/elevenlabs.env
+# (ELEVENLABS_API_KEY); audio cached in ~/.cache/steer-tts; "Voice: AI-generated (ElevenLabs)" goes in the caption.
+# If it fails, the whole reel is voiced with edge-tts (name/rate below), unless the reel has presenter clips: then it fails.
 [voice]
 provider = "edge-tts"
 name = "en-IN-NeerjaExpressiveNeural"
 rate = "+8%"
+voice_id = ""                       # ElevenLabs voice (picked from trials/voice-1)
+model = "eleven_multilingual_v2"
