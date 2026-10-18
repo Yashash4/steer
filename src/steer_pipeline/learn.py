@@ -31,8 +31,8 @@ THEMES = ["glp1_muscle", "glp1_access_cost", "glp1_side_effects", "weight_journe
 DOUBTS = ["safe", "muscle", "regain", "only_diabetics", "for_me", "none"]
 LONG = {"is_it_safe": "safe", "will_i_lose_muscle": "muscle", "will_weight_come_back": "regain",
         "only_for_diabetics": "only_diabetics", "is_it_for_me": "for_me"}
-# our posts' papers; rounds.toml (read at run time) overrides. Checked against rounds.toml 2026-10-18: Laverde is the
-# safety paper, Ismaiel the muscle paper.
+# our posts' papers; rounds.toml (read at run time) overrides. Checked against rounds.toml and the store's documents
+# 2026-10-18: PMC13461373 is Laverde 2026 (lean mass, muscle), PMC12532569 is Ismaiel 2025 (safety).
 PAPER_DOUBT = {"PMC8006839": "for_me", "PMC12776922": "regain", "PMC12532569": "safe", "PMC13461373": "muscle"}
 RULES = {  # fixed text per code, never model-written
     "QUALIFIER_MISSING": "keep the population and comparison group in the same line as each number",

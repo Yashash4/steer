@@ -220,6 +220,8 @@ def write_prompt(brief: dict, claims: list[dict], brand: dict, boundaries: dict)
     for r in boundaries.get("avoid_phrase", []):
         exc = f", except in the exact phrase(s) {r['except']}" if r.get("except") else ""
         lines.append(f"- never write {r['text']!r} in {r.get('kinds', ['health'])} lines{exc} ({r.get('why', '')})")
+    if brief.get("rules"):  # fixed rule strings from the learning loop (steer learn), never model-written
+        lines += ["", "Rules from earlier checks of our own posts:"] + [f"- {r}" for r in brief["rules"]]
     return "\n".join(lines)
 
 

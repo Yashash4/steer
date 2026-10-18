@@ -97,6 +97,15 @@ def test_brief_diff_adds_exactly_one_line():
     assert json.loads(before) == brief and json.loads(after) == brief | {"rules": [learn.RULES["QUALIFIER_MISSING"]]}
 
 
+def test_brief_rules_reach_the_writer_prompt():
+    from steer_pipeline.write import write_prompt
+    brand = {"whitelist": ["w"], "cta": ["c"], "signoff": ["s"]}
+    brief = {"format": "carousel", "theme": "t", "doubt": "d", "claim_ids": []}
+    assert "Rules from" not in write_prompt(brief, [], brand, {})
+    rule = learn.RULES["QUALIFIER_MISSING"]
+    assert f"- {rule}" in write_prompt(brief | {"rules": [rule]}, [], brand, {}).splitlines()
+
+
 def mini_db(path):
     con = sqlite3.connect(path)
     con.executescript("""create table runs (run_id text, input text);
