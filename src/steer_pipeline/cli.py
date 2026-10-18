@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {e}", file=sys.stderr)
             return 2
         con = store.connect(args.db or settings.get("storage", {}).get("db", "steer.db"))
-        store.save_run_with_checks(con, rec)
+        store.save_run(con, rec)
         if args.export:
             Path(args.export).write_text(json.dumps(store.export_run(con, rec["run_id"]), ensure_ascii=False, indent=1),
                                          encoding="utf-8")

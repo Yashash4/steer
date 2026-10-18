@@ -74,7 +74,6 @@ def test_run_and_store(tmp_path):
     assert run_row[1] == SETTINGS["version"] and run_row[2] == SETTINGS["rules"]["version"]
     assert len(json.loads(run_row[3])) == len(rec["model_calls"]) > 0
 
-    store.save_crosschecks(con, rec["run_id"], rec["crosschecks"], rec["finished_at"])
     exported = store.export_run(con, rec["run_id"])
     assert len(exported["crosschecks"]) == 3 and {c["independence"] for c in exported["crosschecks"]} == {"different_provider"}
     assert exported["run"]["summary"]["passed"] == 2 and len(exported["claims"]) == 5
@@ -111,6 +110,9 @@ def test_live_run_on_narayan(tmp_path):
     rec = pipeline.run("PMC8006839", "evidence", SETTINGS)
     con = store.connect(tmp_path / "live.db")
     store.save_run(con, rec)
+    kept = len(rec["passed"]) + len(rec["needs_check"])
+    # the library cross-check is stored with the run, one row per kept claim
+    assert con.execute("SELECT count(*) FROM crosschecks").fetchone()[0] == kept == len(rec["crosschecks"])
     s = rec["summary"]
     assert s["chunks_failed"] == 0 and s["proposed"] > 0
     for status, gate, sids in con.execute("SELECT status, gate, sids FROM claims"):

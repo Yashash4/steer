@@ -98,7 +98,8 @@ def _j(value) -> str:
 
 
 def save_run(con: sqlite3.Connection, record: dict) -> None:
-    """Store one pipeline run (see pipeline.run): its document, run row and every claim, in one transaction."""
+    """Store one pipeline run (see pipeline.run): its document, run row, every claim and every library
+    cross-check result, in one transaction. There is no partial save."""
     doc = record["document"]
     with con:
         con.execute(
@@ -125,12 +126,10 @@ def save_run(con: sqlite3.Connection, record: dict) -> None:
                      _j(c["gate"]), _j(c.get("flags", [])), _j(c.get("review_reasons", [])),
                      (c.get("labels") or {}).get("theme"), _j((c.get("labels") or {}).get("doubts", [])),
                      _j(c.get("rule_flags", []))))
-
-
-def save_run_with_checks(con: sqlite3.Connection, record: dict) -> None:
-    """save_run plus the library cross-check results the run carries."""
-    save_run(con, record)
-    save_crosschecks(con, record["run_id"], record.get("crosschecks", []), record["finished_at"])
+        for r in record.get("crosschecks", []):  # the run's library cross-check, in the same transaction
+            con.execute("INSERT INTO crosschecks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (record["run_id"], r["claim_id"], r["verdict"], r["reason"], r["endpoint"], r["model"],
+                         r["provider"], r["independence"], record["finished_at"]))
 
 
 def export_run(con: sqlite3.Connection, run_id: str) -> dict:
