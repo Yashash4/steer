@@ -15,12 +15,15 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 cd code
 uv sync
 uv run pytest            # offline tests
+uv run pytest -m network # also hit the live public APIs
 ```
 
 ## Use
 
 ```bash
 uv run steer ingest paper.pdf --role evidence -o paper.json
+uv run steer ingest 10.1136/bmj-2025-085304 --role evidence -o bmj.json      # DOI
+uv run steer ingest https://pubmed.ncbi.nlm.nih.gov/41500720/ --role evidence -o bmj.json
 uv run steer ingest protocol.md --role contextual -o protocol.json
 uv run steer ingest brief.txt --role editorial -o brief.json
 uv run steer verify claims.json --doc paper.json -o report.json   # exit code 1 if any claim is rejected
@@ -30,6 +33,29 @@ uv run steer verify claims.json --doc paper.json -o report.json   # exit code 1 
 
 `--role` says what the source may be used for. Only `evidence` (a research paper) can back a claim.
 `contextual` is for material like a clinical protocol, and `editorial` is for a theme brief.
+
+## Fetching papers
+
+A DOI, PubMed ID or URL, PMC ID or URL, or a direct PDF link is resolved like this:
+
+1. NCBI's PMC ID Converter finds the PubMed Central ID.
+2. If the article is in PMC's open-access set, it is downloaded from the
+   [PMC Article Datasets on AWS](https://registry.opendata.aws/ncbi-pmc/) (public bucket `pmc-oa-opendata`).
+   - The article PDF is MD5-checked against the record and then read like any PDF.
+   - When PMC has no article PDF, PMC's plain-text version of the full article is used instead
+     (`extraction_version` `pmc-text-1`, no page coordinates).
+   - The licence and the retraction flag come from the record. A retracted article is refused unless
+     `--allow-retracted` is given; then it carries a `RETRACTED` warning.
+3. Otherwise only the abstract is taken from Europe PMC (`access: abstract_only`, warning `ABSTRACT_ONLY`).
+   The abstract's HTML is parsed with an HTML parser:
+   - entities are decoded and `<sup>`/`<sub>` text is kept (kg/m<sup>2</sup> → kg/m2);
+   - headings become paragraph breaks;
+   - a literal "<" in the science ("p < 0.00001") is never mistaken for a tag.
+4. Any other URL: a PDF response is read directly. An HTML page is followed only through its `citation_doi`
+   meta tag; there is no scraping.
+
+Authors, journal and year come from Europe PMC. Errors (HTTP status, timeouts, MD5 mismatch) stop with the
+URL named. Publisher websites usually block scripted downloads, which is why the public PMC route comes first.
 
 ## The document (schema version 1)
 
@@ -82,6 +108,8 @@ The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
   - Known limit: a single-letter word before a full stop counts as an initial, so "...in group B. Results..."
     does not split. That is the safe direction: sentences merge, and quotes still match.
   - A change of more than 1 pt in the main font size between lines (a heading) starts a new paragraph.
+- Known limit: ragged-right columns stored in one block are guarded only by the gap rule above. A table row
+  with a wide gap between label and values may split into two lines; reading order holds and quotes still match.
 - A PDF with no extractable text fails with "OCR required". Text-free pages inside an otherwise readable
   PDF are listed as warnings.
 

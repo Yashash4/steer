@@ -7,17 +7,20 @@ from pathlib import Path
 import json
 
 from . import contract, verify
+from .fetch import FetchError, fetch
 from .pdf import OcrRequired, ingest_pdf
 from .text import ingest_text
 
 
-def ingest(source: str, role: str) -> dict:
+def ingest(source: str, role: str, allow_retracted: bool = False) -> dict:
     path = Path(source)
+    if not path.exists():
+        return fetch(source, role, allow_retracted=allow_retracted)  # DOI, PubMed/PMC ID or URL
     if path.suffix.lower() in (".txt", ".md"):
         return ingest_text(path, role)
     if path.suffix.lower() == ".pdf":
         return ingest_pdf(path, role)
-    raise SystemExit(f"unsupported input: {source} (supported in this version: .pdf, .txt, .md)")
+    raise SystemExit(f"unsupported input: {source} (files: .pdf, .txt, .md; or a DOI, PubMed/PMC ID or URL)")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -27,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("source")
     p.add_argument("--role", required=True, choices=contract.ROLES)
     p.add_argument("-o", "--out", required=True)
+    p.add_argument("--allow-retracted", action="store_true", help="ingest a paper PMC marks as retracted (warned)")
     v = sub.add_parser("verify", help="check claims against contract documents")
     v.add_argument("claims", help="JSON list of {claim_id, text, document_id, quote}")
     v.add_argument("--doc", action="append", required=True, help="a contract document (repeatable)")
@@ -43,8 +47,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if s["rejected"] == 0 else 1
 
     try:
-        doc = ingest(args.source, args.role)
-    except OcrRequired as e:
+        doc = ingest(args.source, args.role, args.allow_retracted)
+    except (OcrRequired, FetchError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     contract.save(doc, args.out)

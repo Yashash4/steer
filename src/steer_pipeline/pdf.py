@@ -274,7 +274,13 @@ def mark_paragraphs(rows: list[dict]) -> None:
 
 def ingest_pdf(path: str | Path, role: str) -> dict:
     path = Path(path)
-    content = path.read_bytes()
+    return ingest_pdf_bytes(path.read_bytes(), role, source_type="pdf",
+                            provenance={"input": str(path), "file_path": str(path.resolve()), "fetched_via": "file"})
+
+
+def ingest_pdf_bytes(content: bytes, role: str, *, source_type: str, provenance: dict,
+                     citation: dict | None = None) -> dict:
+    """Extract a PDF given as bytes. `citation`, when known (fetched metadata), replaces the page-1 DOI guess."""
     doc = pymupdf.open(stream=content, filetype="pdf")
     raw_pages = []
     for page in doc:
@@ -358,19 +364,20 @@ def ingest_pdf(path: str | Path, role: str) -> dict:
             prev, prev_page = body[-1], pg["page"]
 
     if not any_text:
-        raise OcrRequired(f"OCR required: no extractable text on any page of {path}")
+        raise OcrRequired(f"OCR required: no extractable text on any page of {provenance.get('input')}")
 
-    first_text = " ".join(ln["raw"] for ln in pages[0]["lines"])
-    m = DOI_RE.search(first_text)
-    citation = {"doi": m.group(1) if m else None}
-    warnings.append({"code": "NO_CITATION_METADATA", "page": None,
-                     "detail": "title/authors not looked up for a local PDF file" + ("" if m else "; no DOI on page 1")})
+    if citation is None:
+        first_text = " ".join(ln["raw"] for ln in pages[0]["lines"])
+        m = DOI_RE.search(first_text)
+        citation = {"doi": m.group(1) if m else None}
+        warnings.append({"code": "NO_CITATION_METADATA", "page": None,
+                         "detail": "title/authors not looked up for a local PDF file" + ("" if m else "; no DOI on page 1")})
     return build_document(
         content=content,
-        source_type="pdf",
+        source_type=source_type,
         role=role,
         access="full_text",
-        provenance={"input": str(path), "file_path": str(path.resolve()), "fetched_via": "file"},
+        provenance=provenance,
         extraction_version=EXTRACTION_VERSION,
         extractor={"name": "pymupdf", "version": pymupdf.__version__},
         pages=pages,
