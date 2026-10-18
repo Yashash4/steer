@@ -337,11 +337,11 @@ def test_the_v4_edit_plan_keeps_food_away_from_numbers_and_puts_the_city_behind_
     assets = {"presenter": {}, "broll": {"lane": "lane.mp4", "thali": "thali.mp4"}}
     plan = reel.edit_plan(scenes, assets)
     by = {p["scene"]: p for p in plan}
-    assert by[0]["broll"] == "thali" and not by[0]["captions"]              # a framing hook: food allowed; shown whole
+    assert by[0]["broll"] == "lane" and not by[0]["captions"]               # "Will the weight come back?" names an outcome
     assert by[1]["broll"] == "lane" and by[1]["evidence"]                   # the health line: the city, never food
     assert all(not (p["broll"] == "thali" and any(ln["kind"] == "health" or reel.number_values(ln["text"])
                for ln in scenes[p["scene"]]["lines"])) for p in plan)
-    assert [p["transition_in"] for p in plan][:3] == ["none", "zoom", "zoom"]   # the background changes each time
+    assert [p["transition_in"] for p in plan][:3] == ["none", "wipe", "zoom"]   # lane -> lane: a wipe; lane -> graphics: zoom
     withp = reel.edit_plan(scenes, {"presenter": {0: "h.mp4", 2: "b.mp4"}, "broll": {"lane": "lane.mp4"}})
     assert withp[0]["presenter"] and withp[0]["zoom"] and withp[2]["presenter"] and not withp[1]["presenter"]
     # a framing line holding a number never gets the food clip either (and edit_plan raises if a rule ever planned it)
@@ -398,3 +398,24 @@ def test_every_health_line_gets_the_evidence_phone_in_its_hold():
     assert ln["cards"] is None and ln["evidence"]["quote"] == quotes["c1"]
     assert ln["end"] < ln["evidence"]["start"] < ln["evidence"]["end"] <= ln["hold_end"]
     assert reel.pool_check(props, script, record, "come back", keys, quotes) == []
+
+
+def test_food_b_roll_never_sits_behind_a_line_naming_a_health_outcome():
+    assert reel.names_outcome("Normal BMI, so diabetes is far away?") and reel.names_outcome("Wondering what your own blood tests say?")
+    assert not reel.names_outcome("Chai break at the office, and someone asks a question.")
+    mk = lambda text: {"index": 0, "kind": "point", "start": 0.0, "end": 3.0, "captions": [],
+                       "lines": [{"kind": "framing", "text": text, "start": 0.2, "end": 2.0}]}
+    assumes = {"broll": {"thali": "t.mp4", "lane": "l.mp4"}}
+    assert reel.edit_plan([mk("Wondering what your own blood tests say?")], assumes)[0]["broll"] is None
+    assert reel.edit_plan([mk("Family dinner at home, and the talk turns to habits.")], assumes)[0]["broll"] == "thali"
+    hook = dict(mk("Normal BMI, so diabetes is far away?"), kind="hook")
+    assert reel.edit_plan([hook], assumes)[0]["broll"] == "lane"
+
+
+def test_the_pull_back_never_shows_a_non_cc_by_page():
+    bad = {"licence": "CC BY-NC", "page_images": True, "page_images_drawn": 0}
+    assert [f["code"] for f in reel.pullback_problems(bad)] == ["PULLBACK_PAGE_IMAGE_LICENCE"]
+    assert reel.pullback_problems(bad | {"page_images": False, "page_images_drawn": 2}) != []   # drawn anyway: fails
+    assert reel.pullback_problems(bad | {"page_images": False}) == []
+    assert reel.pullback_problems({"licence": "CC BY", "page_images": True, "page_images_drawn": 1}) == []
+    assert reel.pullback_problems(None) == []

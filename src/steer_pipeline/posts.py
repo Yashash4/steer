@@ -169,5 +169,9 @@ def reel_post(folder: str | Path, con, settings: dict, tts=None, transcribe=None
     script = json.loads((folder / "reel_script.json").read_text())
     if v4 is not None:   # the v4 edit: the claims' exact quotes for the evidence phone; the checks above passed (checklist)
         v4 = v4 | {"quotes": {i: c["quote"] for i, c in claims.items()}, "checked": True}
+        if v4.get("pullback_claim"):   # the pull-back screenshot from the studio's public copy (licence rule applies)
+            from .reel import studio_pullback_shot
+            shot = folder / "studio-pullback.png"
+            v4 = v4 | {"pullback": str(shot), "pullback_meta": studio_pullback_shot(v4["db"], v4["pullback_claim"], shot)}
     return make_reel(record, script, load_brand(), folder, settings["voice"], tts=tts, transcribe=transcribe,
                      post_emphasis=emphasis, engine=engine, keys=checked_keys(post), presenter=presenter, v4=v4)

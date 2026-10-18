@@ -579,13 +579,61 @@ CHECK_QUOTED = "Every number quoted word for word from the paper"
 CHECK_CROSS = "Checked by a second, independent model"
 CHECK_DOCTOR = "Pending review by a Steer doctor"
 CHECK_LINES = (CHECK_QUOTED, CHECK_CROSS, CHECK_DOCTOR)
-FOOD_BROLL = {"thali"}      # food clips: never behind a health or number line (food beside a number implies a cause)
+FOOD_BROLL = {"thali"}      # food clips: never behind a line naming a health outcome or a number (it would imply a cause)
+OUTCOME = re.compile(r"\b(diabet\w*|weight|blood|sugar|glucose|insulin|hba1c|bmi|body mass|obes\w*|cholesterol|heart|"
+                     r"pressure|risk|side effects?|adverse|muscle|lean mass|regain\w*|metabolic|disease|health)\b", re.I)
+
+
+def names_outcome(text: str) -> bool:
+    """A line that names a health outcome (diabetes, weight, blood sugar, side effects ...): no food clip behind it."""
+    return bool(OUTCOME.search(text))
 
 
 def hook_too_long(scene: dict) -> bool:
     """The hook's own speech over HOOK_MAX seconds (the lead silence before it is not counted)."""
     return scene["kind"] == "hook" and bool(scene["lines"]) and \
         scene["lines"][0]["end"] - scene["lines"][0]["start"] > HOOK_MAX + 1e-6
+
+
+def studio_pullback_shot(db: str | Path, claim_key: str, out_png: Path) -> dict:
+    """The pull-back's screenshot: the claim page of the studio's PUBLIC read-only copy (export_site), which shows a paper's
+    page images only when its licence allows a public copy (CC BY). Taken from a copy of the store, so nothing is written
+    next to the real one. Returns the facts the QA checks: the paper's licence and the export's own page_images flag."""
+    import os
+    import shutil
+    from . import studio
+    with tempfile.TemporaryDirectory(prefix="steer-pullback-") as tmp:
+        tmp = Path(tmp)
+        shutil.copy(db, tmp / "steer.db")
+        site = tmp / "site"
+        studio.export_site(tmp / "steer.db", [], Path(studio.__file__).resolve().parents[2] / "reviewers.toml", site,
+                           Path(studio.__file__).resolve().parent / "studio_ui" / "static")
+        snap = json.loads((site / "data.js").read_text().split("=", 1)[1].rstrip().rstrip(";"))
+        paper = snap["papers"][claim_key.split("/")[0]]
+        os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(rd.CODE / ".browsers"))
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as pw:
+            b = pw.chromium.launch()
+            pg = b.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
+            pg.goto((site / "claim.html").as_uri() + "#" + claim_key.replace("/", "%2F"))
+            pg.wait_for_timeout(1200)
+            imgs = pg.evaluate("[...document.images].filter(i => i.src.includes('/pages/') && i.naturalWidth > 0).length")
+            pg.screenshot(path=str(out_png))
+            b.close()
+    return {"source": "studio public copy (export_site)", "claim": claim_key, "licence": paper.get("license"),
+            "page_images": bool(paper["page_images"]), "page_images_drawn": imgs}
+
+
+def pullback_problems(meta: dict | None) -> list[dict]:
+    """PULLBACK_PAGE_IMAGE_LICENCE: the screenshot may show a paper's page only if its licence is CC BY (the studio's own
+    flag decides, plus a count of page images actually drawn)."""
+    from .studio import cc_by
+    if not meta:
+        return []
+    allowed = cc_by({"license": meta.get("licence")})
+    if not allowed and (meta.get("page_images") or meta.get("page_images_drawn")):
+        return [{"code": "PULLBACK_PAGE_IMAGE_LICENCE", "detail": meta}]
+    return []
 
 
 def checklist_items(checked: bool) -> list[str]:
@@ -610,10 +658,13 @@ def edit_plan(scenes: list[dict], assets: dict) -> list[dict]:
         clip = None
         if "health" in kinds and "lane" in broll:
             clip = "lane"
-        elif not pres and kinds and kinds <= {"framing"} and not numbers and "thali" in broll:
+        outcome = any(names_outcome(ln["text"]) for ln in sc["lines"])
+        if not pres and kinds and kinds <= {"framing"} and not numbers and not outcome and "thali" in broll:
             clip = "thali"
-        if clip in FOOD_BROLL and ("health" in kinds or numbers):   # the rule, enforced here as well as tested
-            raise ValueError(f"food b-roll {clip!r} planned behind a health or number line (scene {sc['index']})")
+        elif not pres and sc["kind"] == "hook" and "lane" in broll:   # a hook naming an outcome: the neutral clip
+            clip = "lane"
+        if clip in FOOD_BROLL and ("health" in kinds or numbers or outcome):   # the rule, enforced here and tested
+            raise ValueError(f"food b-roll {clip!r} planned behind a health, outcome or number line (scene {sc['index']})")
         bg = "presenter" if pres else clip or "graphics"
         zoom = []
         if pres and sc["kind"] in ("hook", "brand") and sc["lines"]:
@@ -1056,13 +1107,14 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
         props = build_props(scenes, record, brand, post_emphasis, keys or [], presenter, plan,
                             (v4 or {}).get("quotes"), bool((v4 or {}).get("checked")),
                             "pullback.png" if (v4 or {}).get("pullback") else None)
-        fails = pool_check(props, script, record, post_emphasis, keys or [], (v4 or {}).get("quotes")) + timing_problems(props)
+        fails = pool_check(props, script, record, post_emphasis, keys or [], (v4 or {}).get("quotes")) + timing_problems(props) \
+            + pullback_problems((v4 or {}).get("pullback_meta"))
         extra = {f"broll-{n}.mp4": c for n, c in ((v4 or {}).get("broll") or {}).items()}
         if (v4 or {}).get("pullback"):
             extra["pullback.png"] = v4["pullback"]
         if plan:
             import hashlib
-            v4_trace = {"edit_plan": plan, "assets_sha256": {n: hashlib.sha256(Path(c).read_bytes()).hexdigest()
+            v4_trace = {"edit_plan": plan, "pullback": (v4 or {}).get("pullback_meta"), "assets_sha256": {n: hashlib.sha256(Path(c).read_bytes()).hexdigest()
                                                              for n, c in extra.items()}}
         mp4 = None
         if not fails:   # nothing is rendered from props that failed the check
