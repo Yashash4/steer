@@ -1,0 +1,368 @@
+{
+ "ingest": {
+  "source": "PMC8006839",
+  "document_id": "doc-5d6b5b66fbf1e92d",
+  "source_id": "src-be1a1129f915eb0f",
+  "citation": {
+   "title": "Incidence and pathophysiology of diabetes in South Asian adults living in India and Pakistan compared with US blacks and whites",
+   "journal": "BMJ open diabetes research & care",
+   "year": 2021,
+   "doi": "10.1136/bmjdrc-2020-001927",
+   "pmid": "33771764",
+   "pmcid": "PMC8006839",
+   "license": "CC BY-NC",
+   "retracted": false,
+   "authors": [
+    "Narayan KMV",
+    "Kondal D",
+    "Daya N",
+    "Gujral UP",
+    "Mohan D",
+    "Patel SA",
+    "Shivashankar R",
+    "Anjana RM",
+    "Staimez LR",
+    "Ali MK",
+    "Chang HH",
+    "Kadir M",
+    "Prabhakaran D",
+    "Selvin E",
+    "Mohan V",
+    "Tandon N"
+   ]
+  },
+  "resolved_url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC8006839.1/PMC8006839.1.pdf",
+  "extraction_version": "pdf-1",
+  "extractor": {
+   "name": "pymupdf",
+   "version": "1.28.2"
+  },
+  "pages": 10,
+  "layouts": {
+   "two_column": 6,
+   "mixed": 2,
+   "single": 2
+  },
+  "sentences": 409,
+  "warnings": [
+   {
+    "code": "UNCERTAIN_COLUMN_ORDER",
+    "page": 1,
+    "detail": "2 possible column splits; ordered by the strongest"
+   },
+   {
+    "code": "TABLE_OR_FIGURE_TEXT",
+    "page": 1,
+    "detail": "8 number-dense lines (tables, figures or reference lists)"
+   },
+   {
+    "code": "TABLE_OR_FIGURE_TEXT",
+    "page": 4,
+    "detail": "31 number-dense lines (tables, figures or reference lists)"
+   },
+   {
+    "code": "TABLE_OR_FIGURE_TEXT",
+    "page": 5,
+    "detail": "4 number-dense lines (tables, figures or reference lists)"
+   },
+   {
+    "code": "TABLE_OR_FIGURE_TEXT",
+    "page": 6,
+    "detail": "57 rotated lines (usually a landscape table), read after the upright text"
+   },
+   {
+    "code": "TABLE_OR_FIGURE_TEXT",
+    "page": 6,
+    "detail": "57 number-dense lines (tables, figures or reference lists)"
+   },
+   {
+    "code": "TABLE_OR_FIGURE_TEXT",
+    "page": 7,
+    "detail": "38 rotated lines (usually a landscape table), read after the upright text"
+   },
+   {
+    "code": "TABLE_OR_FIGURE_TEXT",
+    "page": 7,
+    "detail": "38 number-dense lines (tables, figures or reference lists)"
+   },
+   {
+    "code": "TABLE_OR_FIGURE_TEXT",
+    "page": 8,
+    "detail": "7 number-dense lines (tables, figures or reference lists)"
+   },
+   {
+    "code": "TABLE_OR_FIGURE_TEXT",
+    "page": 9,
+    "detail": "9 number-dense lines (tables, figures or reference lists)"
+   },
+   {
+    "code": "TABLE_OR_FIGURE_TEXT",
+    "page": 10,
+    "detail": "19 number-dense lines (tables, figures or reference lists)"
+   }
+  ],
+  "timing_seconds": {
+   "fetch_and_ingest": 3.879,
+   "verify": 0.013
+  }
+ },
+ "gate": {
+  "gate_version": "gate-1",
+  "min_words": 5,
+  "summary": {
+   "claims": 7,
+   "passed": 4,
+   "rejected": 3
+  },
+  "results": [
+   {
+    "claim_id": "a-exact-sentence",
+    "document_id": "doc-5d6b5b66fbf1e92d",
+    "status": "pass",
+    "reasons": [],
+    "warnings": [],
+    "matches": [
+     {
+      "text_span": [
+       2963,
+       3159
+      ],
+      "sids": [
+       "p0001-s0027"
+      ],
+      "line_ids": [
+       "p0001-l0077",
+       "p0001-l0078",
+       "p0001-l0079",
+       "p0001-l0080",
+       "p0001-l0081"
+      ],
+      "from_table_text": false,
+      "pages": [
+       1
+      ],
+      "layouts": [
+       "two_column"
+      ]
+     }
+    ],
+    "numbers_checked": [
+     "<25 kg/m2",
+     "2.9",
+     "2.09 to 4.28",
+     "5.3",
+     "3.64 to 7.54"
+    ],
+    "from_table_text": false,
+    "expect": "pass"
+   },
+   {
+    "claim_id": "b-wrong-comparison-group",
+    "document_id": "doc-5d6b5b66fbf1e92d",
+    "status": "reject",
+    "reasons": [
+     {
+      "code": "QUOTE_NOT_FOUND",
+      "detail": "the quote does not occur in the document text"
+     }
+    ],
+    "warnings": [],
+    "matches": [],
+    "numbers_checked": [
+     "2.9"
+    ],
+    "expect": "reject: QUOTE_NOT_FOUND"
+   },
+   {
+    "claim_id": "c-changed-number",
+    "document_id": "doc-5d6b5b66fbf1e92d",
+    "status": "reject",
+    "reasons": [
+     {
+      "code": "NUMBER_NOT_IN_QUOTE",
+      "detail": "'3.5' (value 3.5, unit None, comparator None) is not in the quote"
+     }
+    ],
+    "warnings": [],
+    "matches": [
+     {
+      "text_span": [
+       3089,
+       3159
+      ],
+      "sids": [
+       "p0001-s0027"
+      ],
+      "line_ids": [
+       "p0001-l0079",
+       "p0001-l0080",
+       "p0001-l0081"
+      ],
+      "from_table_text": false,
+      "pages": [
+       1
+      ],
+      "layouts": [
+       "two_column"
+      ]
+     }
+    ],
+    "numbers_checked": [
+     "3.5",
+     "3.64 to 7.54"
+    ],
+    "expect": "reject: NUMBER_NOT_IN_QUOTE"
+   },
+   {
+    "claim_id": "d-dropped-hedge",
+    "document_id": "doc-5d6b5b66fbf1e92d",
+    "status": "pass",
+    "reasons": [],
+    "warnings": [
+     {
+      "code": "HEDGE_DROPPED",
+      "detail": "the quote hedges '30%' (for example 'approximately'); the claim states it without a hedge"
+     }
+    ],
+    "matches": [
+     {
+      "text_span": [
+       4633,
+       4711
+      ],
+      "sids": [
+       "p0001-s0043"
+      ],
+      "line_ids": [
+       "p0001-l0117",
+       "p0001-l0118"
+      ],
+      "from_table_text": false,
+      "pages": [
+       1
+      ],
+      "layouts": [
+       "two_column"
+      ]
+     }
+    ],
+    "numbers_checked": [
+     "30%",
+     "2"
+    ],
+    "from_table_text": false,
+    "expect": "pass with HEDGE_DROPPED"
+   },
+   {
+    "claim_id": "e-table-row",
+    "document_id": "doc-5d6b5b66fbf1e92d",
+    "status": "reject",
+    "reasons": [
+     {
+      "code": "NUMBER_NOT_IN_QUOTE",
+      "detail": "'1000' (value 1000, unit None, comparator None) is not in the quote"
+     }
+    ],
+    "warnings": [],
+    "matches": [
+     {
+      "text_span": [
+       25456,
+       25487
+      ],
+      "sids": [
+       "p0006-s0018"
+      ],
+      "line_ids": [
+       "p0006-l0020"
+      ],
+      "from_table_text": true,
+      "pages": [
+       6
+      ],
+      "layouts": [
+       "single"
+      ]
+     }
+    ],
+    "numbers_checked": [
+     "45-49",
+     "64",
+     "27.2",
+     "1000"
+    ],
+    "expect": "reject: NUMBER_NOT_IN_QUOTE (1000 is only in the table title)"
+   },
+   {
+    "claim_id": "f-table-row-numbers-only",
+    "document_id": "doc-5d6b5b66fbf1e92d",
+    "status": "pass",
+    "reasons": [],
+    "warnings": [],
+    "matches": [
+     {
+      "text_span": [
+       25456,
+       25487
+      ],
+      "sids": [
+       "p0006-s0018"
+      ],
+      "line_ids": [
+       "p0006-l0020"
+      ],
+      "from_table_text": true,
+      "pages": [
+       6
+      ],
+      "layouts": [
+       "single"
+      ]
+     }
+    ],
+    "numbers_checked": [
+     "45-49",
+     "64",
+     "27.2"
+    ],
+    "from_table_text": true,
+    "expect": "pass, from_table_text true"
+   },
+   {
+    "claim_id": "g-abstract-men-vs-white-men",
+    "document_id": "doc-5d6b5b66fbf1e92d",
+    "status": "pass",
+    "reasons": [],
+    "warnings": [],
+    "matches": [
+     {
+      "text_span": [
+       2610,
+       2704
+      ],
+      "sids": [
+       "p0001-s0025"
+      ],
+      "line_ids": [
+       "p0001-l0071",
+       "p0001-l0072"
+      ],
+      "from_table_text": false,
+      "pages": [
+       1
+      ],
+      "layouts": [
+       "two_column"
+      ]
+     }
+    ],
+    "numbers_checked": [
+     "1.6",
+     "1.37 to 1.92"
+    ],
+    "from_table_text": false,
+    "expect": "pass"
+   }
+  ]
+ }
+}

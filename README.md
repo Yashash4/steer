@@ -34,6 +34,17 @@ uv run steer verify claims.json --doc paper.json -o report.json   # exit code 1 
 `--role` says what the source may be used for. Only `evidence` (a research paper) can back a claim.
 `contextual` is for material like a clinical protocol, and `editorial` is for a theme brief.
 
+## Sample run
+
+`examples/run_report.py` fetches a paper, ingests it, checks a claims file and writes a JSON report plus a
+Markdown summary. The committed example covers Narayan et al., BMJ Open Diabetes Research & Care 2021 (CC BY-NC);
+the paper itself is not committed. The claims include an exact sentence, a wrong comparison group, a changed
+number, a dropped hedge and two table-row claims.
+
+```bash
+uv run python examples/run_report.py PMC8006839 examples/narayan-claims.json examples/narayan
+```
+
 ## Fetching papers
 
 A DOI, PubMed ID or URL, PMC ID or URL, or a direct PDF link is resolved like this:
@@ -76,7 +87,7 @@ The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
 - `sentences[]`: `sid` (`p0004-s0017`, numbered per page, taking the page where the sentence starts), its text,
   its spans in `text` and `raw_text`, and the lines it covers.
 - `warnings[]`: limitations, never hidden. The codes are `ABSTRACT_ONLY`, `OCR_REQUIRED_PAGE`, `EMPTY_PAGE`,
-  `UNCERTAIN_COLUMN_ORDER`, `NO_CITATION_METADATA`, `RETRACTED`, `TABLE_OR_FIGURE_TEXT` and `NO_PAGE_LAYOUT`.
+  `UNCERTAIN_COLUMN_ORDER`, `NO_CITATION_METADATA`, `RETRACTED`, `TABLE_OR_FIGURE_TEXT`, `NO_PAGE_LAYOUT` and `RETRACTION_CHECK_PARTIAL` (Europe PMC could not be reached or had no record, so only PMC's flag was checked).
 - `extraction_version`: changes whenever the parser's output can change. Sentence IDs are only comparable
   within one extraction version.
 

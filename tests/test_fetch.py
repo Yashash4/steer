@@ -205,3 +205,13 @@ def test_full_text_from_pmc_plain_text_when_no_pdf(validate):
     assert doc["sentences"][-1]["text"] == "Weight regain was seen in 8,993 patients after stopping treatment."
     assert {"code": "NO_PAGE_LAYOUT", "page": None,
             "detail": "PMC plain-text rendering: no pages or bounding boxes; locate claims by sentence"} in doc["warnings"]
+
+
+def test_retraction_check_partial_when_europepmc_fails(validate):
+    doc = fetch("PMC13564392", "evidence", client=recorded(europepmc=httpx.Response(503)))
+    validate(doc)
+    assert {"code": "RETRACTION_CHECK_PARTIAL", "page": None,
+            "detail": "Europe PMC metadata unavailable; retraction checked against PMC OA only"} in doc["warnings"]
+    assert doc["citation"]["retracted"] is False  # PMC's flag was still checked
+    ok = fetch("PMC13564392", "evidence", client=recorded())
+    assert not any(w["code"] == "RETRACTION_CHECK_PARTIAL" for w in ok["warnings"])

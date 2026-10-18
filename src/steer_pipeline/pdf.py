@@ -282,9 +282,8 @@ def order_rows(rows: list[dict], gx: float | None, depth: int = 0) -> list[dict]
 
 
 def _table_like(row: dict, width: float) -> bool:
-    t = row["raw"].strip()
-    digits = sum(ch.isdigit() for ch in t)
-    return (row["bbox"][2] - row["bbox"][0]) < 0.4 * width and digits >= max(2, 0.3 * len(t.replace(" ", "")))
+    """A number-dense line (digits are at least 30% of its characters), as in table rows; any width."""
+    return _numeric(row["raw"].strip())
 
 
 def mark_paragraphs(rows: list[dict]) -> None:
@@ -385,7 +384,7 @@ def ingest_pdf_bytes(content: bytes, role: str, *, source_type: str, provenance:
         n_table = sum(r["table_like"] for r in ordered)
         if n_table >= 3:
             warnings.append({"code": "TABLE_OR_FIGURE_TEXT", "page": pno,
-                             "detail": f"{n_table} short number-heavy lines (table or figure text)"})
+                             "detail": f"{n_table} number-dense lines (tables, figures or reference lists)"})
         furn = [r for r in rows if r["furniture"]]
         lines = []
         for k, r in enumerate(ordered + furn, start=1):

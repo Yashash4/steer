@@ -217,6 +217,9 @@ def _fetch(source: str, role: str, client: httpx.Client, allow_retracted: bool) 
         epmc = None  # metadata only; the OA record still carries title and licence
     citation = _citation_from(oa, epmc, ids)
     warnings = []
+    if epmc is None:
+        warnings.append({"code": "RETRACTION_CHECK_PARTIAL", "page": None,
+                         "detail": "Europe PMC metadata unavailable; retraction checked against PMC OA only"})
     if citation["retracted"]:
         if not allow_retracted:
             raise RetractedError(f"{source} is marked retracted (PMC or Europe PMC); refusing to ingest it")
