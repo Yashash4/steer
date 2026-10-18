@@ -10,7 +10,9 @@ from playwright.sync_api import sync_playwright
 
 page_path = Path(sys.argv[1]).resolve()
 shots = Path(sys.argv[2]).resolve() if len(sys.argv) > 2 else None
-claims = json.loads((HERE.parent / "sample" / "claims.json").read_text())
+# the claims inlined in the page itself, so the check plays whatever this build contains
+_html = page_path.read_text(encoding="utf-8")
+claims = json.loads(_html.split('<script type="application/json" id="claims">', 1)[1].split("</script>", 1)[0])
 url = page_path.as_uri()
 if shots: shots.mkdir(parents=True, exist_ok=True)
 
@@ -39,18 +41,27 @@ def play(browser, w, h, tag):
     p.click(".link"); snap("04-reveal-quote")
     p.click(".btn"); p.wait_for_selector(".chip"); snap("05-picker")
     chips = p.locator(".chip:not(.done)")
-    for i in (0, 1, 2): chips.nth(i).click()   # safe (gap), muscle (2 rounds), regain
+    for i in range(chips.count()): chips.nth(i).click()   # every open doubt: rounds and gap cards as built
     snap("06-picked")
     p.click(".btn")
-    p.wait_for_selector(".card.gap"); snap("07-gap"); p.click(".btn")
-    p.wait_for_selector(".choice"); snap("08-muscle-a-ask"); p.locator(".choice").nth(1).click()
-    p.wait_for_selector(".reveal"); snap("09-muscle-a-reveal"); p.click(".btn")
-    p.wait_for_selector(".choice"); p.locator(".choice").nth(0).click()
-    p.wait_for_selector(".reveal"); snap("10-muscle-b-reveal"); p.click(".btn")
-    p.wait_for_selector(".slider"); p.locator(".stop").nth(2).click(); snap("11-regain-ask")
-    p.click(".btn"); p.wait_for_selector(".reveal"); snap("12-regain-reveal"); p.click(".btn")
-    p.wait_for_selector(".big"); snap("13-readout"); p.click(".btn")
-    p.wait_for_selector(".warm"); snap("14-next-step")
+    k = 7
+    while True:   # follow the screens this build has, in order
+        p.wait_for_timeout(350)
+        if p.locator(".warm").count():
+            break
+        if p.locator("h1.q").count() and p.inner_text("h1.q") == claims["ui"]["readout_title"]:
+            snap(f"{k:02}-readout"); k += 1; p.click(".btn"); continue
+        if p.locator(".card.gap").count():
+            snap(f"{k:02}-gap"); k += 1; p.click(".btn"); continue
+        if p.locator(".reveal").count():
+            snap(f"{k:02}-reveal"); k += 1; p.click(".btn"); continue
+        if p.locator(".choice").count():
+            snap(f"{k:02}-ask"); k += 1; p.locator(".choice").first.click(); continue
+        if p.locator(".slider").count():
+            assert p.locator(".stop.on").count() == 0, "a stop is preselected"
+            p.locator(".stop").nth(1).click(); snap(f"{k:02}-ask"); k += 1; p.click(".btn"); continue
+        raise AssertionError("an unknown screen")
+    snap(f"{k:02}-next-step")
     hrefs = [p.locator("a.btn").nth(i).get_attribute("href") for i in (0, 1)]
     assert hrefs == [claims["cta"]["primary"]["url"], claims["cta"]["secondary"]["url"]], hrefs
     assert len(reqs) == 0, f"requests attempted: {reqs}"

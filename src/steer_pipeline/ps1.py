@@ -185,9 +185,12 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
         for f in fails:
             report["failures"].append(f"{where}: {f['code']} ({f.get('detail', '')})")
     if router is not None:
-        for pm, (run, claims, doc, b, ctx) in papers.items():
+        groups = [(pm, claims, ctx) for pm, (run, claims, doc, b, ctx) in papers.items()] + [(None, {}, ())]
+        for pm, claims, ctx in groups:   # the last group: copy tied to no paper (gap cards, questions, UI words)
             ls = [{"kind": k if k != "qualifier" else "framing", "text": t, "claim_ids": i, "path": w}
                   for k, t, i, w, p in lines if p == pm and k in ("health", "framing")]
+            if not ls:
+                continue
             res = crosscheck_lines(ls, claims, router, "claude_sonnet", ctx)
             for path, v in res.items():
                 report["crosscheck"][path] = f"{v['verdict']} ({v.get('independence')})"
