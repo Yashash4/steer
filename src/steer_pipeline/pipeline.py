@@ -1,4 +1,4 @@
-"""`steer run`: ingest -> extract (with the gate) -> label -> rules -> store, with the time of every step."""
+"""`steer run`: ingest -> extract (with the gate) -> label -> rules -> library cross-check -> store, timed per step."""
 
 import time
 import uuid
@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import rules
+from .crosscheck import crosscheck_library, verified
 from .extract import extract
 from .fetch import fetch
 from .label import label
@@ -66,13 +67,24 @@ def run(source: str, role: str, settings: dict, router: Router | None = None) ->
     ex["summary"] |= {"passed": len(ex["passed"]), "needs_check": len(ex["needs_check"]), "needs_check_by_reason": by_reason}
     timings["rules"] = round(time.perf_counter() - t, 2)
 
+    t = time.perf_counter()
+    kept = ex["passed"] + ex["needs_check"]
+    checks = crosscheck_library(kept, ex["chunks"], router) if kept else []
+    by_id = {c["claim_id"]: c for c in checks}
+    for c in kept:
+        c["crosscheck"] = by_id.get(c["claim_id"])
+        c["verified"] = verified(c, c["crosscheck"])
+    timings["crosscheck"] = round(time.perf_counter() - t, 2)
+
     summary = ex["summary"] | {
         "labelled": len(labelled["labels"]), "unlabeled": len(labelled["unlabeled"]),
         "rule_flags": _count(f["code"] for c in kept for f in c["rule_flags"]),
-        "model_calls": sum(a["outcome"] != "skipped_no_key" for a in router.log),
+        "model_calls": sum(a["outcome"] not in ("skipped_no_key", "skipped_ineligible") for a in router.log),
+        "verified": sum(c["verified"] for c in kept),
+        "crosscheck": _count(f"{r['verdict']} ({r['independence']})" for r in checks),
     }
     return record | {"finished_at": _now(), "document": doc, "timings": timings, "summary": summary,
-                     "chunks": ex["chunks"], "model_calls": router.log, "label_result": labelled,
+                     "chunks": ex["chunks"], "model_calls": router.log, "label_result": labelled, "crosschecks": checks,
                      "passed": ex["passed"], "needs_check": ex["needs_check"], "rejected": ex["rejected"]}
 
 

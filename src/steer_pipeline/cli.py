@@ -59,14 +59,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {e}", file=sys.stderr)
             return 2
         con = store.connect(args.db or settings.get("storage", {}).get("db", "steer.db"))
-        store.save_run(con, rec)
+        store.save_run_with_checks(con, rec)
         if args.export:
             Path(args.export).write_text(json.dumps(store.export_run(con, rec["run_id"]), ensure_ascii=False, indent=1),
                                          encoding="utf-8")
         s, t = rec["summary"], rec["timings"]
         print(f"{rec['run_id']}: {s['proposed']} proposed, {s['passed']} passed, {s['needs_check']} need a check "
               f"{s['needs_check_by_reason']}, {s['rejected']} rejected {s['rejected_by_reason']}, {s['flagged']} flagged; "
-              f"labelled {s['labelled']}, rule flags {s['rule_flags']}; {s['model_calls']} model calls; "
+              f"labelled {s['labelled']}, rule flags {s['rule_flags']}; verified {s['verified']}, "
+              f"cross-check {s['crosscheck']}; {s['model_calls']} model calls; "
               f"time {t}", file=sys.stderr)
         return 0
 

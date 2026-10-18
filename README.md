@@ -258,6 +258,32 @@ Everything goes into one SQLite file (`[storage] db` in `steer.toml`, default `s
 
 `--export` writes the stored run back out as JSON, exactly as stored.
 
+## Library cross-check (what "verified" means)
+
+After extraction, a different model judges every kept claim against its quote and context fields, one call per
+extraction chunk (job `crosscheck`).
+- **Verdicts:** `supported`, `overstated`, `qualifier_dropped`, `population_generalised`, `wrong_number`,
+  `lean_mass_vs_muscle`, `association_as_cause`, `wrong_comparison_group`, `unsupported`, with a one-line reason.
+  A claim the checker skips is `not_checked`.
+- **Independence**, computed per call from the model that wrote the claim and the model that answered:
+  - `different_provider` (Claude vs an OpenCode model);
+  - `different_model_same_provider` (Claude Sonnet vs Claude Opus);
+  - `same_model`: a self-check, which never counts. A checker that would be the writer's own model is skipped.
+    If no eligible checker answers, the claims are `crosscheck_unavailable`.
+- **Verified** means: the gate passed, no review reason, no code flag, and an independent `supported` verdict.
+  Results are stored in the `crosschecks` table (database schema version 2, an add-only migration).
+
+## Writer contract
+
+`write.py` defines the JSON a model-written post must satisfy. The writer itself, its checks and rendering come next.
+- `message` and `reasoning`, and `format`: `carousel` (4–7 model slides; the sources slide is added by code) or
+  `static` (a headline and at most 2 supporting lines).
+- A caption with 5–10 hashtags from the vocabulary in `steer.toml`.
+- A reel script: scenes, each ONE list of lines that are both spoken and shown.
+- Every line has a `kind`. `health` lines must name claim ids from the brief; `framing`, `brand`, `cta` and `signoff`
+  lines name none. There is no model-written `source` kind.
+- The automatic brief picks the theme × doubt cell with the most verified claims and records why.
+
 ## Labels and rules
 
 - **Labels** (`label.py`): the model gives each claim one theme and zero or more reader doubts, from the

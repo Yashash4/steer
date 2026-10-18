@@ -8,7 +8,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS documents (
@@ -57,6 +57,20 @@ CREATE TABLE IF NOT EXISTS claims (
 );
 CREATE INDEX IF NOT EXISTS claims_by_status ON claims (status, document_id);
 """
+# version 2 adds this table only (an add-only migration: version 1 files keep every row)
+SCHEMA_V2 = """
+CREATE TABLE IF NOT EXISTS crosschecks (
+    run_id TEXT NOT NULL,
+    claim_id TEXT NOT NULL,
+    verdict TEXT NOT NULL,
+    reason TEXT,
+    endpoint TEXT, model TEXT, provider TEXT,
+    independence TEXT,               -- different_provider | different_model_same_provider | same_model | NULL
+    checked_at TEXT NOT NULL,
+    PRIMARY KEY (run_id, claim_id, checked_at),
+    FOREIGN KEY (run_id, claim_id) REFERENCES claims (run_id, claim_id)
+);
+"""
 STATUSES = {"passed": "passed", "needs_check": "needs_check", "rejected": "rejected"}
 
 
@@ -64,8 +78,19 @@ def connect(path: str | Path) -> sqlite3.Connection:
     con = sqlite3.connect(str(path))
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(SCHEMA)
-    con.execute("INSERT OR IGNORE INTO meta VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
+    con.execute("INSERT OR IGNORE INTO meta VALUES ('schema_version', '1')")
+    con.executescript(SCHEMA_V2)
+    with con:
+        con.execute("UPDATE meta SET value = ? WHERE key = 'schema_version'", (str(SCHEMA_VERSION),))
     return con
+
+
+def save_crosschecks(con: sqlite3.Connection, run_id: str, results: list[dict], checked_at: str) -> None:
+    with con:
+        for r in results:
+            con.execute("INSERT INTO crosschecks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (run_id, r["claim_id"], r["verdict"], r["reason"], r["endpoint"], r["model"], r["provider"],
+                         r["independence"], checked_at))
 
 
 def _j(value) -> str:
@@ -102,6 +127,12 @@ def save_run(con: sqlite3.Connection, record: dict) -> None:
                      _j(c.get("rule_flags", []))))
 
 
+def save_run_with_checks(con: sqlite3.Connection, record: dict) -> None:
+    """save_run plus the library cross-check results the run carries."""
+    save_run(con, record)
+    save_crosschecks(con, record["run_id"], record.get("crosschecks", []), record["finished_at"])
+
+
 def export_run(con: sqlite3.Connection, run_id: str) -> dict:
     """The run row and all its claims as plain JSON (what was stored, nothing recomputed)."""
     con.row_factory = sqlite3.Row
@@ -115,6 +146,8 @@ def export_run(con: sqlite3.Connection, run_id: str) -> dict:
                               for k in row.keys()}
         claims = [decode(r) for r in con.execute(
             "SELECT * FROM claims WHERE run_id = ? ORDER BY status, claim_id", (run_id,))]
-        return {"run": decode(run), "claims": claims}
+        checks = [dict(r) for r in con.execute(
+            "SELECT * FROM crosschecks WHERE run_id = ? ORDER BY claim_id, checked_at", (run_id,))]
+        return {"run": decode(run), "claims": claims, "crosschecks": checks}
     finally:
         con.row_factory = None

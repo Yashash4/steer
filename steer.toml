@@ -85,3 +85,10 @@ before_after = ["before and after", "before/after", "before & after", "transform
 # Where `steer run` stores documents, claims and run records (relative to the working directory).
 [storage]
 db = "steer.db"
+
+# Writer settings. Hashtags are a fixed vocabulary (placeholder; edit freely): never drug names, brands or promises.
+[writer]
+hashtags = ["#steerclub", "#metabolichealth", "#doctorled", "#weightmanagement", "#metaboliccare", "#indianfood",
+            "#healthyhabits", "#insulinresistance", "#musclehealth", "#evidencebased", "#lifestylemedicine",
+            "#southasianhealth", "#longtermhealth", "#nutritionscience"]
+brief_claims = 4   # claims picked for an automatic brief

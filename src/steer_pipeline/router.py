@@ -159,12 +159,20 @@ class Router:
         self.run_id = uuid.uuid4().hex  # one stable session id per run (sent as x-opencode-session)
         self.log: list[dict] = []
 
-    def call(self, job: str, system: str, prompt: str, schema: dict) -> dict:
-        """The first schema-valid output along the job's chain: {output, endpoint, model, usage}."""
+    def call(self, job: str, system: str, prompt: str, schema: dict, skip: set[str] = frozenset()) -> dict:
+        """The first schema-valid output along the job's chain: {output, endpoint, model, usage}.
+
+        Endpoints named in `skip` are not called (logged as skipped_ineligible), e.g. a checker that is the
+        same model as the writer it would check.
+        """
         attempts = []
         for name in self.settings["jobs"][job]["chain"]:
             ep = self.settings["endpoints"][name]
             base = {"job": job, "endpoint": name, "connector": ep["connector"], "model": ep.get("model")}
+            if name in skip:
+                attempts.append(base | {"attempt": 0, "outcome": "skipped_ineligible", "latency_ms": 0, "tokens": None,
+                                        "detail": "same model as the text it would check"})
+                continue
             key = None
             if ep.get("key_env"):
                 key = self.env.get(ep["key_env"])

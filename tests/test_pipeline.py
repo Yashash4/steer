@@ -35,12 +35,16 @@ EXTRA: list = []
 
 def fake_router():
     def connector(ep, system, prompt, schema, **kw):
+        if "verdicts" in schema["properties"]:   # library cross-check: everything supported
+            ids = schema["properties"]["verdicts"]["items"]["properties"]["claim_id"]["enum"]
+            return {"verdicts": [{"claim_id": i, "verdict": "supported", "reason": "restates the quote"} for i in ids]}, None
         if "claims" in schema["properties"]:   # extraction
             return {"claims": PAGE2 + EXTRA if "Section (page 2)" in prompt else []}, {"input_tokens": 10, "output_tokens": 5}
         ids = schema["properties"]["labels"]["items"]["properties"]["claim_id"]["enum"]   # labels
         return {"labels": [{"claim_id": i, "theme": "insulin_resistance", "doubts": ["is_it_for_me"]} for i in ids]}, None
-    settings = SETTINGS | {"jobs": {"extract": {"chain": ["f"]}, "label": {"chain": ["f"]}},
-                           "endpoints": {"f": {"connector": "fake", "model": "fake"}}}
+    settings = SETTINGS | {"jobs": {"extract": {"chain": ["f"]}, "label": {"chain": ["f"]}, "crosscheck": {"chain": ["chk"]}},
+                           "endpoints": {"f": {"connector": "fake", "model": "fake"},
+                                         "chk": {"connector": "fake", "model": "other", "base_url": "https://checker.example"}}}
     return Router(settings, connectors={"fake": connector}, env={})
 
 
@@ -49,7 +53,9 @@ def test_run_and_store(tmp_path):
     s = rec["summary"]
     assert (s["proposed"], s["passed"], s["needs_check"], s["rejected"]) == (5, 2, 1, 2)
     assert s["labelled"] == 3 and s["unlabeled"] == 0  # passed AND needs_check are labelled, rejected never
-    assert set(rec["timings"]) == {"ingest", "extract_and_verify", "label", "rules"}
+    assert set(rec["timings"]) == {"ingest", "extract_and_verify", "label", "rules", "crosscheck"}
+    # verified = clean + an independent "supported" cross-check; needs_check claims are checked but not verified
+    assert s["verified"] == 2 and s["crosscheck"] == {"supported (different_provider)": 3}
     for c in rec["passed"] + rec["needs_check"]:
         assert c["labels"] == {"theme": "insulin_resistance", "doubts": ["is_it_for_me"]}
     assert all("labels" not in c for c in rec["rejected"])
@@ -68,7 +74,9 @@ def test_run_and_store(tmp_path):
     assert run_row[1] == SETTINGS["version"] and run_row[2] == SETTINGS["rules"]["version"]
     assert len(json.loads(run_row[3])) == len(rec["model_calls"]) > 0
 
+    store.save_crosschecks(con, rec["run_id"], rec["crosschecks"], rec["finished_at"])
     exported = store.export_run(con, rec["run_id"])
+    assert len(exported["crosschecks"]) == 3 and {c["independence"] for c in exported["crosschecks"]} == {"different_provider"}
     assert exported["run"]["summary"]["passed"] == 2 and len(exported["claims"]) == 5
     assert {c["status"] for c in exported["claims"]} == {"passed", "needs_check", "rejected"}
 
