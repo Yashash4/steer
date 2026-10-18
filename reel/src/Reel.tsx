@@ -19,7 +19,7 @@ const colorsFor = (p: Palette, g: Ground): Colors => ({
   sub: g === "cream" ? p.clay : p.blush,
   ground: p[g],
   emph: p.rust,
-  hi: g === "cream" ? p.rust : p.blush,   // the word being spoken
+  hi: g === "cream" ? p.rust : p.cream,   // the word being spoken (on rust/maroon: full cream; earlier phrases are dimmed)
 });
 
 const fam = (family: string) => (family === SANS ? { fontFamily: family } : { fontFamily: family, fontVariationSettings: SERIF_VARS });
@@ -101,7 +101,7 @@ const LineView = (p: { line: Line; t: number; c: Colors; top: number; height: nu
             const live = s.current === k;
             const active = live ? b.words.reduce((a, x, j) => (x.start <= t ? j : a), -1) : -1;
             const enter = buildsUp(line) ? ease(clamp01((t - b.start) / 0.22)) : 1;
-            const opacity = !shown ? 0 : (buildsUp(line) && s.current !== null && k < s.current ? DIM : live && i > active && health ? 0.45 : 1) * enter;
+            const opacity = !shown ? 0 : (buildsUp(line) && s.current !== null && k < s.current ? DIM : 1) * enter;   // the current phrase at full strength, earlier ones dimmed
             const on = live && i === active ? clamp01((t - w.start) / 0.1) : 0;
             return (
               <span key={k + "-" + i} style={{
