@@ -300,7 +300,7 @@ def probe_mp4(path: Path) -> dict:
             "duration": int(dur[1]) * 3600 + int(dur[2]) * 60 + float(dur[3]), "bytes": path.stat().st_size}
 
 
-MARK_BOX = (560, 56, 460, 84)  # x, y, w, h around the draft pill (top right)
+MARK_BOX = (560, 206, 460, 62)  # x, y, w, h around the draft pill (top right, layout.json "pill")
 
 
 SUBS_BOX = (90, 1340, 900, 230)
@@ -432,7 +432,7 @@ def _scene_css(p: dict) -> str:
     return rd._css(p, W, H) + f"""
 .content {{ top: 220px; bottom: 640px; left: 90px; right: 90px; gap: 44px; }}
 .foot {{ bottom: 90px; left: 90px; right: 90px; }}
-.mark {{ top: 70px; right: 70px; font-size: 26px; }}
+.mark {{ top: 222px; right: 70px; font-size: 26px; }}
 .line {{ opacity: 0; }}
 .subs {{ position: absolute; left: 90px; right: 90px; top: 1340px; height: 230px; }}
 .cap {{ position: absolute; left: 0; right: 0; bottom: 0; opacity: 0; background: {p['paper']}; color: {p['ink']};
@@ -560,7 +560,7 @@ REMOTION_DURATION = (20.0, 45.0)
 HOOK_MAX = 4.0   # the hook line is spoken within 4 s of the reel's start
 REMOTION_END_CARD, HEALTH_HOLD = 5.0, 0.8   # the sources card holds >= 5 s (its text >= 40 px)
 PRESENTER_LABEL = "AI-generated presenter · not a Steer clinician"   # D-026: on every frame a presenter clip is on screen
-LABEL_BOX = (60, 72, 220, 34)   # x, y, w, h inside the label pill (top left; Reel.tsx LABEL_BG / LABEL_INK)
+LABEL_BOX = (60, 222, 220, 30)  # x, y, w, h inside the label pill (top left, layout.json "pill"; Reel.tsx LABEL_BG / LABEL_INK)
 GROUNDS = {"hook": "cream", "brand": "maroon", "cta": "cream", "sources": "cream"}
 
 
@@ -703,13 +703,21 @@ def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | N
             "palette": brand["palette"], "chrome": {"draft_mark": rd.DRAFT, "wordmark": "steer"}, "scenes": out}
 
 
+def safe_area_problems(layout_path: Path | None = None) -> list[str]:
+    """Every text box in code/reel/layout.json must sit inside its safe band (below the IG top bar, above its UI)."""
+    lay = json.loads((layout_path or REEL_DIR / "layout.json").read_text())
+    top, bottom = lay["safe"]["top"], lay["safe"]["bottom"]
+    return [f"{k}: {v['top']}-{v['top'] + v['height']} outside {top}-{bottom}" for k, v in lay.items()
+            if isinstance(v, dict) and "height" in v and not (top <= v["top"] and v["top"] + v["height"] <= bottom)]
+
+
 def pool_check(props: dict, script: dict, record: dict, emphasis: str | None, keys: list[dict]) -> list[dict]:
     """Every string the composition can draw, checked against the post before render: a script line verbatim (after
     the display transforms), an exact substring of its own line, the post's checked key pair and emphasis, or a
     string built by code. Any other string fails the reel."""
     import jsonschema
 
-    fails = []
+    fails = [{"code": "TEXT_OUTSIDE_SAFE_AREA", "detail": x} for x in safe_area_problems()]
     try:
         jsonschema.validate(props, json.loads((REEL_DIR / "props.schema.json").read_text()))
     except jsonschema.ValidationError as e:

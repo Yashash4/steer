@@ -1,0 +1,15 @@
+{
+  "_comment": "Every text box the composition draws, as {top, height} px on 1080x1920. reel.py's QA asserts each sits inside safe (below the IG top bar, above its caption/UI area); Reel.tsx reads the same file.",
+  "safe": {"top": 210, "bottom": 1620},
+  "pill": {"top": 214, "height": 46},
+  "keypair": {"top": 290, "height": 470},
+  "keypair_presenter": {"top": 960, "height": 240},
+  "lines": {"top": 290, "height": 1210},
+  "lines_key": {"top": 780, "height": 720},
+  "lines_presenter": {"top": 1100, "height": 400},
+  "lines_presenter_key": {"top": 1210, "height": 290},
+  "captions": {"top": 1180, "height": 320},
+  "source_label": {"top": 1510, "height": 34},
+  "wordmark": {"top": 1556, "height": 56},
+  "sources": {"top": 290, "height": 1200}
+}

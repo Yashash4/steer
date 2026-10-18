@@ -309,3 +309,14 @@ def test_a_long_health_line_becomes_two_cards_split_at_its_colon():
     assert reel.make_cards(reel.display_tokens("On average 0.4 kg a month.", [0.0] * 6)) is None      # no colon: build-up
     many = "In this very long setting " + "word " * 20 + "here: 2.99 times higher."
     assert reel.make_cards(reel.display_tokens(many, [0.0] * len(many.split()))) is None              # > 22 words a card
+
+
+def test_every_text_box_and_both_pills_sit_in_the_safe_area(tmp_path):
+    assert reel.safe_area_problems() == []
+    lay = json.loads((reel.REEL_DIR / "layout.json").read_text())
+    assert lay["pill"]["top"] >= lay["safe"]["top"]                       # the pills are not exempt
+    bad = lay | {"wordmark": {"top": 1840, "height": 56}}
+    (tmp_path / "l.json").write_text(json.dumps(bad))
+    assert reel.safe_area_problems(tmp_path / "l.json") == ["wordmark: 1840-1896 outside 210-1620"]
+    x, y, w, h = reel.MARK_BOX                                              # the QA looks where the pill now is
+    assert y <= lay["pill"]["top"] and lay["pill"]["top"] + lay["pill"]["height"] <= y + h

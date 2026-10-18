@@ -37,7 +37,7 @@ S2 = "0.909375, 0.725, 0.421875, 0.0"
 FPS = 24
 NEG = ("text, letters, words, captions, subtitles, logo, watermark, numbers, signage, medicine packaging, pills, "
        "white coat, stethoscope, hospital, clinic, distorted face, extra fingers, deformed hands, blurry, cartoon, "
-       "video game, ugly, doctor, medical setting, scrubs, lanyard, ID badge")
+       "video game, ugly, doctor, medical setting, scrubs, lanyard, ID badge, faces, hands, signage, writing, brand logos")
 
 
 def graph(prompt, w, h, frames, seed, sampler, image=None, audio=None, seconds=None, modality=1.0):

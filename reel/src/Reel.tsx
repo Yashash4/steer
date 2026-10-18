@@ -5,6 +5,7 @@ import {
 } from "remotion";
 import { DIM, buildsUp, cardsShown, onScreen } from "./beats";
 import { SANS, SERIF, SERIF_ITALIC, SERIF_VARS, fit } from "./fit";
+import L from "../layout.json";
 import type { Card, Ground, Line, Palette, Presenter, ReelProps, Scene } from "./types";
 
 const FPS = 30;
@@ -38,7 +39,7 @@ const PresenterLayer = (p: { pr: Presenter; sceneStart: number; c: Colors }) => 
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1060,
         background: `linear-gradient(to bottom, transparent 0%, ${p.c.ground}d9 38%, ${p.c.ground} 70%)` }} />
       <div style={{
-        position: "absolute", top: 64, left: 48, padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
+        position: "absolute", top: L.pill.top, left: 48, height: L.pill.height, boxSizing: "border-box", padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
         fontSize: 26, color: LABEL_INK, background: LABEL_BG,
       }}>{p.pr.label}</div>
     </Sequence>
@@ -117,7 +118,7 @@ const CardsView = (p: { line: Line; cards: Card[]; t: number; c: Colors; top: nu
       )}
       {line.source_label ? (
         <div style={{
-          position: "absolute", left: (1080 - BOX) / 2, width: BOX, bottom: 200, textAlign: "center", fontFamily: SANS,
+          position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: L.source_label.top, height: L.source_label.height, textAlign: "center", fontFamily: SANS,
           fontWeight: 500, fontSize: 26, lineHeight: 1.25, color: c.sub,
         }}>{line.source_label}</div>
       ) : null}
@@ -165,7 +166,7 @@ const LineView = (p: { line: Line; t: number; c: Colors; top: number; height: nu
       </div>
       {line.source_label ? (
         <div style={{
-          position: "absolute", left: (1080 - BOX) / 2, width: BOX, bottom: 200, textAlign: "center", fontFamily: SANS,
+          position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: L.source_label.top, height: L.source_label.height, textAlign: "center", fontFamily: SANS,
           fontWeight: 500, fontSize: 26, lineHeight: 1.25, color: c.sub,
         }}>{line.source_label}</div>
       ) : null}
@@ -214,7 +215,7 @@ const SourcesCard = (p: { s: NonNullable<Scene["sources"]>; c: Colors }) => {
   const url = useMemo(() => fit(s.url, SERIF, 600, 1, BOX, 56, 40), [s]);
   return (
     <div style={{
-      position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: 150, bottom: 140, display: "flex", flexDirection: "column",
+      position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: L.sources.top, height: L.sources.height, display: "flex", flexDirection: "column",
       gap: 28, justifyContent: "center", color: c.ink,
     }}>
       <div style={{ fontFamily: SERIF, fontVariationSettings: SERIF_VARS, fontWeight: 600, fontSize: 64 }}>{s.heading}</div>
@@ -236,9 +237,8 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; props: ReelPr
   const c = colorsFor(props.palette, scene.ground);
   const keyLine = scene.lines.find((l) => l.key !== null);
   // with a presenter the text sits in the lower band, over the gradient; without, it uses the frame
-  const box = scene.presenter ? { top: keyLine ? 1240 : 1120, height: keyLine ? 400 : 520 }
-    : { top: keyLine ? 700 : 240, height: keyLine ? 940 : 1400 };
-  const keyBox = scene.presenter ? { top: 980, height: 250, numMax: 150 } : { top: 170, height: 500, numMax: 200 };
+  const box = scene.presenter ? (keyLine ? L.lines_presenter_key : L.lines_presenter) : (keyLine ? L.lines_key : L.lines);
+  const keyBox = scene.presenter ? { ...L.keypair_presenter, numMax: 150 } : { ...L.keypair, numMax: 200 };
   const wp = p.wipe ? ease(clamp01(frame / (WIPE_S * FPS))) : 1;
   const sinceStart = t - scene.start;
   const rule = ease(clamp01(sinceStart / 0.7));
@@ -252,7 +252,7 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; props: ReelPr
         border: "3px solid " + (dark ? props.palette.blush : props.palette.rust), opacity: 0.35,
         transform: `translate(${Math.sin(t / 3) * 24}px, ${Math.cos(t / 4) * 30}px)`,
       }} />
-      <div style={{ position: "absolute", left: 60, bottom: 150, height: 4, width: 960 * rule, background: props.palette.blush }} />
+      <div style={{ position: "absolute", left: 60, top: L.wordmark.top - 14, height: 4, width: 960 * rule, background: props.palette.blush }} />
       {scene.lines.map((l, i) => l.cards ? (
         <CardsView key={i} line={l} cards={l.cards} t={t} c={c} top={box.top} height={box.height}
           heroInk={scene.ground === "cream" ? c.emph : c.ink} />
@@ -266,11 +266,11 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; props: ReelPr
       ) : null}
       {scene.sources ? <SourcesCard s={scene.sources} c={c} /> : null}
       <div style={{
-        position: "absolute", top: 64, right: 48, padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
+        position: "absolute", top: L.pill.top, right: 48, height: L.pill.height, boxSizing: "border-box", padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
         fontSize: 26, color: c.sub, border: "2px solid " + c.sub,
       }}>{props.chrome.draft_mark}</div>
       <div style={{
-        position: "absolute", left: 60, bottom: 64, fontFamily: SERIF, fontVariationSettings: SERIF_VARS, fontWeight: 600,
+        position: "absolute", left: 60, top: L.wordmark.top, height: L.wordmark.height, lineHeight: 1, fontFamily: SERIF, fontVariationSettings: SERIF_VARS, fontWeight: 600,
         fontSize: 44, color: c.ink,
       }}>{props.chrome.wordmark}</div>
     </AbsoluteFill>
