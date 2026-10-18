@@ -157,7 +157,7 @@ def test_report_counts_and_cli(two, tmp_path):
     out = tmp_path / "report.json"
     assert cli.main(["verify", str(claims_path), "--doc", str(doc_path), "-o", str(out)]) == 1
     report = json.loads(out.read_text())
-    assert report["summary"] == {"claims": 2, "passed": 1, "rejected": 1}
+    assert report["summary"] == {"claims": 2, "passed": 1, "passed_clean": 1, "needs_layout_check": 0, "rejected": 1}
     assert [r["status"] for r in report["results"]] == ["pass", "reject"]
     assert report["gate_version"] == "gate-1" and report["min_words"] == 5
 
@@ -174,3 +174,40 @@ def test_hedge_dropped_is_a_warning_not_a_rejection(one):
 def test_duration_wording_passes_gate(two):
     q = "The intervention group received 43 g of almonds/day for 12 weeks"
     assert run(two, "Participants ate 43 g of almonds a day over 12 weeks", q)["status"] == "pass"
+
+
+# --- layout check (claims on pages or regions whose reading order is uncertain) ---
+
+def test_no_layout_warning_on_a_clean_page(two):
+    # control: Frontiers page 2 carries no reading-order warning
+    assert not any(w["code"] == "UNCERTAIN_COLUMN_ORDER" and w["page"] == 2 for w in two["warnings"])
+    r = run(two, "352 participants completed the study", "A total of 352 participants completed the study.")
+    assert r["status"] == "pass" and r["warnings"] == []
+
+
+def test_page_level_uncertainty_flags_the_claim(two):
+    doc = json.loads(json.dumps(two))
+    doc["warnings"].append({"code": "UNCERTAIN_COLUMN_ORDER", "page": 2, "detail": "2 possible column splits"})
+    claim = {"claim_id": "p", "text": "352 participants completed the study", "document_id": doc["document_id"],
+             "quote": "A total of 352 participants completed the study."}
+    report = verify([claim], [doc])
+    r = report["results"][0]
+    assert r["status"] == "pass"
+    assert [w["code"] for w in r["warnings"]] == ["LAYOUT_CHECK_NEEDED"]
+    assert r["warnings"][0]["detail"].startswith("page 2, lines p0002-l")
+    assert report["summary"] == {"claims": 1, "passed": 1, "passed_clean": 0, "needs_layout_check": 1, "rejected": 0}
+
+
+def test_region_uncertainty_flags_only_overlapping_claims(two):
+    doc = json.loads(json.dumps(two))
+    hit = run(doc, "352 participants completed the study", "A total of 352 participants completed the study.")
+    line = hit["matches"][0]["line_ids"][0]
+    n = int(line[-4:])
+    doc["warnings"].append({"code": "UNCERTAIN_COLUMN_ORDER", "page": 2, "detail": "inner column split",
+                            "lines": [f"p0002-l{n:04d}", f"p0002-l{n + 2:04d}"]})
+    r = run(doc, "352 participants completed the study", "A total of 352 participants completed the study.")
+    assert [w["code"] for w in r["warnings"]] == ["LAYOUT_CHECK_NEEDED"]
+    # a quote elsewhere on the same page, outside the region, is not flagged
+    far = run(doc, "People were followed up every fortnight",
+              "Thus, it is reasonable to hypothesize that providing healthier foods could improve")
+    assert far["status"] == "pass" and far["warnings"] == []

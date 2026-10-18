@@ -19,6 +19,30 @@ class _Doc:
         self.doc = doc
         self.canon, self.index = canonical(doc["text"])
         self.lines = {ln["line_id"]: ln for p in doc["pages"] for ln in p["lines"]}
+        self.uncertain = [w for w in doc["warnings"] if w["code"] == "UNCERTAIN_COLUMN_ORDER" and w.get("page")]
+
+    def layout_warnings(self, line_ids: list[str]) -> list[dict]:
+        """LAYOUT_CHECK_NEEDED for every page the match touches that has an unresolved reading-order warning.
+
+        A warning with a "lines" range applies only when the match overlaps that range (reading-order
+        index on the page); a warning without one applies to the whole page.
+        """
+        by_page: dict[int, list[int]] = {}
+        for i in line_ids:
+            by_page.setdefault(int(i[1:5]), []).append(int(i[-4:]))
+        out = []
+        for w in self.uncertain:
+            idx = by_page.get(w["page"])
+            if not idx:
+                continue
+            if "lines" in w:
+                lo, hi = (int(x[-4:]) for x in w["lines"])
+                if max(idx) < lo or min(idx) > hi:
+                    continue
+            first, last = f"p{w['page']:04d}-l{min(idx):04d}", f"p{w['page']:04d}-l{max(idx):04d}"
+            out.append(_reason("LAYOUT_CHECK_NEEDED",
+                               f"page {w['page']}, lines {first}-{last}: reading order uncertain ({w['detail']})"))
+        return out
 
     def locate(self, canon_quote: str) -> list[dict]:
         out, start = [], self.canon.find(canon_quote)
@@ -89,6 +113,10 @@ def check_claim(claim: dict, docs: dict[str, _Doc], min_words: int = MIN_WORDS) 
     }
     if not reasons:
         result["from_table_text"] = all(m["from_table_text"] for m in matches)
+        for m in matches:
+            for w in d.layout_warnings(m["line_ids"]):
+                if w not in warnings:
+                    warnings.append(w)
     return result
 
 
@@ -96,9 +124,13 @@ def verify(claims: list[dict], documents: list[dict], min_words: int = MIN_WORDS
     docs = {doc["document_id"]: _Doc(doc) for doc in documents}
     results = [check_claim(c, docs, min_words) for c in claims]
     passed = sum(r["status"] == "pass" for r in results)
+    layout = sum(r["status"] == "pass" and any(w["code"] == "LAYOUT_CHECK_NEEDED" for w in r["warnings"])
+                 for r in results)
     return {
         "gate_version": GATE_VERSION,
         "min_words": min_words,
-        "summary": {"claims": len(results), "passed": passed, "rejected": len(results) - passed},
+        # a pass that needs a layout check is not a verified claim until a reviewer compares it with the page
+        "summary": {"claims": len(results), "passed": passed, "passed_clean": passed - layout,
+                    "needs_layout_check": layout, "rejected": len(results) - passed},
         "results": results,
     }

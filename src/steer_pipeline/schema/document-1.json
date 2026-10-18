@@ -129,7 +129,8 @@
           "code": {"enum": ["ABSTRACT_ONLY", "OCR_REQUIRED_PAGE", "EMPTY_PAGE", "UNCERTAIN_COLUMN_ORDER",
                             "NO_CITATION_METADATA", "RETRACTED", "TABLE_OR_FIGURE_TEXT", "NO_PAGE_LAYOUT", "RETRACTION_CHECK_PARTIAL"]},
           "page": {"type": ["integer", "null"]},
-          "detail": {"type": "string"}
+          "detail": {"type": "string"},
+          "lines": {"type": "array", "items": {"$ref": "#/$defs/line_id"}, "minItems": 2, "maxItems": 2}
         }
       }
     }

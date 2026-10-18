@@ -68,8 +68,9 @@ def markdown(s: dict, report: dict) -> str:
         "",
         "## Claims checked by the gate",
         "",
-        f"{report['summary']['claims']} claims: {report['summary']['passed']} passed, "
-        f"{report['summary']['rejected']} rejected.",
+        f"{report['summary']['claims']} claims: {report['summary']['passed']} passed "
+        f"({report['summary']['passed_clean']} clean, {report['summary']['needs_layout_check']} need a layout check: "
+        f"not verified until a reviewer compares them with the page), {report['summary']['rejected']} rejected.",
         "",
         "| Claim | Expected | Result | Where (page / sentence / lines) | Notes |",
         "|---|---|---|---|---|",

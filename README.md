@@ -103,7 +103,16 @@ The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
   figures) split the page into bands. Bands are read top to bottom; inside a band the left column comes
   before the right one. Each column is searched again for a column inside it, so a sidebar beside two
   columns reads as three. Wide title lines are left out of the column test, and so are number-heavy
-  rows (tables). Unclear cases add `UNCERTAIN_COLUMN_ORDER` for that page instead of guessing.
+  rows (tables). A split is only accepted when the text left of it reads like a column: one line per
+  baseline that fills most of the space up to the gutter. Table cells never qualify.
+- **Reading-order warnings are never silent.** `UNCERTAIN_COLUMN_ORDER` is added for:
+  - several candidate splits;
+  - every inner column split;
+  - every split candidate rejected as table-like;
+  - number-dense pages: when too few text rows remain, the column test runs on all rows and says so; if a
+    page is at least 40% number-dense and reads as one column, that reading is marked unconfirmed.
+
+  A warning about one region carries `lines: [first, last]`.
 - **Rotated text** (landscape tables) is ordered in its own upright frame, read after the page's upright text,
   and flagged `TABLE_OR_FIGURE_TEXT`.
 - **Line joins.**
@@ -136,8 +145,13 @@ repaired. No AI is involved.
 **1. The quote is in the evidence.** The document's role must be `evidence`. The quote, after the canonical
 form below, must occur in the document text after the same canonical form. The quote must be contiguous
 (an ellipsis is rejected). It needs at least 5 words (`--min-words`), unless it contains a number that the
-claim also states. Every match is reported with its sentence IDs and lines, and `from_table_text: true`
-when it comes only from table or rotated text.
+claim also states. Every match is reported with its sentence IDs and lines. Two flags may come with it:
+- `from_table_text: true` when it comes only from number-dense or rotated lines. That is a "check the
+  context" flag, never a rejection.
+- A `LAYOUT_CHECK_NEEDED` warning when it touches a page or region with an unresolved reading-order warning.
+  **A pass with this warning is not a verified claim until a reviewer has compared it with the page.**
+
+The report summary counts such claims apart: `passed`, `passed_clean`, `needs_layout_check`, `rejected`.
 
 The canonical form, applied in this order:
 1. Unicode NFKC (ligatures, superscript digits such as "²", full-width forms).

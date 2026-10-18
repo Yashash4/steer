@@ -43,7 +43,8 @@ def main(argv: list[str] | None = None) -> int:
         report = verify.verify(claims, [contract.load(d) for d in args.doc], args.min_words)
         Path(args.out).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
         s = report["summary"]
-        print(f"{s['claims']} claims: {s['passed']} passed, {s['rejected']} rejected -> {args.out}", file=sys.stderr)
+        print(f"{s['claims']} claims: {s['passed']} passed ({s['passed_clean']} clean, {s['needs_layout_check']} need a "
+              f"layout check), {s['rejected']} rejected -> {args.out}", file=sys.stderr)
         return 0 if s["rejected"] == 0 else 1
 
     try:

@@ -56,6 +56,15 @@
     "detail": "8 number-dense lines (tables, figures or reference lists)"
    },
    {
+    "code": "UNCERTAIN_COLUMN_ORDER",
+    "page": 1,
+    "detail": "inner column split in the right column, y 23-742",
+    "lines": [
+     "p0001-l0036",
+     "p0001-l0124"
+    ]
+   },
+   {
     "code": "TABLE_OR_FIGURE_TEXT",
     "page": 4,
     "detail": "31 number-dense lines (tables, figures or reference lists)"
@@ -69,6 +78,11 @@
     "code": "TABLE_OR_FIGURE_TEXT",
     "page": 6,
     "detail": "57 rotated lines (usually a landscape table), read after the upright text"
+   },
+   {
+    "code": "UNCERTAIN_COLUMN_ORDER",
+    "page": 6,
+    "detail": "number-dense page: single-column reading not confirmed"
    },
    {
     "code": "TABLE_OR_FIGURE_TEXT",
@@ -102,7 +116,7 @@
    }
   ],
   "timing_seconds": {
-   "fetch_and_ingest": 3.879,
+   "fetch_and_ingest": 9.115,
    "verify": 0.013
   }
  },
@@ -112,6 +126,8 @@
   "summary": {
    "claims": 7,
    "passed": 4,
+   "passed_clean": 0,
+   "needs_layout_check": 4,
    "rejected": 3
   },
   "results": [
@@ -120,7 +136,16 @@
     "document_id": "doc-5d6b5b66fbf1e92d",
     "status": "pass",
     "reasons": [],
-    "warnings": [],
+    "warnings": [
+     {
+      "code": "LAYOUT_CHECK_NEEDED",
+      "detail": "page 1, lines p0001-l0077-p0001-l0081: reading order uncertain (2 possible column splits; ordered by the strongest)"
+     },
+     {
+      "code": "LAYOUT_CHECK_NEEDED",
+      "detail": "page 1, lines p0001-l0077-p0001-l0081: reading order uncertain (inner column split in the right column, y 23-742)"
+     }
+    ],
     "matches": [
      {
       "text_span": [
@@ -222,6 +247,14 @@
      {
       "code": "HEDGE_DROPPED",
       "detail": "the quote hedges '30%' (for example 'approximately'); the claim states it without a hedge"
+     },
+     {
+      "code": "LAYOUT_CHECK_NEEDED",
+      "detail": "page 1, lines p0001-l0117-p0001-l0118: reading order uncertain (2 possible column splits; ordered by the strongest)"
+     },
+     {
+      "code": "LAYOUT_CHECK_NEEDED",
+      "detail": "page 1, lines p0001-l0117-p0001-l0118: reading order uncertain (inner column split in the right column, y 23-742)"
      }
     ],
     "matches": [
@@ -298,7 +331,12 @@
     "document_id": "doc-5d6b5b66fbf1e92d",
     "status": "pass",
     "reasons": [],
-    "warnings": [],
+    "warnings": [
+     {
+      "code": "LAYOUT_CHECK_NEEDED",
+      "detail": "page 6, lines p0006-l0020-p0006-l0020: reading order uncertain (number-dense page: single-column reading not confirmed)"
+     }
+    ],
     "matches": [
      {
       "text_span": [
@@ -333,7 +371,16 @@
     "document_id": "doc-5d6b5b66fbf1e92d",
     "status": "pass",
     "reasons": [],
-    "warnings": [],
+    "warnings": [
+     {
+      "code": "LAYOUT_CHECK_NEEDED",
+      "detail": "page 1, lines p0001-l0071-p0001-l0072: reading order uncertain (2 possible column splits; ordered by the strongest)"
+     },
+     {
+      "code": "LAYOUT_CHECK_NEEDED",
+      "detail": "page 1, lines p0001-l0071-p0001-l0072: reading order uncertain (inner column split in the right column, y 23-742)"
+     }
+    ],
     "matches": [
      {
       "text_span": [

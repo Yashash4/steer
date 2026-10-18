@@ -220,6 +220,9 @@ def test_table_in_one_block_keeps_its_rows(tmp_path):
     doc.save(path)
     out = ingest_pdf(path, "evidence")
     assert out["pages"][0]["layout"] == "single"
+    # a number-dense page read as one column is flagged, never silent
+    assert {"code": "UNCERTAIN_COLUMN_ORDER", "page": 1,
+            "detail": "number-dense page: single-column reading not confirmed"} in out["warnings"]
     flat = out["text"].replace("\n", " ")  # the gate's canonical form treats line breaks as spaces
     for i, label in enumerate(labels):
         cells = " ".join(f"{i + 1}.{k} ± 0.{k + 1}" for k in range(4))
@@ -250,6 +253,9 @@ def test_sidebar_plus_two_columns_under_a_wide_title(tmp_path):
     out = ingest_pdf(path, "evidence")
     sents = [s["text"] for s in out["sentences"]]
     assert sents == side + title + mid + right
+    # the inner split is never silent: a region warning names its lines
+    inner = [w for w in out["warnings"] if w["detail"].startswith("inner column split")]
+    assert len(inner) == 1 and inner[0]["code"] == "UNCERTAIN_COLUMN_ORDER" and len(inner[0]["lines"]) == 2
 
 
 def test_regressions_on_real_pages(single, two):
@@ -260,3 +266,57 @@ def test_regressions_on_real_pages(single, two):
     # Frontiers p7: figure captions above two columns no longer hide the column gutter
     assert ("In this randomized, controlled trial conducted over-weight Asian Indian adults the consumption of "
             "43 g (≈1.5 oz) of almonds daily as a snack (mid -morning/evening) over 12 weeks") in two["text"]
+
+
+def test_word_table_inside_a_column_is_not_split(tmp_path):
+    # sidebar | a word-cell table (short labels + descriptions) in the main area: the inner split
+    # must not read "all labels, then all descriptions"
+    doc = pymupdf.open()
+    page = doc.new_page()
+    tw = pymupdf.TextWriter(page.rect)
+    side = [f"Side note {i} on the trial." for i in range(1, 13)]
+    rows = [("Diet", "Rice and dal at home"), ("Sleep", "Seven hours each night"), ("Walk", "Thirty minutes daily"),
+            ("Tea", "Two cups without sugar"), ("Work", "Desk job with breaks"), ("Meals", "Three fixed times"),
+            ("Snacks", "Fruit and nuts only"), ("Family", "Dinner together often")]
+    for i, t in enumerate(side):
+        tw.append((40, 150 + i * 14), t, fontsize=10)
+    for i, (a, b) in enumerate(rows):
+        tw.append((175, 150 + i * 14), a, fontsize=10)
+        tw.append((330, 150 + i * 14), b, fontsize=10)
+    tw.write_text(page)
+    path = tmp_path / "wordtable.pdf"
+    doc.save(path)
+    out = ingest_pdf(path, "evidence")
+    flat = out["text"].replace("\n", " ")
+    assert flat.index(side[-1]) < flat.index("Diet")  # the sidebar is its own column
+    for a, b in rows:
+        assert f"{a} {b}" in flat
+    assert not any(w["detail"].startswith("inner column split") for w in out["warnings"])
+    # the rejected candidate is flagged for its region, never silent
+    assert any(w["detail"].startswith("inner column candidate rejected as table-like") and "lines" in w
+               for w in out["warnings"])
+
+
+def test_number_dense_two_column_page_uses_the_fallback(tmp_path):
+    # two justified columns whose lines are mostly numbers: the text-only test sees too few rows
+    doc = pymupdf.open()
+    page = doc.new_page()
+    tw = pymupdf.TextWriter(page.rect)
+    # same characters per line (Helvetica digits are equal width), so each column is justified
+    left = [f"Arm A{i}: {i}0.{i} (1{i}.2), {i}5.1 (2.{i}), 9{i}.4% (8{i}.1 to 9{i}.9), p=0.0{i}" for i in range(1, 9)]
+    right = [f"Arm B{i}: {i}1.{i} (2{i}.3), {i}6.2 (3.{i}), 8{i}.5% (7{i}.2 to 8{i}.8), p=0.1{i}" for i in range(1, 9)]
+    texts = ["Results by group are shown below in two columns of text for each arm."] * 2
+    for i, t in enumerate(texts):
+        tw.append((50, 80 + i * 14), t, fontsize=10)
+    for i, (lt, rt) in enumerate(zip(left, right)):
+        tw.append((50, 130 + i * 14), lt, fontsize=9)
+        tw.append((310, 130 + i * 14), rt, fontsize=9)
+    tw.write_text(page)
+    path = tmp_path / "numbers.pdf"
+    doc.save(path)
+    out = ingest_pdf(path, "evidence")
+    assert out["pages"][0]["layout"] in ("two_column", "mixed")
+    assert {"code": "UNCERTAIN_COLUMN_ORDER", "page": 1,
+            "detail": "number-dense page: columns detected on all rows (fallback)"} in out["warnings"]
+    flat = out["text"].replace("\n", " ")
+    assert flat.index(left[-1]) < flat.index(right[0])  # the left column is read before the right one
