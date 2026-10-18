@@ -235,9 +235,11 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
   const { scene, props } = p;
   const frame = useCurrentFrame();
   const t = p.frozenAt ?? (frame + p.from) / FPS;
-  const c = colorsFor(props.palette, scene.ground);
-  const keyLine = scene.lines.find((l) => l.key !== null);
   const media = scene.presenter !== null || scene.broll !== null;
+  const base = colorsFor(props.palette, scene.ground);
+  // over a clip: white text with a soft shadow (inherited), blush accents
+  const c = media ? { ...base, ink: "#FFFFFF", sub: props.palette.cream, emph: props.palette.blush, hi: props.palette.blush } : base;
+  const keyLine = scene.lines.find((l) => l.key !== null);
   // with a presenter the text sits in the lower band, over the gradient; without, it uses the frame
   const box = scene.presenter ? (keyLine ? L.lines_presenter_key : L.lines_presenter) : (keyLine ? L.lines_key : L.lines);
   const keyBox = scene.presenter ? { ...L.keypair_presenter, numMax: 150 } : { ...L.keypair, numMax: 200 };
@@ -248,6 +250,7 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
   const dark = scene.ground !== "cream";
   return (
     <AbsoluteFill style={{ background: c.ground, clipPath: wp < 1 ? `inset(0 ${100 - wp * 100}% 0 0)` : undefined,
+      textShadow: media ? "0 2px 14px rgba(0,0,0,0.6), 0 0 2px rgba(0,0,0,0.5)" : undefined,
       transform: zin < 1 ? `scale(${1.25 - 0.25 * ease(zin)})` : undefined, opacity: zin < 1 ? ease(zin) : undefined }}>
       {scene.broll ? <BrollBg b={scene.broll} sceneStart={scene.start} scale={z} origin="50% 40%" /> : null}
       {scene.presenter ? <PresenterLayer pr={scene.presenter} sceneStart={scene.start} c={c} scale={z} /> : null}

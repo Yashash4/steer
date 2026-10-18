@@ -337,7 +337,7 @@ def test_the_v4_edit_plan_keeps_food_away_from_numbers_and_puts_the_city_behind_
     assets = {"presenter": {}, "broll": {"lane": "lane.mp4", "thali": "thali.mp4"}}
     plan = reel.edit_plan(scenes, assets)
     by = {p["scene"]: p for p in plan}
-    assert by[0]["broll"] == "thali" and by[0]["captions"]                  # a framing hook: the food clip is allowed
+    assert by[0]["broll"] == "thali" and not by[0]["captions"]              # a framing hook: food allowed; shown whole
     assert by[1]["broll"] == "lane" and by[1]["evidence"]                   # the health line: the city, never food
     assert all(not (p["broll"] == "thali" and any(ln["kind"] == "health" or reel.number_values(ln["text"])
                for ln in scenes[p["scene"]]["lines"])) for p in plan)
@@ -376,3 +376,15 @@ def test_v4_props_checklist_evidence_and_timing_are_checked():
     wrong = cp.deepcopy(p2)
     wrong["scenes"][0]["lines"][0]["evidence"]["quote"] = "A sentence the paper does not have."
     assert [f["code"] for f in reel.pool_check(wrong, s2, record, None, [], quotes)] == ["TEXT_NOT_FROM_SCRIPT"]
+
+
+def test_the_hook_limit_counts_the_spoken_line_only_and_the_hook_keeps_its_whole_line():
+    sc = lambda start, end: {"kind": "hook", "start": 0.0, "lines": [{"start": start, "end": end}]}
+    assert not reel.hook_too_long(sc(0.4, 4.4))        # 4.0 s of speech after the 0.4 s lead: passes
+    assert reel.hook_too_long(sc(0.4, 4.41))           # 4.01 s: fails
+    assert not reel.hook_too_long(sc(0.4, 4.29))       # Neerja's 3.89 s hook (trials/s7-reel-9)
+    record, script, scenes, keys = kinetic_scenes()
+    plan = reel.edit_plan(scenes, {"presenter": {0: "h.mp4"}, "broll": {"lane": "l.mp4"}})
+    props = reel.build_props(scenes, record, BRAND, "come back", keys, {0: "h.mp4"}, plan)
+    assert props["scenes"][0]["kind"] == "hook" and props["scenes"][0]["presenter"] and not props["scenes"][0]["captions"]
+    assert reel.V4_DURATION == (20.0, 50.0) and reel.REMOTION_DURATION == (20.0, 45.0)

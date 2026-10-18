@@ -570,13 +570,22 @@ def build_timeline(script: dict, voice: dict, tts, health_hold: float = 0.0, end
 
 # --- Reel v4 edit plan (docs/topics/reel-v4-edit-plan.md): derived by code from the script and the assets ---
 
-EVIDENCE_HOLD = 2.6        # the c004-style card line holds this much longer: the evidence phone appears in the hold
-CHECKLIST_S, PULLBACK_S = 3.0, 2.5
+EVIDENCE_HOLD = 2.0        # the c004-style card line holds this much longer: the evidence phone appears in the hold
+CHECKLIST_S, PULLBACK_S = 2.5, 2.0
+# v4 reels may run to 50 s: the speech is unchanged (20-45 s rule), the extra time is silent evidence beats (the phone,
+# the checklist, the pull-back) that are themselves the traceability story; STATISTIC_TOO_SHORT still guards the cards.
+V4_DURATION = (20.0, 50.0)
 CHECK_QUOTED = "Every number quoted word for word from the paper"
 CHECK_CROSS = "Checked by a second, independent model"
 CHECK_DOCTOR = "Pending review by a Steer doctor"
 CHECK_LINES = (CHECK_QUOTED, CHECK_CROSS, CHECK_DOCTOR)
 FOOD_BROLL = {"thali"}      # food clips: never behind a health or number line (food beside a number implies a cause)
+
+
+def hook_too_long(scene: dict) -> bool:
+    """The hook's own speech over HOOK_MAX seconds (the lead silence before it is not counted)."""
+    return scene["kind"] == "hook" and bool(scene["lines"]) and \
+        scene["lines"][0]["end"] - scene["lines"][0]["start"] > HOOK_MAX + 1e-6
 
 
 def checklist_items(checked: bool) -> list[str]:
@@ -611,7 +620,9 @@ def edit_plan(scenes: list[dict], assets: dict) -> list[dict]:
             ln = sc["lines"][0]
             zoom = [{"at": round(ln["start"] + 0.15, 3), "dur": 0.6, "scale": 1.1}]
         transition = "none" if prev is None else "zoom" if bg != prev else "wipe"
-        plan.append({"scene": sc["index"], "background": bg, "presenter": pres, "broll": clip, "captions": bg != "graphics",
+        # chunked captions over a clip, except on the hook: its question is shown whole from the first frame (v3 rule)
+        plan.append({"scene": sc["index"], "background": bg, "presenter": pres, "broll": clip,
+                     "captions": bg != "graphics" and sc["kind"] != "hook",
                      "zoom": zoom, "transition_in": transition, "evidence": "health" in kinds})
         prev = bg
     return plan
@@ -621,7 +632,7 @@ def edit_plan(scenes: list[dict], assets: dict) -> list[dict]:
 
 REEL_DIR = rd.CODE / "reel"
 REMOTION_DURATION = (20.0, 45.0)
-HOOK_MAX = 4.0   # the hook line is spoken within 4 s of the reel's start
+HOOK_MAX = 4.0   # the hook line is spoken in at most 4 s (its own speech; the 0.4 s lead before it is not counted)
 REMOTION_END_CARD, HEALTH_HOLD = 5.0, 0.8   # the sources card holds >= 5 s (its text >= 40 px)
 PRESENTER_LABEL = "AI-generated presenter · not a Steer clinician"   # D-026: on every frame a presenter clip is on screen
 LABEL_BOX = (60, 222, 220, 30)  # x, y, w, h inside the label pill (top left, layout.json "pill"; Reel.tsx LABEL_BG / LABEL_INK)
@@ -1078,10 +1089,10 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
                     fails.append({"code": r["code"], "scene": sc["index"], "detail": r})
     timings["transcribe_seconds"] = round(time.perf_counter() - t0, 2)
 
-    lo, hi = REMOTION_DURATION if remotion else DURATION
+    lo, hi = (V4_DURATION if v4 else REMOTION_DURATION) if remotion else DURATION
     hook = scenes[0]
-    if remotion and hook["kind"] == "hook" and hook["lines"][0]["end"] - hook["start"] > HOOK_MAX + 1e-6:
-        fails.append({"code": "HOOK_TOO_LONG", "detail": round(hook["lines"][0]["end"] - hook["start"], 2)})
+    if remotion and hook_too_long(hook):
+        fails.append({"code": "HOOK_TOO_LONG", "detail": round(hook["lines"][0]["end"] - hook["lines"][0]["start"], 2)})
     probe = probe_mp4(mp4) if mp4 and mp4.exists() else {}
     if probe:
         if (probe["width"], probe["height"]) != (W, H):
