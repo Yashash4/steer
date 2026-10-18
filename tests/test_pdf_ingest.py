@@ -346,3 +346,28 @@ def test_figure_above_two_columns_keeps_the_columns(tmp_path):
     assert " ".join(left) in flat and " ".join(right) in flat
     assert any(w["detail"].startswith("two-column reading rejected as table-like in this band") and "lines" in w
                for w in out["warnings"])
+
+
+def test_short_band_read_as_two_columns_is_flagged(tmp_path):
+    # a figure page with only 3 lines of (ragged, widely spaced) two-column text under the caption:
+    # the band passes the low 2-baseline bar, so it is read as columns AND flagged as a short band
+    doc = pymupdf.open()
+    page = doc.new_page()
+    tw = pymupdf.TextWriter(page.rect)
+    for i in range(10):
+        tw.append((150, 80 + i * 30), f"Box {i} (n = {i})", fontsize=10)
+        tw.append((380, 80 + i * 30), f"Excluded {i}", fontsize=10)
+    tw.append((50, 400), _fill("Fig. 1 Flow chart of the study selection", 490) + ".", fontsize=10)
+    left = [_fill(f"Left{i}", 160) + "." for i in range(1, 4)]
+    right = [_fill(f"Right{i}", 160) + "." for i in range(1, 4)]
+    for i, (lt, rt) in enumerate(zip(left, right)):
+        tw.append((50, 440 + i * 14), lt, fontsize=10)
+        tw.append((350, 440 + i * 14), rt, fontsize=10)
+    tw.write_text(page)
+    path = tmp_path / "shortband.pdf"
+    doc.save(path)
+    out = ingest_pdf(path, "evidence")
+    flat = out["text"].replace("\n", " ")
+    assert flat.index(left[-1]) < flat.index(right[0])
+    short = [w for w in out["warnings"] if w["detail"].startswith("two-column reading of a short band (3 lines)")]
+    assert len(short) == 1 and "lines" in short[0]

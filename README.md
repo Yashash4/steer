@@ -109,6 +109,9 @@ The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
   - several candidate splits;
   - every inner column split;
   - every split candidate rejected as table-like;
+  - when a figure or table above the columns makes the whole-page test fail, each band between full-width
+    lines decides for itself: a band read as one column is flagged, and so is a band read as two columns
+    from fewer than 4 lines;
   - number-dense pages: when too few text rows remain, the column test runs on all rows and says so; if a
     page is at least 40% number-dense and reads as one column, that reading is marked unconfirmed.
 
@@ -132,6 +135,8 @@ The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
   - Known limit: a single-letter word before a full stop counts as an initial, so "...in group B. Results..."
     does not split. That is the safe direction: sentences merge, and quotes still match.
   - A change of more than 1 pt in the main font size between lines (a heading) starts a new paragraph.
+- Known limit: a run-in heading ("INTRODUCTION Obesity is ...", "Safety There was ...") is joined to the first
+  sentence after it. Quotes still match, and the heading words become part of that sentence's text.
 - Known limit: ragged-right columns stored in one block are guarded only by the gap rule above. A table row
   with a wide gap between label and values may split into two lines; reading order holds and quotes still match.
 - A PDF with no extractable text fails with "OCR required". Text-free pages inside an otherwise readable

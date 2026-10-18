@@ -358,6 +358,10 @@ def order_rows(rows: list[dict], gx: float | None, depth: int = 0, regions: list
                 if regions is not None:
                     regions.append(("band", part, "two-column reading rejected as table-like"))
                 band = []
+            elif band_guard and band and regions is not None:
+                bases = {round((x["bbox"][1] + x["bbox"][3]) / 2 / SAME_ROW) for x in band if x["bbox"][2] <= gx}
+                if len(bases) < 4:  # min_baselines=2 is a low bar: a short accepted band is flagged, never silent
+                    regions.append(("band", by_lines(band), f"two-column reading of a short band ({len(bases)} lines)"))
             for side in ("left", "right"):
                 part = [x for x in band if x["column"] == side]
                 # an inner split must look like text columns (ragged or justified), never like table cells
