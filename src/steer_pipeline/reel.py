@@ -570,7 +570,7 @@ def build_timeline(script: dict, voice: dict, tts, health_hold: float = 0.0, end
 
 # --- Reel v4 edit plan (docs/topics/reel-v4-edit-plan.md): derived by code from the script and the assets ---
 
-EVIDENCE_HOLD = 2.0        # the c004-style card line holds this much longer: the evidence phone appears in the hold
+EVIDENCE_HOLD = 2.0        # every health line holds this much longer: the evidence phone appears in the hold
 CHECKLIST_S, PULLBACK_S = 2.5, 2.0
 # v4 reels may run to 50 s: the speech is unchanged (20-45 s rule), the extra time is silent evidence beats (the phone,
 # the checklist, the pull-back) that are themselves the traceability story; STATISTIC_TOO_SHORT still guards the cards.
@@ -771,7 +771,7 @@ def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | N
             if cards:
                 key = None   # the hero numbers are the scene's large type
             evidence = None
-            if cards and shots.get(sc["index"], {}).get("evidence") and quotes:
+            if ln["kind"] == "health" and shots.get(sc["index"], {}).get("evidence") and quotes:
                 src = rd.source_entries([by_claim[i] for i in ln["claim_ids"] if i in by_claim])
                 evidence = {"kind": "quote", "header": evidence_header(src), "image": None, "boxes": [],
                             "quote": "\n\n".join(quotes[i] for i in ln["claim_ids"] if i in quotes),

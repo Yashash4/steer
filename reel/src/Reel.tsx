@@ -275,8 +275,11 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
       ) : scene.captions ? (
         <Captions key={i} line={l} t={t} accent={props.palette.blush} emph={emphasisFlags(l)} />
       ) : (
-        <LineView key={i} line={l} t={t} c={c} top={box.top} height={box.height} appear={i === 0 ? scene.start : l.start}
-          big={scene.kind === "hook" && i === 0} />
+        <div key={i}>
+          <LineView line={l} t={t} c={c} top={box.top} height={box.height} appear={i === 0 ? scene.start : l.start}
+            big={scene.kind === "hook" && i === 0} />
+          {l.evidence ? <PhoneEvidence e={l.evidence} t={t} ink={props.palette.ink} accent={props.palette.rust} /> : null}
+        </div>
       ))}
       {keyLine && keyLine.key ? (
         <KeyPair number={keyLine.key.number} label={keyLine.key.label} at={keyLine.key.at} t={t} frame={frame}

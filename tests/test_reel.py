@@ -388,3 +388,13 @@ def test_the_hook_limit_counts_the_spoken_line_only_and_the_hook_keeps_its_whole
     props = reel.build_props(scenes, record, BRAND, "come back", keys, {0: "h.mp4"}, plan)
     assert props["scenes"][0]["kind"] == "hook" and props["scenes"][0]["presenter"] and not props["scenes"][0]["captions"]
     assert reel.V4_DURATION == (20.0, 50.0) and reel.REMOTION_DURATION == (20.0, 45.0)
+
+
+def test_every_health_line_gets_the_evidence_phone_in_its_hold():
+    record, script, scenes, keys = kinetic_scenes()   # the health line has no colon: phrase build-up, no cards
+    quotes = {"c1": "Weight came back at 0.4 kg a month (95% CI 0.3 to 0.5)."}
+    props = reel.build_props(scenes, record, BRAND, "come back", keys, None, reel.edit_plan(scenes, {}), quotes)
+    ln = props["scenes"][1]["lines"][0]
+    assert ln["cards"] is None and ln["evidence"]["quote"] == quotes["c1"]
+    assert ln["end"] < ln["evidence"]["start"] < ln["evidence"]["end"] <= ln["hold_end"]
+    assert reel.pool_check(props, script, record, "come back", keys, quotes) == []
