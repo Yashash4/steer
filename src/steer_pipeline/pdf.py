@@ -18,6 +18,7 @@ FURNITURE_BAND = 0.07      # top/bottom share of the page height checked for hea
 SAME_ROW = 2.0             # pt: line fragments whose vertical centres differ less than this are one row
 FONT_STEP = 1.0           # pt: a larger change of the main font size between rows starts a paragraph
 ROW_GAP = 0.25            # share of the text width: a wider gap between fragments on one baseline splits the row
+INDENT = 20.0             # pt: rows starting this far right of a column edge (bullets, indents) still belong to it
 EDGE = 3.0                 # pt: tolerance when clustering line start positions
 DOI_RE = re.compile(r"\b(10\.\d{4,9}/[^\s\"<>]+[^\s\"<>.,;)])")
 PAGE_NO_RE = re.compile(r"^(page\s*)?\d{1,4}(\s*(of|/)\s*\d{1,4})?$", re.I)
@@ -45,14 +46,31 @@ def _upright(bbox: list[float], direction: tuple[float, float]) -> list[float]:
     return list(bbox)
 
 
-def text_gutter(frags: list[dict]) -> float | None:
+def text_gutters(frags: list[dict], indent: float = 0.0, depth: int = 0) -> list[float]:
+    """Every justified text-column gutter among the fragments, nested columns included.
+
+    Each side of any column split is searched again, even when that split itself is not a
+    justified text gutter (a ragged sidebar beside two justified columns).
+    """
+    gx, _ = find_gutter(frags, indent)
+    if gx is None:
+        return []
+    own = [gx] if text_gutter(frags, indent) == gx else []
+    if depth >= 2:
+        return own
+    left = [f for f in frags if f["bbox"][2] <= gx]
+    right = [f for f in frags if f["bbox"][0] >= gx]
+    return sorted(text_gutters(left, INDENT, depth + 1) + own + text_gutters(right, INDENT, depth + 1))
+
+
+def text_gutter(frags: list[dict], indent: float = 0.0) -> float | None:
     """A column gutter among a page's unmerged fragments, accepted only for justified text columns.
 
     find_gutter() also fires on tables (label column vs value columns). Text columns are told
     apart by shape: on most baselines the text left of the gutter ends at one x (justified) and has
     no hole wider than 1.5 line heights inside it; table rows have holes between cells.
     """
-    gx, _ = find_gutter(frags)
+    gx, _ = find_gutter(frags, indent)
     if gx is None:
         return None
     left: dict[int, list[dict]] = {}
@@ -72,7 +90,7 @@ def text_gutter(frags: list[dict]) -> float | None:
     return gx if text_like >= 0.6 * len(left) else None
 
 
-def join_fragments(frags: list[dict], text_width: float, gutter: float | None = None) -> list[dict]:
+def join_fragments(frags: list[dict], text_width: float, gutters: list[float] = ()) -> list[dict]:
     """Merge fragments of one baseline (same direction) into rows, left to right.
 
     Two neighbours further apart than ROW_GAP x the text width stay separate rows, so a block that
@@ -92,7 +110,7 @@ def join_fragments(frags: list[dict], text_width: float, gutter: float | None = 
         g.sort(key=lambda f: f["bbox"][0])
         row = None
         for f in g:
-            across = gutter is not None and row is not None and row["bbox"][2] <= gutter + 1 <= f["bbox"][0] + 2
+            across = row is not None and any(row["bbox"][2] <= g + 1 <= f["bbox"][0] + 2 for g in gutters)
             if row is None or across or f["bbox"][0] - row["bbox"][2] > ROW_GAP * text_width:
                 row = dict(f)
                 rows.append(row)
@@ -134,7 +152,7 @@ def _rows(page) -> tuple[list[dict], bool]:
         lo, hi = widths.get(f["dir"], (f["bbox"][0], f["bbox"][2]))
         widths[f["dir"]] = (min(lo, f["bbox"][0]), max(hi, f["bbox"][2]))
     everything = [f for frags in by_block.values() for f in frags]
-    gutters = {d: text_gutter([f for f in everything if f["dir"] == d]) for d in widths}
+    gutters = {d: text_gutters([f for f in everything if f["dir"] == d]) for d in widths}
     rows = []
     for frags in by_block.values():
         for direction in {f["dir"] for f in frags}:
@@ -158,13 +176,20 @@ def _in_band(row: dict, height: float) -> bool:
     return box[3] <= height * FURNITURE_BAND or box[1] >= height * (1 - FURNITURE_BAND)
 
 
-def find_gutter(rows: list[dict]) -> tuple[float | None, int]:
+def _numeric(text: str) -> bool:
+    t = text.replace(" ", "")
+    digits = sum(ch.isdigit() for ch in t)
+    return digits >= max(2, 0.3 * len(t))
+
+
+def find_gutter(rows: list[dict], indent: float = 0.0) -> tuple[float | None, int]:
     """x of the column gutter, or None for a single column; also the number of qualifying splits.
 
-    A second column exists when a cluster of row starts (x0) sits 20-75% across the text,
-    holds at least max(3, 10%) of the rows, and at least 90% of the rows that start at the
-    dominant left edge end before it.
+    A second column exists when a cluster of row starts (x0) sits 20-75% across the text, at least
+    max(3, 10%) of the rows start there (or up to `indent` pt to its right: bullets and indents, used
+    for nested columns), and at least 90% of the rows that start at the dominant left edge end before it.
     """
+    rows = [r for r in rows if not _numeric(r["raw"])]  # table cells must not look like a column of text
     if len(rows) < 6:
         return None, 0
     x_min = min(r["bbox"][0] for r in rows)
@@ -172,18 +197,25 @@ def find_gutter(rows: list[dict]) -> tuple[float | None, int]:
     width = x_max - x_min
     starts = Counter(round(r["bbox"][0] / EDGE) for r in rows)
     candidates = []
-    for key, n in starts.items():
+    for key in starts:
         c2 = key * EDGE
+        n = sum(c2 - EDGE <= r["bbox"][0] <= c2 + max(indent, EDGE) for r in rows)
         if n < max(3, 0.10 * len(rows)) or not (x_min + 0.20 * width <= c2 <= x_min + 0.75 * width):
             continue
         before = [r for r in rows if r["bbox"][0] < c2 - EDGE]
         if not before:
             continue
         left_edge = Counter(round(r["bbox"][0] / EDGE) for r in before).most_common(1)[0][0] * EDGE
-        edge_rows = [r for r in before if abs(r["bbox"][0] - left_edge) <= EDGE]
+        # column-sized rows at the left edge (wide title/author lines sharing that edge form their own band)
+        edge_rows = [r for r in before if abs(r["bbox"][0] - left_edge) <= EDGE
+                     and r["bbox"][2] - r["bbox"][0] < 0.6 * width]
+        if not edge_rows:
+            continue
         ending_before = [r for r in edge_rows if r["bbox"][2] <= c2 - 2]
         if len(ending_before) >= 0.9 * len(edge_rows):
-            gx = (max(r["bbox"][2] for r in ending_before) + c2 - EDGE) / 2
+            # the gutter sits right of every row that ends before the second column, not only edge rows
+            left_end = max(r["bbox"][2] for r in before if r["bbox"][2] <= c2 - 2)
+            gx = (left_end + c2 - EDGE) / 2
             candidates.append((n, gx))
     if not candidates:
         return None, 0
@@ -215,8 +247,12 @@ def by_lines(rows: list[dict]) -> list[dict]:
     return out + sorted(line, key=lambda x: x["bbox"][0])
 
 
-def order_rows(rows: list[dict], gx: float | None) -> list[dict]:
-    """Reading order: bands top to bottom; inside a two-column band, left column then right column."""
+def order_rows(rows: list[dict], gx: float | None, depth: int = 0) -> list[dict]:
+    """Reading order: bands top to bottom; inside a two-column band, left column then right column.
+
+    Each side of a band is ordered again the same way, so a third column (a sidebar beside two
+    columns) is found too. Column labels come from the outermost split.
+    """
     rows = by_lines(rows)
     if gx is None:
         for r in rows:
@@ -228,7 +264,15 @@ def order_rows(rows: list[dict], gx: float | None) -> list[dict]:
     out, band = [], []
     for r in rows + [None]:
         if r is None or r["column"] == "full":
-            out += by_lines([x for x in band if x["column"] == "left"]) + by_lines([x for x in band if x["column"] == "right"])
+            for side in ("left", "right"):
+                part = [x for x in band if x["column"] == side]
+                inner = find_gutter(part, INDENT)[0] if depth < 2 else None
+                if inner is None:
+                    out += by_lines(part)
+                else:
+                    out += order_rows(part, inner, depth + 1)
+                    for x in part:
+                        x["column"] = side
             band = []
             if r is not None:
                 out.append(r)
@@ -257,7 +301,11 @@ def mark_paragraphs(rows: list[dict]) -> None:
         p = rows[i - 1]
         height = max(p["bbox"][3] - p["bbox"][1], 1.0)
         gap = r["bbox"][1] - p["bbox"][3]
-        moved = r["block"] != p["block"] or r["column"] != p["column"] or gap > 0.5 * height or gap < -height
+        # a short last line of a full-width paragraph can land on one side of the gutter: same left
+        # edge and normal line spacing mean it continues the paragraph, not a new column
+        same_flow = abs(r["bbox"][0] - p["bbox"][0]) <= EDGE and 0 <= gap <= 0.5 * height
+        moved = (r["block"] != p["block"] or (r["column"] != p["column"] and not same_flow)
+                 or gap > 0.5 * height or gap < -height)
         if abs(r["size"] - p["size"]) > FONT_STEP:
             r["para_break"] = True  # a heading or caption: the font size changes
             continue

@@ -90,7 +90,9 @@ The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
 - **Columns.** A page has two columns when a group of lines starts 20–75% of the way across the text, and the
   lines starting at the left edge end before it. Lines that cross the gutter (titles, abstracts, wide
   figures) split the page into bands. Bands are read top to bottom; inside a band the left column comes
-  before the right one. Unclear cases add `UNCERTAIN_COLUMN_ORDER` for that page instead of guessing.
+  before the right one. Each column is searched again for a column inside it, so a sidebar beside two
+  columns reads as three. Wide title lines are left out of the column test, and so are number-heavy
+  rows (tables). Unclear cases add `UNCERTAIN_COLUMN_ORDER` for that page instead of guessing.
 - **Rotated text** (landscape tables) is ordered in its own upright frame, read after the page's upright text,
   and flagged `TABLE_OR_FIGURE_TEXT`.
 - **Line joins.**

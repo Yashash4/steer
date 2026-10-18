@@ -225,3 +225,38 @@ def test_table_in_one_block_keeps_its_rows(tmp_path):
         cells = " ".join(f"{i + 1}.{k} ± 0.{k + 1}" for k in range(4))
         assert f"{label} {cells}" in flat
     assert out["pages"][0]["lines"][0]["raw"] == "Body weight (kg) 1.0 ± 0.1 1.1 ± 0.2 1.2 ± 0.3 1.3 ± 0.4"
+
+
+def test_sidebar_plus_two_columns_under_a_wide_title(tmp_path):
+    # like BMJ Open pages: a ragged metadata sidebar, then a title and author lines that start at the
+    # abstract's left edge and run across both columns, then the abstract column and a right column
+    doc = pymupdf.open()
+    page = doc.new_page()
+    tw = pymupdf.TextWriter(page.rect)
+    side = [f"Side note {i}." for i in range(1, 16)]
+    title = [_fill("Title line", 390) + "." for _ in range(3)]
+    mid = [_fill(f"Mid{i}", 190) + "." for i in range(1, 21)]
+    right = [_fill(f"Rgt{i}", 180) + "." for i in range(1, 21)]
+    for i, t in enumerate(title):
+        tw.append((150, 80 + i * 16), t, fontsize=10)
+    for i, t in enumerate(side):
+        tw.append((40, 150 + i * 14), t, fontsize=10)
+    for i, (m, r) in enumerate(zip(mid, right)):
+        tw.append((150, 150 + i * 14), m, fontsize=10)
+        tw.append((360, 150 + i * 14), r, fontsize=10)
+    tw.write_text(page)
+    path = tmp_path / "three.pdf"
+    doc.save(path)
+    out = ingest_pdf(path, "evidence")
+    sents = [s["text"] for s in out["sentences"]]
+    assert sents == side + title + mid + right
+
+
+def test_regressions_on_real_pages(single, two):
+    # PeerJ p8: a short last line under a table stays in its paragraph
+    assert ("Secondary outcomes included reduced overall adverse events (RR = 0.77) and gastrointestinal events "
+            "(RR = 0.39) upon discontinuation, with high and moderate quality evidence, respectively; no difference "
+            "in cardiovascular events (RR = 0.87) was observed, with very low quality evidence.") in single["text"]
+    # Frontiers p7: figure captions above two columns no longer hide the column gutter
+    assert ("In this randomized, controlled trial conducted over-weight Asian Indian adults the consumption of "
+            "43 g (≈1.5 oz) of almonds daily as a snack (mid -morning/evening) over 12 weeks") in two["text"]
