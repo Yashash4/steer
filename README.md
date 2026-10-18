@@ -78,8 +78,8 @@ What is real, stage by stage. "Built" means it exists and has tests; "demo" mean
 | S2 extract and label | A model proposes claims; only those the gate verifies are kept. Labels (theme, reader doubt), a rules check (promises, drug brands, hype), SQLite store. A second model from another provider cross-checks every claim; "verified" needs an independent "supported". | Built, ran on 4 papers |
 | S3 write and render | A model writes a carousel or static post as lines that each name their claims. Code checks every line (numbers must come from the claim, framing lines carry none), enforces per-paper boundaries (for example "average, not a promise"), then renders 1080 x 1350 PNGs with a sources slide. | Built; in the stored runs 4 of 9 written posts were blocked by the checks |
 | S4 review studio | Local web app for a reviewer: layout check, clearing a flagged claim with a written reason, editorial and clinical approval. Append-only action log enforced by database triggers; a clearance can be revoked, never edited. A read-only public snapshot is exported. | Built. No clinician has reviewed anything, so nothing is clinically approved |
-| S5 eval | `steer eval`: planted errors, known-good items and stored-run funnels as a report with counts (n always shown). In the first report, 0 of 14 planted unsupported items passed a gate and 15 of 15 planted errors were caught (14 in the expected category), with 1 false alarm among 15 known-good items. Many planted items are synthetic and n = 3 gold claims is a smoke test, not a rate. | Built; not in this tree yet |
-| S6 learning loop | `steer learn`: weekly ledger of public benchmark posts, labels, own output, a score and one proposed brief rule. | Built as a demo; not in this tree yet |
+| S5 eval | `steer eval`: planted errors, known-good items and stored-run funnels as a report with counts (n always shown). In the first report, 0 of 14 planted unsupported items passed a gate and 15 of 15 planted errors were caught (14 in the expected category), with 1 false alarm among 15 known-good items. Many planted items are synthetic and n = 3 gold claims is a smoke test, not a rate. | Built |
+| S6 learning loop | `steer learn`: weekly ledger of public benchmark posts, labels, own output, a score and one proposed brief rule. | Built (a demo run on 11 public posts) |
 | S7 reel | Remotion kinetic-type reel from a checked post: voice, burned-in captions, line art, an optional AI presenter. QA transcribes the audio locally and fails the reel if a spoken number differs from the shown one. | Built |
 | S8 batch week | Several papers in, a week of posts out. | Design only, not built |
 
@@ -148,7 +148,7 @@ uv run steer studio --db steer.db --posts out --serve                        # a
 uv run steer sources --db steer.db --out sources --posts out                 # source tables per paper
 ```
 
-Not in this tree yet (built, not merged), so check `steer --help` before relying on them:
+The measurement and learning steps:
 
 ```bash
 uv run steer eval --db steer.db --out eval [--live]                                  # S5 report
