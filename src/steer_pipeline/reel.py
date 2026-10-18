@@ -136,12 +136,13 @@ def audio_numbers_match(line_text: str, transcript: str | None) -> dict:
 
 # --- voice and transcription (replaceable for tests) ---
 
-def edge_tts_voice(text: str, voice: str) -> tuple[bytes, list[tuple[str, float, float]]]:
+def edge_tts_voice(text: str, voice: dict) -> tuple[bytes, list[tuple[str, float, float]]]:
     import edge_tts
 
     async def run():
         audio, words = b"", []
-        async for ch in edge_tts.Communicate(text, voice, boundary="WordBoundary").stream():
+        async for ch in edge_tts.Communicate(text, voice["name"], rate=voice.get("rate", "+0%"),
+                                             boundary="WordBoundary").stream():
             if ch["type"] == "audio":
                 audio += ch["data"]
             elif ch["type"] == "WordBoundary":
@@ -379,8 +380,10 @@ def scene_kind(scene_lines: list[dict], index: int) -> str:
     return "cta" if kinds & {"cta", "signoff"} else "point"
 
 
-def build_timeline(script: dict, voice: str, tts) -> tuple[list[dict], bytes, dict]:
-    """Voice every line; return the scenes with line/caption times, the full PCM track and timing stats."""
+def build_timeline(script: dict, voice: dict, tts, health_hold: float = 0.0, end_card: float = END_CARD
+                   ) -> tuple[list[dict], bytes, dict]:
+    """Voice every line; return the scenes with line/caption/word times, the full PCM track and timing stats.
+    health_hold: the pause after a health line is at least this long (the whole line holds on screen)."""
     scenes, pcm, t, tts_s = [], b"", 0.0, 0.0
     silence = lambda s: b"\x00\x00" * int(round(s * RATE))
     pcm += silence(LEAD)
@@ -396,44 +399,219 @@ def build_timeline(script: dict, voice: str, tts) -> tuple[list[dict], bytes, di
             line_pcm = decode_pcm(audio)
             dur = len(line_pcm) / 2 / RATE
             starts = word_times(per_word, bounds, dur)
-            entry = ln | {"spoken": say, "start": t, "end": t + dur, "duration": dur, "pcm": line_pcm}
+            gap = GAP_LINE if li + 1 < len(sc["lines"]) else GAP_SCENE
+            if ln["kind"] == "health":
+                gap = max(gap, health_hold)
+            entry = ln | {"spoken": say, "start": t, "end": t + dur, "duration": dur, "pcm": line_pcm,
+                          "word_starts": [t + x for x in starts], "hold_end": t + dur + gap}
             scene["lines"].append(entry)
             scene["captions"] += captions_for_line(ln["text"], starts, t, t + dur)
-            pcm += line_pcm
-            t += dur
-            gap = GAP_LINE if li + 1 < len(sc["lines"]) else GAP_SCENE
-            pcm += silence(gap)
-            t += gap
+            pcm += line_pcm + silence(gap)
+            t += dur + gap
         scene["end"] = t
         scenes.append(scene)
-    end = {"index": len(scenes), "kind": "sources", "start": t, "end": t + END_CARD, "lines": [], "captions": []}
-    pcm += silence(END_CARD)
+    end = {"index": len(scenes), "kind": "sources", "start": t, "end": t + end_card, "lines": [], "captions": []}
+    pcm += silence(end_card)
     scenes.append(end)
     return scenes, pcm, {"tts_seconds": round(tts_s, 2), "timeline_seconds": round(end["end"], 3)}
 
 
-def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dict, tts=None, transcribe=None,
-              post_emphasis: str | None = None) -> dict:
-    """Write reel.mp4, reel.srt and reel_trace.json into out_dir; returns the trace (status passed | failed)."""
-    from playwright.sync_api import sync_playwright
+# --- Remotion props (reel_props.json v1, code/reel/props.schema.json) ---
 
-    tts = tts or edge_tts_voice
-    transcribe = transcribe or whisper_transcribe
-    p = brand["palette"]
+REEL_DIR = rd.CODE / "reel"
+REMOTION_DURATION = (25.0, 40.0)
+REMOTION_END_CARD, HEALTH_HOLD = 3.0, 0.8
+GROUNDS = {"hook": "cream", "brand": "maroon", "cta": "cream", "sources": "cream"}
+
+
+def display(text: str) -> str:
+    """The documented display transforms only: kg/m2 -> kg/m², a number and its unit joined by a no-break space."""
+    return rd.SQUARED.sub("/m²", rd.UNIT.sub("\\1\u00a0", text))
+
+
+def display_tokens(text: str, starts: list[float]) -> list[tuple[str, float]]:
+    """The line's display words with the time each is spoken: words the display joins (a number and its unit) are
+    one token, timed by its first word."""
+    words, out, i = text.split(), [], 0
+    while i < len(words):
+        tok, t0 = words[i], starts[i]
+        while i + 1 < len(words) and rd.UNIT.search(f"{words[i]} {words[i + 1]}"):
+            i += 1
+            tok += "\u00a0" + words[i]
+        out.append((rd.SQUARED.sub("/m²", tok), t0))
+        i += 1
+    if " ".join(t for t, _ in out) != display(text):
+        raise ValueError(f"display tokens do not rebuild the line: {text!r}")
+    return out
+
+
+def make_beats(tokens: list[tuple[str, float]]) -> list[dict]:
+    """2-4 tokens a beat, cut after punctuation once a beat has 2 tokens; a number and its unit are one token."""
+    beats, cur = [], []
+    for tok, t0 in tokens:
+        cur.append((tok, t0))
+        if len(cur) >= 4 or (len(cur) >= 2 and tok[-1:] in ",.;:?!"):
+            beats.append(cur)
+            cur = []
+    if cur:
+        if len(cur) == 1 and beats and len(beats[-1]) < 4:
+            beats[-1] += cur
+        else:
+            beats.append(cur)
+    return [{"text": " ".join(t for t, _ in b), "start": round(b[0][1], 3),
+             "words": [{"text": t, "start": round(s0, 3)} for t, s0 in b]} for b in beats]
+
+
+def checked_keys(post: dict) -> list[dict]:
+    """The post's key pairs that passed its checks (slides and static): number, label and the claims behind them."""
+    units = list(post.get("slides") or []) + ([post["static"]] if post.get("static") else [])
+    out = []
+    for u in units:
+        lines = [u["headline"], *u["supporting"]] if "headline" in u else u["lines"]
+        num, label = u.get("key_number"), u.get("key_label")
+        if num and label:
+            src = [ln for ln in lines if ln["kind"] == "health" and num in ln["text"] and label in ln["text"]]
+            if src:
+                out.append({"number": num, "label": label, "claim_ids": set(src[0]["claim_ids"])})
+    return out
+
+
+def source_entry_parts(e: dict) -> dict:
+    """The end card's citation, built by code as on the S3 sources slide, split around the italic journal."""
+    loc = str(e.get("location") or "").capitalize()
+    return {"before": f"{e.get('authors', '')} {e.get('title', '')}.", "journal": rd.journal_display(e.get("journal")),
+            "after": f", {e.get('year', '')}. doi:{e.get('doi', '')}. {loc}."}
+
+
+def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | None, keys: list[dict]) -> dict:
     by_claim = {s["claim_id"]: s for s in record["sources"]}
     entries = rd.source_entries(record["sources"])
-    timings: dict = {}
-    scenes, pcm, stats = build_timeline(script, voice["name"], tts)
-    timings.update(stats)
+    out, point = [], 0
+    for sc in scenes:
+        if sc["kind"] == "sources":
+            ground = GROUNDS["sources"]
+        elif sc["kind"] == "point":
+            ground = ("rust", "cream")[point % 2]
+            point += 1
+        else:
+            ground = GROUNDS[sc["kind"]]
+        lines = []
+        for ln in sc["lines"]:
+            text = display(ln["text"])
+            tokens = display_tokens(ln["text"], [x - ln["start"] for x in ln["word_starts"]])
+            tokens = [(tok, ln["start"] + rel) for tok, rel in tokens]
+            key = None
+            for k in keys:
+                if ln["kind"] == "health" and k["number"] in ln["text"] and k["label"] in ln["text"] \
+                        and k["claim_ids"] & set(ln["claim_ids"]):
+                    first = display(k["number"]).split(" ")[0]
+                    at = next((t0 for tok, t0 in tokens if tok.startswith(first) or first.startswith(tok)), ln["start"])
+                    key = {"number": display(k["number"]), "label": display(k["label"]), "at": round(at, 3)}
+                    break
+            labels = [rd.short_source(e) for e in rd.source_entries([by_claim[i] for i in ln["claim_ids"] if i in by_claim])]
+            lines.append({"kind": ln["kind"], "text": text, "start": round(ln["start"], 3), "end": round(ln["end"], 3),
+                          "hold_end": round(ln["hold_end"], 3), "beats": make_beats(tokens),
+                          "emphasis": display(emphasis) if sc["kind"] == "hook" and emphasis and display(emphasis) in text
+                          and ln is sc["lines"][0] else None,
+                          "key": key, "source_label": "; ".join(labels) if ln["kind"] == "health" and labels else None})
+        out.append({"kind": sc["kind"], "ground": ground, "start": round(sc["start"], 3), "end": round(sc["end"], 3),
+                    "transition_in": "none" if not out else "wipe", "broll": None, "lines": lines,
+                    "sources": {"heading": "Sources", "entries": [source_entry_parts(e) for e in entries],
+                                "footnote": rd.FOOTNOTE, "url": "steerclub.com"} if sc["kind"] == "sources" else None})
+    return {"version": 1, "fps": FPS, "width": W, "height": H, "durationInFrames": int(round(scenes[-1]["end"] * FPS)),
+            "audio": "voice.wav", "fonts": {"serif": "Fraunces.ttf", "serif_italic": "Fraunces-Italic.ttf", "sans": "Inter.ttf"},
+            "palette": brand["palette"], "chrome": {"draft_mark": rd.DRAFT, "wordmark": "steer"}, "scenes": out}
+
+
+def pool_check(props: dict, script: dict, record: dict, emphasis: str | None, keys: list[dict]) -> list[dict]:
+    """Every string the composition can draw, checked against the post before render: a script line verbatim (after
+    the display transforms), an exact substring of its own line, the post's checked key pair and emphasis, or a
+    string built by code. Any other string fails the reel."""
+    import jsonschema
+
+    fails = []
+    try:
+        jsonschema.validate(props, json.loads((REEL_DIR / "props.schema.json").read_text()))
+    except jsonschema.ValidationError as e:
+        return [{"code": "PROPS_SCHEMA", "detail": e.message}]
+    lines_ok = {display(ln["text"]) for sc in script["scenes"] for ln in sc["lines"]}
+    keys_ok = {(display(k["number"]), display(k["label"])) for k in keys}
+    entries = rd.source_entries(record["sources"])
+    labels_ok = {rd.short_source(e) for e in entries}
+    bad = lambda what, value: fails.append({"code": "TEXT_NOT_FROM_SCRIPT", "detail": f"{what}: {value!r}"})
+    if props["chrome"] != {"draft_mark": rd.DRAFT, "wordmark": "steer"}:
+        bad("chrome", props["chrome"])
+    for sc in props["scenes"]:
+        for ln in sc["lines"]:
+            if ln["text"] not in lines_ok:
+                bad("line", ln["text"])
+            for b in ln["beats"]:
+                if b["text"] not in ln["text"]:
+                    bad("beat", b["text"])
+                for w in b["words"]:
+                    if w["text"] not in b["text"]:
+                        bad("word", w["text"])
+            if ln["emphasis"] is not None and (ln["emphasis"] != display(emphasis or "") or ln["emphasis"] not in ln["text"]):
+                bad("emphasis", ln["emphasis"])
+            k = ln["key"]
+            if k is not None and ((k["number"], k["label"]) not in keys_ok or k["number"] not in ln["text"]
+                                  or k["label"] not in ln["text"]):
+                bad("key", k)
+            if ln["source_label"] is not None and not set(ln["source_label"].split("; ")) <= labels_ok:
+                bad("source_label", ln["source_label"])
+        if sc["sources"] is not None and sc["sources"] != {"heading": "Sources", "entries": [source_entry_parts(e) for e in entries],
+                                                           "footnote": rd.FOOTNOTE, "url": "steerclub.com"}:
+            bad("sources", sc["sources"])
+    return fails
+
+
+def render_remotion(props: dict, pcm: bytes, out_dir: Path) -> tuple[Path | None, list[dict], dict]:
+    """node code/reel/render.mjs -> H.264 + PCM in MKV, then AAC encoded once into reel.mp4."""
+    timings, fails = {}, []
+    with tempfile.TemporaryDirectory(prefix="steer-remotion-") as tmp:
+        tmp = Path(tmp)
+        public = tmp / "public"
+        public.mkdir()
+        for f in props["fonts"].values():
+            (public / f).write_bytes((rd.FONTS / f).read_bytes())
+        _write_wav(public / props["audio"], pcm)
+        (tmp / "props.json").write_text(json.dumps(props, ensure_ascii=False))
+        mkv = tmp / "reel.mkv"
+        t0 = time.perf_counter()
+        r = subprocess.run(["node", str(REEL_DIR / "render.mjs"), str(public), str(tmp / "props.json"), str(mkv)],
+                           cwd=REEL_DIR, capture_output=True, text=True, timeout=1800)
+        timings["remotion_seconds"] = round(time.perf_counter() - t0, 2)
+        if r.returncode != 0 or not mkv.exists():
+            fails.append({"code": "RENDER_FAILED", "detail": (r.stderr or r.stdout)[-1500:]})
+            return None, fails, timings
+        try:
+            timings |= json.loads(r.stdout.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            pass
+        mp4 = out_dir / "reel.mp4"
+        enc = subprocess.run([ffmpeg_exe(), "-loglevel", "error", "-y", "-i", str(mkv), "-c:v", "copy", "-c:a", "aac",
+                              "-b:a", "128k", "-shortest", "-movflags", "+faststart", str(mp4)], capture_output=True, text=True)
+        if enc.returncode != 0:
+            fails.append({"code": "ENCODE_FAILED", "detail": enc.stderr[-500:]})
+            return None, fails, timings
+    (out_dir / "reel_props.json").write_text(json.dumps(props, ensure_ascii=False, indent=1), encoding="utf-8")
+    return mp4, fails, timings
+
+
+def render_playwright(scenes: list[dict], pcm: bytes, script: dict, record: dict, p: dict, out_dir: Path,
+                      post_emphasis: str | None) -> tuple[Path, list[dict], list[dict], dict]:
+    """The fallback renderer: every frame captured by Playwright from one HTML page per scene."""
+    from playwright.sync_api import sync_playwright
+
+    by_claim = {s["claim_id"]: s for s in record["sources"]}
+    entries = rd.source_entries(record["sources"])
     total = scenes[-1]["end"]
-    out_dir.mkdir(parents=True, exist_ok=True)
-    fails, scene_qa = [], []
+    fails, scene_qa, timings = [], [], {}
     # every text node on screen must sit inside one of these (script lines, or parts built by code)
     norm = lambda s: " ".join(s.replace("²", "2").replace("\u00a0", " ").split())
     pool = [ln["text"] for sc in script["scenes"] for ln in sc["lines"]]
     pool += [rd.DRAFT, "steer", "steerclub.com", "Sources", rd.FOOTNOTE] + [rd.short_source(e) for e in entries]
     pool = [norm(x) for x in pool + [_plain(rd._entry_html(e)) for e in entries]]
-
     with tempfile.TemporaryDirectory(prefix="steer-reel-") as tmp:
         tmp = Path(tmp)
         for f in ("Fraunces.ttf", "Fraunces-Italic.ttf", "Inter.ttf"):
@@ -470,15 +648,15 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
                 texts = page.evaluate(TEXTS_JS)
                 extra = [x for x in texts if not any(norm(x) in s for s in pool)]
                 small = [b["px"] for b in fit["boxes"] if b["kind"] in rd.FLOORS and b["px"] < rd.FLOORS[b["kind"]]]
-                qa = {"scene": sc["index"], "kind": sc["kind"], "start": round(sc["start"], 3), "end": round(sc["end"], 3),
-                      "overflow": fit["overflow"], "fit_step": fit["step"], "extra_text": extra, "below_floor": small}
+                scene_qa.append({"scene": sc["index"], "kind": sc["kind"], "start": round(sc["start"], 3),
+                                 "end": round(sc["end"], 3), "overflow": fit["overflow"], "fit_step": fit["step"],
+                                 "extra_text": extra, "below_floor": small})
                 if fit["overflow"]:
                     fails.append({"code": "TEXT_OVERFLOW", "scene": sc["index"]})
                 if extra:
                     fails.append({"code": "TEXT_NOT_FROM_SCRIPT", "scene": sc["index"], "detail": extra})
                 if small:
                     fails.append({"code": "TEXT_BELOW_FLOOR", "scene": sc["index"], "detail": small})
-                scene_qa.append(qa)
                 end_frame = int(round(sc["end"] * FPS)) if sc is not scenes[-1] else frames
                 while k < end_frame:
                     page.evaluate(SET_TIME_JS, (k / FPS - sc["start"]) * 1000)
@@ -491,44 +669,80 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
         timings["frames"] = frames
         if enc.returncode != 0:
             fails.append({"code": "ENCODE_FAILED", "detail": f"ffmpeg exit {enc.returncode}"})
+    return mp4, fails, scene_qa, timings
 
-        # audio round trip, line by line
-        t0 = time.perf_counter()
-        rounds = []
+
+def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dict, tts=None, transcribe=None,
+              post_emphasis: str | None = None, engine: str = "playwright", keys: list[dict] | None = None) -> dict:
+    """Write reel.mp4, reel.srt and reel_trace.json into out_dir; returns the trace (status passed | failed).
+    engine: "remotion" (kinetic type, code/reel) or "playwright" (the fallback)."""
+    tts = tts or edge_tts_voice
+    transcribe = transcribe or whisper_transcribe
+    p = brand["palette"]
+    by_claim = {s["claim_id"]: s for s in record["sources"]}
+    entries = rd.source_entries(record["sources"])
+    remotion = engine == "remotion"
+    scenes, pcm, timings = build_timeline(script, voice, tts, HEALTH_HOLD if remotion else 0.0,
+                                          REMOTION_END_CARD if remotion else END_CARD)
+    total = scenes[-1]["end"]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fails, scene_qa = [], []
+    if remotion:
+        props = build_props(scenes, record, brand, post_emphasis, keys or [])
+        fails = pool_check(props, script, record, post_emphasis, keys or [])
+        mp4 = None
+        if not fails:   # nothing is rendered from props that failed the check
+            mp4, more, t = render_remotion(props, pcm, out_dir)
+            fails += more
+            timings |= t
+        scene_qa = [{"scene": i, "kind": sc["kind"], "ground": sc["ground"], "start": sc["start"], "end": sc["end"],
+                     "keys": [ln["key"] for ln in sc["lines"] if ln["key"]]} for i, sc in enumerate(props["scenes"])]
+    else:
+        mp4, fails, scene_qa, t = render_playwright(scenes, pcm, script, record, p, out_dir, post_emphasis)
+        timings |= t
+
+    # audio round trip, line by line
+    t0 = time.perf_counter()
+    rounds = []
+    with tempfile.TemporaryDirectory(prefix="steer-stt-") as tmp:
         for sc in scenes:
             for ln in sc["lines"]:
-                wav = tmp / f"line-{sc['index']}-{len(rounds)}.wav"
+                wav = Path(tmp) / f"line-{sc['index']}-{len(rounds)}.wav"
                 _write_wav(wav, resample(ln["pcm"], 16000), 16000)
                 r = audio_numbers_match(ln["text"], transcribe(wav))
                 rounds.append({"scene": sc["index"], "line": ln["text"]} | r)
                 if not r["ok"]:
                     fails.append({"code": r["code"], "scene": sc["index"], "detail": r})
-        timings["transcribe_seconds"] = round(time.perf_counter() - t0, 2)
+    timings["transcribe_seconds"] = round(time.perf_counter() - t0, 2)
 
-    probe = probe_mp4(mp4) if mp4.exists() else {}
+    lo, hi = REMOTION_DURATION if remotion else DURATION
+    probe = probe_mp4(mp4) if mp4 and mp4.exists() else {}
     if probe:
         if (probe["width"], probe["height"]) != (W, H):
             fails.append({"code": "WRONG_SIZE", "detail": probe})
         if abs(probe["fps"] - FPS) > 0.01:
             fails.append({"code": "WRONG_FPS", "detail": probe})
-        if not DURATION[0] <= probe["duration"] <= DURATION[1]:
+        if not lo <= probe["duration"] <= hi:
             fails.append({"code": "DURATION_OUT_OF_RANGE", "detail": probe["duration"]})
         if abs(probe["duration"] - total) > 0.3:
             fails.append({"code": "AUDIO_TIMELINE_MISMATCH", "detail": {"mp4": probe["duration"], "timeline": total}})
         marks = draft_mark_present(mp4, [total * f for f in (0.1, 0.5, 0.9)], p)
         if not all(marks):
             fails.append({"code": "DRAFT_MARK_MISSING", "detail": marks})
+    elif not fails:
+        fails.append({"code": "NO_VIDEO", "detail": "no reel.mp4 was written"})
     used = sorted({i for sc in script["scenes"] for ln in sc["lines"] for i in ln["claim_ids"]})
     listed = {i for e in entries for i in e["claim_ids"]}
     if [i for i in used if i not in listed]:
         fails.append({"code": "SOURCE_MISSING", "detail": [i for i in used if i not in listed]})
     captions = [c for sc in scenes for c in sc["captions"]]
     short = [c for c in captions if c["end"] - c["start"] < MIN_CAPTION - 1e-6]
-    if short:
+    if short and not remotion:   # the srt only, in the kinetic reel (the beats are the on-screen words)
         fails.append({"code": "CAPTION_TOO_SHORT", "detail": short})
     (out_dir / "reel.srt").write_text(srt(captions), encoding="utf-8")
     trace = {
         "post_id": record["post_id"], "run_id": record["run_id"], "status": "failed" if fails else "passed",
+        "engine": engine,
         "voice": voice | {"note": "edge-tts is Microsoft's online voice service; the spoken text leaves the box"
                           if voice.get("provider") == "edge-tts" else ""},
         "transcriber": "whisper.cpp v1.9.1, ggml-base.en (local)", "timings": timings, "probe": probe,

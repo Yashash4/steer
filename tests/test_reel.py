@@ -112,3 +112,68 @@ def test_a_short_reel_encodes_with_captions_and_the_draft_mark(tmp_path):
     assert reel.box_has_content(tmp_path / "reel.mp4", (cap["start"] + cap["end"]) / 2, reel.SUBS_BOX)
     assert (tmp_path / "reel.srt").read_text().count("-->") == len(t["captions"])
     assert t["scenes"][-1]["kind"] == "sources" and t["scenes"][1]["lines"][0]["spoken"].startswith("On average 0.4 kilograms")
+
+
+def test_display_tokens_keep_a_number_with_its_unit_and_beats_take_two_to_four():
+    text = "Risk was 2.99 times higher with BMI under 25 kg/m2, in 12 983 people."
+    toks = reel.display_tokens(text, [i * 0.3 for i in range(len(text.split()))])
+    assert [t for t, _ in toks] == ["Risk", "was", "2.99 times", "higher", "with", "BMI", "under", "25 kg/m²,",
+                                    "in", "12 983", "people."]
+    assert toks[3][1] == 1.2                                                  # "higher" keeps its own time
+    beats = reel.make_beats(toks)
+    assert all(2 <= len(b["words"]) <= 4 for b in beats)
+    assert " ".join(b["text"] for b in beats) == reel.display(text)           # nothing added, nothing lost
+    assert any(b["text"].endswith("25 kg/m²,") for b in beats)          # cut after the comma
+
+
+def kinetic_scenes():
+    record = {"post_id": "p1", "run_id": "r1", "sources": [
+        {"claim_id": "c1", "authors": "West S, Scragg J, Aveyard P et al.", "title": "Weight regain", "journal": "BMJ (Clinical research ed.)",
+         "year": 2026, "doi": "10.1/w", "location": "section text, no page layout"}]}
+    script = {"scenes": [{"lines": [{"kind": "framing", "text": "Will the weight come back?", "claim_ids": []}]},
+                         {"lines": [{"kind": "health", "text": "On average weight came back at 0.4 kg a month.", "claim_ids": ["c1"]}]},
+                         {"lines": [{"kind": "cta", "text": "Talk to a Steer doctor", "claim_ids": []}]}]}
+    scenes, pcm, _ = reel.build_timeline(script, {"name": "x"}, fake_tts, reel.HEALTH_HOLD, reel.REMOTION_END_CARD)
+    keys = [{"number": "0.4 kg a month", "label": "weight came back", "claim_ids": {"c1"}}]
+    return record, script, scenes, keys
+
+
+def test_props_carry_only_checked_text_and_the_pool_check_catches_anything_else():
+    record, script, scenes, keys = kinetic_scenes()
+    props = reel.build_props(scenes, record, BRAND, "come back", keys)
+    assert reel.pool_check(props, script, record, "come back", keys) == []
+    hook, point = props["scenes"][0]["lines"][0], props["scenes"][1]["lines"][0]
+    assert hook["emphasis"] == "come back" and props["scenes"][0]["ground"] == "cream"
+    assert point["key"]["number"] == "0.4 kg a month" and point["key"]["label"] == "weight came back"
+    assert point["hold_end"] - point["end"] >= reel.HEALTH_HOLD - 1e-9        # the whole line holds >= 0.8 s
+    assert point["source_label"] == "West et al. 2026, section text, no page layout"
+    end = props["scenes"][-1]
+    assert end["kind"] == "sources" and end["sources"]["entries"][0]["journal"] == "BMJ"
+    assert [s["transition_in"] for s in props["scenes"]] == ["none", "wipe", "wipe", "wipe"]
+    import copy as cp
+    for path, value in [(("lines", 0, "text"), "On average weight came back at 0.8 kg a month."),   # a changed number
+                        (("lines", 0, "source_label"), "Smith et al. 2020, page 1"),
+                        (("lines", 0, "key"), {"number": "0.4 kg", "label": "per month", "at": 1.0})]:
+        bad = cp.deepcopy(props)
+        node = bad["scenes"][1]
+        for k in path[:-1]:
+            node = node[k]
+        node[path[-1]] = value
+        found = reel.pool_check(bad, script, record, "come back", keys)
+        assert found and {f["code"] for f in found} == {"TEXT_NOT_FROM_SCRIPT"}
+    bad = cp.deepcopy(props)
+    bad["scenes"][1]["lines"][0]["beats"][0]["text"] = "Doctors agree"                 # a beat not in its line
+    assert reel.pool_check(bad, script, record, "come back", keys)
+    bad = cp.deepcopy(props)
+    bad["scenes"][1]["extra"] = "x"                                                    # anything outside the schema
+    assert [f["code"] for f in reel.pool_check(bad, script, record, "come back", keys)] == ["PROPS_SCHEMA"]
+
+
+def test_checked_keys_come_from_the_posts_slides_and_static():
+    line = {"kind": "health", "text": "On average weight came back at 0.4 kg a month.", "claim_ids": ["c1"]}
+    post = {"slides": [{"role": "point", "lines": [line], "key_number": "0.4 kg a month", "key_label": "weight came back"}],
+            "static": None}
+    assert reel.checked_keys(post) == [{"number": "0.4 kg a month", "label": "weight came back", "claim_ids": {"c1"}}]
+    post = {"static": {"headline": {"kind": "framing", "text": "Will it come back?", "claim_ids": []}, "supporting": [line],
+                       "key_number": "0.4 kg a month", "key_label": "nothing like this"}}
+    assert reel.checked_keys(post) == []                                       # a label not in its line is not a key

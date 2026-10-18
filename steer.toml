@@ -102,4 +102,5 @@ brief_claims = 4   # claims picked for an automatic brief
 # edge-tts is Microsoft's online voice service: each line's text is sent to it.
 [voice]
 provider = "edge-tts"
-name = "en-IN-NeerjaNeural"
+name = "en-IN-NeerjaExpressiveNeural"
+rate = "+8%"

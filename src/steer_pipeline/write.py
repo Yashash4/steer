@@ -142,6 +142,7 @@ key_number + key_label whose label says who the number is about (for example "ri
 under 25"); a static with only a fact card is blocked. Every artwork ends with the sign-off: on the carousel's
 CTA slide, and among the static's supporting lines.
 Leave them out when nothing deserves it.
+The reel script is spoken in about 25-40 seconds: 55-85 words in all its lines together.
 State the message (the one thing the audience should take away) and the reasoning (why this post, for whom,
 which doubt it answers). Both are published with the post and checked like health lines: the message may only
 combine what the claims used say, and may end with one call-to-action line copied exactly; no other mention

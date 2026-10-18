@@ -61,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("folder", help="out/<run_id>/<post_id>")
     v.add_argument("--db", required=True, help="the SQLite file the post was written from")
     v.add_argument("--settings")
+    v.add_argument("--engine", default="remotion", choices=["remotion", "playwright"],
+                   help="remotion: kinetic type (code/reel); playwright: the fallback renderer")
     d = sub.add_parser("render", help="render (again) the PNGs of a written post folder")
     d.add_argument("folder", help="out/<run_id>/<post_id>")
     args = ap.parse_args(argv)
@@ -68,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "reel":
         settings = load_settings(args.settings)
         try:
-            t = posts.reel_post(args.folder, store.connect(args.db), settings)
+            t = posts.reel_post(args.folder, store.connect(args.db), settings, engine=args.engine)
         except posts.ReelRefused as e:
             print(f"refused: {json.dumps(e.reasons, ensure_ascii=False)[:2000]}", file=sys.stderr)
             return 2
