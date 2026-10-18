@@ -332,9 +332,9 @@ def render(record: dict, brand: dict, out_dir: Path, draft: bool = True) -> dict
                 box = lineart.place((y1 - y0) / (x1 - x0), boxes, W, H)
                 if box:
                     pal = brand["palette"]; ink = pal["cream"] if pg["art"]["bold"] else pal["ink"]
-                    art_png = tmp / f"{pg['name']}.lineart.png"
-                    lineart.draw_png(pw, [(id_, ink, round(box[2] - box[0]), art_png)])
-                    pad = 12   # the PNG's margin around the drawing's own bounding box (lineart.draw_png)
+                    art_png = tmp / f"{pg['name']}.lineart.svg"   # SVG strokes: p5.brush dropped strokes at slide sizes
+                    lineart.draw_svg(id_, ink, round(box[2] - box[0]), art_png)
+                    pad = 12   # the SVG's margin around the drawing's own bounding box (lineart.draw_svg)
                     page.evaluate(ADD_ART_JS, [art_png.as_uri(), [box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad]])
                     drawn = {"id": id_, "box": box, "ink": ink}
                     if lineart.overlaps(box, page.evaluate(TEXT_BOXES_JS), lineart.PAD):   # min gap, not just no touching

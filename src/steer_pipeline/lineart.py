@@ -159,3 +159,17 @@ def draw_png(pw, requests: list[tuple]) -> None:
             out.write_bytes(base64.b64decode(pg.evaluate(ALPHA_JS, ink).split(",", 1)[1]))
             pg.close()
         b.close()
+
+
+def draw_svg(id_: str, ink: str, width: float, out: Path, pad: float = 12, stroke_px: float = 4.5) -> None:
+    """The drawing as plain SVG strokes (the fallback the reel uses; p5.brush under software GL drops strokes at these
+    sizes): its bounding box shown `width` px wide with `pad` px of margin, like draw_png's PNG."""
+    d = drawing(id_)
+    x0, y0, x1, y1 = bbox(d)
+    s = width / (x1 - x0)
+    w, h = width + 2 * pad, (y1 - y0) * s + 2 * pad
+    paths = "".join('<path d="M' + " L".join(f"{(x - x0) * s + pad:.1f} {(y - y0) * s + pad:.1f}" for x, y in p) + '"/>'
+                    for p in d["paths"] if len(p) > 1)
+    out.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="{h:.0f}" viewBox="0 0 {w:.1f} {h:.1f}">'
+                   f'<g fill="none" stroke="{ink}" stroke-width="{stroke_px}" stroke-linecap="round" stroke-linejoin="round">'
+                   f"{paths}</g></svg>")
