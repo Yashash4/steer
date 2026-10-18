@@ -63,10 +63,10 @@ the papers in the store do not answer them well. No real lead capture or backend
 No test on physical devices. The line cross-check of the newest game strings needs the cross-check key; a build
 made with `--no-crosscheck` skips it and is not for release.
 
-**Draft one-liners (draft for review):**
-- TRIGGER: "Guess how much higher a slim South Asian woman's diabetes risk is than a slim white woman's, then see the real number from the study."
+**One-liners:**
+- TRIGGER: "Think a 'normal' BMI rules out diabetes? One tap to guess how diabetes rates compared in a real study — then see the number and the exact sentence it came from."
 - VALUE: "In about a minute you see where your guesses about weight regain, muscle and risk differ from what the studies measured, each with the exact sentence and source, and leave with three questions to ask a doctor."
-- NEXT STEP: "See if the programme fits you, or talk to a Steer doctor, with the doubts you picked carried over."
+- NEXT STEP: "See if the programme fits you, or talk to a Steer doctor, with the doubts you picked and three questions ready to share (a prototype preview; nothing is sent)."
 
 ## PS2: the pipeline (S1 to S8)
 
