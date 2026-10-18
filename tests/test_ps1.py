@@ -296,6 +296,11 @@ def test_an_excluded_claim_cannot_reach_a_round(stored, tmp_path, monkeypatch):
         ps1.build(stored, tmp_path / "x", SETTINGS, rounds_file(tmp_path), playable=False, fonts=False)
 
 
+def test_muscle_b_does_not_carry_the_high_heterogeneity_caveat():
+    assert "Results varied a lot between studies." in ROUND["muscle-a"]["qualifiers"]       # the -1.74 kg result (I2 = 98%)
+    assert not any("varied" in q or "vary" in q for q in ps1.merged_qualifiers(ROUND["muscle-b"], ROUNDS))   # +1.81% had I2 = 7%
+
+
 def test_the_one_study_note_is_only_for_single_studies(stored, tmp_path):
     note = ROUNDS["single_study_note"]
     for r in ROUNDS["round"]:

@@ -168,7 +168,7 @@ def check_line(line: dict, claims: dict[str, dict], brand: dict, rules: dict, bo
         fails.append({"check": "structure", "code": "CTA_NOT_ALLOWED", "detail": text})
     elif kind == "signoff" and _norm(text) not in {_norm(w) for w in brand["signoff"]}:
         fails.append({"check": "structure", "code": "SIGNOFF_NOT_ALLOWED", "detail": text})
-    elif kind == "framing" and (find_numbers(PRONOUNS.sub(" ", text)) or re.search(r"\d", text)):
+    elif kind == "framing" and (find_numbers(PRONOUNS.sub(" ", no_class_name(text))) or re.search(r"\d", no_class_name(text))):
         # no numbers in framing, no exceptions: digits glued to words ("3pm") count too
         fails.append({"check": "structure", "code": "FRAMING_HAS_NUMBER", "detail": text})
 
@@ -286,6 +286,14 @@ def key_lines(post: dict) -> list[dict]:
             out.append({"kind": "key", "text": f"{num} / {label}", "claim_ids": src[0]["claim_ids"], "path": f"{path}/key",
                         "surface": "artwork", "unit": int(path.split("/")[1]) if "/" in path else 0})
     return out
+
+
+GLP1 = re.compile(r"\bGLP-1\b(?![\w-])")
+
+
+def no_class_name(text: str) -> str:
+    """The text without the exact class name "GLP-1" (its digit is a name, not a number; "GLP-2", "GLP-10" keep theirs)."""
+    return GLP1.sub(" ", text)
 
 
 PRONOUNS = re.compile(r"\b(?:no one|anyone|someone|everyone)\b", re.I)  # "one" here is no number ("one of" still is)

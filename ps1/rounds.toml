@@ -150,7 +150,8 @@ answer = "up"
 sentence = "Lean mass as a share of total weight rose by 1.81% on average."
 reveal_number = "1.81%"
 reveal_label = "Lean mass as a share of total weight rose"
-qualifiers = ["Results varied a lot between studies.", "The authors advise nutrition and exercise alongside treatment."]
+# no "varied a lot" caveat here: the 1.81% result had low heterogeneity (I2 = 7%); the caveat belongs to the -1.74 kg result
+qualifiers = ["The authors advise nutrition and exercise alongside treatment."]
 fallback_gap = "gap-muscle"
 
 [[round]]

@@ -25,6 +25,7 @@ LEAN_ABS = ("However, a significant decrease was observed in the absolute change
             "−0.45; p < 0.00001; I² = 98%) and in the percentage of lean mass (−3.06%; 95% CI: −5.10 to −1.02; p < 0.00001; I² = 98%).")
 LEAN_SHARE = ("GLP1-RA significantly improved lean mass as a proportion of total weight, with an observed increase of 1.81% "
               "(95% CI: 1.1– 2.52; p < 0.00001; I² = 7%).")
+HOLD = "Among 28 randomised controlled trials, weight was no different between treatment and control groups 1.4 years after cessation of WMM."
 REGAIN = "The average monthly rate of weight regain was 0.4 kg (95% confidence interval (CI) 0.3 to 0.5)."
 
 
@@ -37,7 +38,7 @@ def C(cid, quote, **kw):
 CLAIMS = {c["claim_id"]: c for c in [
     C("women", ABSTRACT, comparison_group="white women"), C("men_abs", ABSTRACT),
     C("men_res", RESULTS, comparison_group="US whites"), C("family", FAMILY),
-    C("lean_abs", LEAN_ABS), C("lean_share", LEAN_SHARE), C("regain", REGAIN),
+    C("lean_abs", LEAN_ABS), C("lean_share", LEAN_SHARE), C("regain", REGAIN), C("hold", HOLD),
 ]}
 
 
@@ -184,9 +185,29 @@ def test_laverde_pair_and_heterogeneity_caveat():
 
 def test_west_average_qualifiers():
     bare = L("health", "Weight came back at 0.4 kg a month after stopping.", ["regain"])
-    ok = L("health", "On average weight came back at 0.4 kg a month, not a personal promise.", ["regain"])
-    assert boundary_codes(post([[bare]]), WEST).count("QUALIFIER_MISSING") == 2
-    assert boundary_codes(post([[ok]]), WEST) == []
+    assert boundary_codes(post([[bare]]), WEST).count("QUALIFIER_MISSING") == 3     # average, prediction, GLP-1
+    promise = L("health", "On average, adults regained 0.4 kg a month after stopping weight management medicines, not a personal promise.", ["regain"])
+    scene = lambda *extra: [{"lines": [promise, *extra]}]
+    assert boundary_codes(post([], scenes=scene()), WEST).count("QUALIFIER_MISSING") == 2     # "personal promise" is the wrong frame
+    both = (L("framing", "An average across studies, not a prediction for you"), L("framing", "All weight-management medicines, not only GLP-1"))
+    assert boundary_codes(post([], scenes=scene(*both)), WEST) == []
+    assert "QUALIFIER_MISSING" in boundary_codes(post([], scenes=scene(both[0])), WEST)       # one of the two is not enough
+    elsewhere = post([[both[0], both[1]]], scenes=scene())                                    # same scene or slide only
+    assert "QUALIFIER_MISSING" in boundary_codes(elsewhere, WEST)
+
+
+def test_the_class_name_glp1_is_not_a_framing_number():
+    assert codes(L("framing", "All weight-management medicines, not only GLP-1")) == []
+    for bad in ("Only GLP-2 was studied", "Not only GLP-10", "About 1 kg"):
+        assert "FRAMING_HAS_NUMBER" in codes(L("framing", bad)), bad
+
+
+def test_west_no_difference_line_must_carry_the_return_meaning():
+    bad = L("health", "Among 28 randomised controlled trials, weight was no different between treatment and control groups 1.4 years after stopping.", ["hold"])
+    good = L("health", "Among 28 randomised controlled trials, weight came back to the level of the control groups 1.4 years after stopping.", ["hold"])
+    assert boundary_codes(post([[bad]]), WEST) == ["QUALIFIER_MISSING"]
+    assert boundary_codes(post([[good]]), WEST) == []
+    assert codes(good, WEST, CLAIMS) == []     # and the line itself passes the numbers and wording checks
 
 
 # --- line cross-check and post status ---
@@ -209,7 +230,8 @@ def says(verdict="supported", medical=False):
 
 
 GOOD = post([[L("framing", "Will the weight come back?")],
-             [L("health", "On average weight came back at 0.4 kg a month, not a personal promise.", ["regain"])],
+             [L("health", "On average weight came back at 0.4 kg a month.", ["regain"]),
+              L("framing", "All weight-management medicines, not only GLP-1, and not a prediction for you")],
              [L("brand", "A planned exit. We help you build habits that last after the medicine stops.")],
              [L("cta", "See if the programme fits you"), L("signoff", "steerclub.com")]])
 

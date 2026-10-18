@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import store
-from .checks import (_has, check_boundaries, check_line, crosscheck_lines, frags, framing_attributes, load_boundaries, split_rule, study_context,
+from .checks import (_has, check_boundaries, check_line, no_class_name, crosscheck_lines, frags, framing_attributes, load_boundaries, split_rule, study_context,
                      writable)
 from .numbers import find_numbers
 from .posts import claims_from_store, load_brand
@@ -35,12 +35,9 @@ FIXED_QUALIFIERS = {"An average across studies, not a prediction for you.", "All
                     "A doctor weighs the benefits against the side effects for each person.",
                     "The authors advise nutrition and exercise alongside treatment."}
 # copy that must never appear anywhere in the quiz (the hook asks about the difference, not about "her" risk or a "slim" woman)
-GLP1 = re.compile(r"\bGLP-1\b(?![\w-])")
-
-
 def has_number(text: str) -> bool:
     """A digit in a qualifier, except inside the exact class name "GLP-1" ("GLP-2", "GLP-10" and "1 kg" still count)."""
-    return bool(re.search(r"\d", GLP1.sub("", text)))
+    return bool(re.search(r"\d", no_class_name(text)))
 
 
 FORBIDDEN_COPY = re.compile(r"\bslim\b|\bher risk\b", re.I)

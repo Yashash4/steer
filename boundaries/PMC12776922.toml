@@ -1,6 +1,6 @@
 # Content boundaries for West S et al., BMJ 2026 (DOI 10.1136/bmj-2025-085304). No page layout (PMC text).
 # Editorial input, versioned. Claims are matched by text in their quote (canonical form).
-version = 2
+version = 3
 pmcid = "PMC12776922"
 doi = "10.1136/bmj-2025-085304"
 
@@ -13,8 +13,23 @@ why = "0.4 kg a month is an average across weight-management medicines"
 [[require_qualifier]]
 when_claim_quote_contains = ["0.4 kg"]
 placement = "same_slide"
-any_of = ["not a personal promise", "not a prediction for any one person", "not a prediction for you", "varies from person to person"]
-why = "an average is never a personal promise"
+any_of = ["not a prediction for you", "not a prediction for any one person"]
+why = "studio clearance of the 0.4 kg claim: only with 'not a prediction for you' shown ('not a personal promise' is the wrong frame)"
+
+[[require_qualifier]]
+when_claim_quote_contains = ["0.4 kg"]
+placement = "same_slide"
+any_of = ["not only GLP-1"]
+why = "studio clearance of the 0.4 kg claim: only with 'not only GLP-1' shown (all weight-management medicines)"
+
+# "No difference from control 1.4 years after stopping" reads as "the medicine did nothing" or "no regain". The paper's point:
+# the treatment groups' weight came back to the comparison groups' level. An avoid_phrase cannot be conditional (it would also
+# ban the line that carries the return meaning), so the require rule alone enforces it.
+[[require_qualifier]]
+when_claim_quote_contains = ["no different between treatment and control"]
+placement = "same_slide"
+any_of = ["back to", "came back", "back level with", "regained to", "returned to", "caught up", "catch up"]
+why = "'no different from control' must say the weight came back to the comparison groups' level, not that the medicine did nothing"
 
 # The 0.4 kg average covers all weight-management medicines: never present it as a GLP-1-only or drug-specific figure.
 [[avoid_phrase]]

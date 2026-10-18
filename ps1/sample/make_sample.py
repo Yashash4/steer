@@ -113,7 +113,7 @@ claims["hook"]["prompt"] = "Guess: how did diabetes rates compare?"
 claims["hook"].update(design="single_study", qualifiers=["A comparison between groups in one study, not a prediction for you."])
 for r in claims["rounds"]:
     r["design"] = "review"
-claims["rounds"][2]["qualifiers"] = ["Results varied a lot between studies.", "The authors advise nutrition and exercise alongside treatment."]
+claims["rounds"][2]["qualifiers"] = ["The authors advise nutrition and exercise alongside treatment."]
 jsonschema.validate(claims, json.loads((HERE.parent / "claims.schema.json").read_text()))
 for r in [claims["hook"], *claims["rounds"]]:
     for rv in r["reveals"]:
