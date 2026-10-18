@@ -96,6 +96,21 @@ def _fit(kind: str, cls: str, inner: str, tag: str = "div") -> str:
             f"{inner}</{tag}>")
 
 
+JOURNALS = {  # display names for NLM catalogue titles (the stored citation keeps the catalogue form)
+    "BMJ (Clinical research ed.)": "BMJ",
+    "BMJ open diabetes research & care": "BMJ Open Diabetes Research & Care",
+    "International journal of obesity (2005)": "International Journal of Obesity",
+}
+
+
+def journal_display(name: str | None) -> str:
+    """The journal as readers know it: a mapped name, else the catalogue title without its trailing qualifier
+    in brackets ("(2005)", "(Clinical research ed.)")."""
+    if not name:
+        return ""
+    return JOURNALS.get(name) or re.sub(r"\s*\([^)]*\)\s*$", "", name)
+
+
 UNIT = re.compile(r"(\d) (?=\d{3}\b|(?:kg|g|cm|mg|mmol|µ|%|times|years|months|weeks)\b)")  # also "12 983"
 
 
@@ -180,7 +195,7 @@ def source_entries(sources: list[dict]) -> list[dict]:
 
 def _entry_html(e: dict) -> str:
     esc = lambda k: html.escape(str(e.get(k) or ""))
-    text = (f"{esc('authors')} {esc('title')}. <i>{esc('journal')}</i>, {esc('year')}. <span class=\"doi\">doi:{esc('doi')}</span>. "
+    text = (f"{esc('authors')} {esc('title')}. <i>{html.escape(journal_display(e.get('journal')))}</i>, {esc('year')}. <span class=\"doi\">doi:{esc('doi')}</span>. "
             f"{html.escape(str(e.get('location') or '').capitalize())}.")
     return _fit("sources", "entry", text)
 

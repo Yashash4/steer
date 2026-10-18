@@ -99,3 +99,14 @@ def test_squared_unit_is_a_display_transform_only():
     html = render.build_pages(sq, BRAND)[1]["html"]
     assert "kg/m²" in html and "kg/m2" not in html
     assert sq["post"]["slides"][1]["lines"][0]["text"].endswith("kg/m2 on average.")   # the checked text is untouched
+
+
+def test_journal_shown_as_readers_know_it():
+    assert render.journal_display("BMJ (Clinical research ed.)") == "BMJ"
+    assert render.journal_display("International journal of obesity (2005)") == "International Journal of Obesity"
+    assert render.journal_display("Some journal (London, England)") == "Some journal"     # catalogue qualifier dropped
+    assert render.journal_display("Lancet") == "Lancet" and render.journal_display(None) == ""
+    west = copy.deepcopy(RECORD)
+    west["sources"] = [src("c1") | {"journal": "BMJ (Clinical research ed.)"}]
+    page = render.build_pages(west, BRAND)[-1]["html"]
+    assert "<i>BMJ</i>" in page and "Clinical research ed." not in page

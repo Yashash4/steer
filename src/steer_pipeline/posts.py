@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import store
 from .checks import check_post, load_boundaries, required_claims, study_context, writable
+from .render import journal_display
 from .router import Router
 from .write import pick_brief, write_post
 
@@ -94,7 +95,8 @@ def write_and_check(con, run_id: str, fmt: str, settings: dict, router: Router |
     (folder / "trace.json").write_text(json.dumps(trace, ensure_ascii=False, indent=1), encoding="utf-8")
     (folder / "reel_script.json").write_text(json.dumps(post["reel_script"], ensure_ascii=False, indent=1), encoding="utf-8")
     caption = "\n".join(ln["text"] for ln in post["caption"]["lines"]) + "\n\nSources: " + "; ".join(
-        f"{s['authors']} ({s['year']}) {s['journal']}, doi:{s['doi']}" for s in {s["doi"]: s for s in srcs}.values()) \
+        f"{s['authors']} ({s['year']}) {journal_display(s['journal'])}, doi:{s['doi']}"
+        for s in {s["doi"]: s for s in srcs}.values()) \
         + "\n\n" + " ".join(post["caption"]["hashtags"])
     (folder / "caption.txt").write_text(caption, encoding="utf-8")
     if render and record["status"] == "draft_pending_review":  # a blocked post gets no artwork

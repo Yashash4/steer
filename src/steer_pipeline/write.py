@@ -119,6 +119,8 @@ Every line has a kind:
 - health: states a fact. It may ONLY restate what its claims say, with their exact numbers, units, signs and
   comparison groups, and must list those claim_ids. Never add a number, a group, a cause or a promise. Expand
   abbreviations for the public.
+  Prefer everyday words when the meaning is exactly the same ("attenuated" -> "fade", "cessation" -> "stopping",
+  "incident diabetes" -> "new cases of diabetes"), never changing the scope, strength or certainty of the claim.
 - framing: the reader's doubt as a question, a transition, or a scene from Indian daily life. No numbers at
   all: no digits and no number words ("one", "four o'clock", "a dozen"), and no health assertion. Every framing line must make sense on its own: no "it", "this" or
   "that" whose meaning sits on another line or slide.
