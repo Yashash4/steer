@@ -65,6 +65,13 @@ def test_extract_keeps_only_verified_claims(two):
     assert [f["code"] for f in kept[PAGE2[4]["claim_text"]]["flags"]] == ["CAUSAL_WORDING"]
     ctx = [f["code"] for f in kept[PAGE2[5]["claim_text"]]["flags"]]
     assert ctx == ["CONTEXT_NOT_IN_QUOTE"]
+    # passed means clean: flagged claims are in needs_check with their reasons, never in passed
+    passed = {c["claim_text"] for c in run["passed"]}
+    assert PAGE2[4]["claim_text"] not in passed and PAGE2[5]["claim_text"] not in passed
+    nc = {c["claim_text"]: c["review_reasons"] for c in run["needs_check"]}
+    assert nc[PAGE2[4]["claim_text"]] == ["CAUSAL_WORDING"] and nc[PAGE2[5]["claim_text"]] == ["CONTEXT_NOT_IN_QUOTE"]
+    assert s["needs_check_by_reason"] == {"CAUSAL_WORDING": 1, "CONTEXT_NOT_IN_QUOTE": 1}
+    assert passed == {PAGE2[0]["claim_text"], PAGE2[1]["claim_text"]}
     assert kept[PAGE2[1]["claim_text"]]["flags"] == []  # "control group" is stated in the quote
     # nothing unverified is stored as passed
     assert all(c["gate"]["status"] == "pass" for c in run["passed"] + run["needs_check"])
@@ -102,6 +109,26 @@ def test_hedge_mismatch_and_lean_mass_flags():
     ok = claim("About 20% of the lost weight was lean mass.", "approximately 20% of the lost weight was lean mass",
                hedged=True)
     assert ex.code_flags(ok) == []
+
+
+def test_hedge_words_only_before_numbers():
+    assert not ex.quote_hedged("We collected data about diet in 12% of homes.")
+    assert ex.quote_hedged("about 12% of homes")
+    assert ex.quote_hedged("This may reduce appetite.")
+    # the model more cautious than the quote: a note, not a flag
+    cautious = claim("Weight fell by 12%.", "Weight fell by 12% in the group.", hedged=True)
+    assert ex.code_flags(cautious) == [] and ex.hedge_note(cautious)
+    plain = claim("Diet data covered 12% of homes.", "We collected data about diet in 12% of homes.")
+    assert ex.code_flags(plain) == []
+
+
+def test_population_must_come_from_the_section():
+    c = claim("352 adults completed the study.", "A total of 352 participants completed the study.",
+              population="Asian Indian adults")
+    assert ex.code_flags(c, "Among Asian Indian adults with overweight, a total of 352 participants completed.") == []
+    assert ex.code_flags(c, "Adults (all Asian Indian) took part; a total of 352 participants completed.") == []
+    assert [f["code"] for f in ex.code_flags(c, "A total of 352 participants completed the study.")] == [
+        "POPULATION_NOT_IN_SECTION"]
 
 
 def test_causal_wording_without_association_word():

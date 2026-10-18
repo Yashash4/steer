@@ -158,13 +158,17 @@ claim also states. Every match is reported with its sentence IDs and lines. Two 
 
 - A `SHORT_QUOTE` warning when the quote has fewer than 5 words and passed only because it holds the claim's
   number: check its context on the page.
+- A `HEDGE_DROPPED` warning when the quote hedges a number ("nearly 30%") and the claim states it without one.
+
+A **clean** pass has none of these three warnings. Any of them means a reviewer must look before the claim
+counts as verified.
 
 A quote made only of numbers and units ("0.4 kg") is rejected as `QUOTE_NO_CONTEXT`, because it cannot show
 what is measured. The exception is table text: a table row's meaning comes from its column headers, which the
 reviewer checks on the page.
 
 The report summary counts flagged passes apart: `passed`, `passed_clean`, `needs_layout_check`, `short_quote`,
-`rejected`.
+`hedge_dropped`, `rejected`.
 
 The canonical form, applied in this order:
 1. Unicode NFKC (ligatures, superscript digits such as "²", full-width forms).
@@ -209,15 +213,19 @@ A model proposes claims from the paper, and the gate decides which ones are kept
   `population`, `hedged`, `direction`, and `outcome`, `comparison_group`, `time_point`, `limitations` only when
   the quote states them). Output is validated against a schema.
 - **The gate:** every claim goes through the gate. Rejected claims are kept in a rejected log with the
-  reasons and are never repaired. Passes with `LAYOUT_CHECK_NEEDED` or `SHORT_QUOTE` go to `needs_check`, not
-  `passed`.
+  reasons and are never repaired. `passed` means clean: no review warning (`LAYOUT_CHECK_NEEDED`,
+  `SHORT_QUOTE`, `HEDGE_DROPPED`) and no code flag. Every other gate pass goes to `needs_check` with its
+  `review_reasons`.
 - **Flags code adds to kept claims** (not rejections):
   - `CAUSAL_WORDING`: the claim states a cause ("causes", "leads to", "results in", "makes you", "because
     of", "due to", "triggers", "prevents") and the quote does not;
   - `LEAN_MASS_WORDING`: "muscle" in the claim, lean or fat-free mass in the quote;
-  - `HEDGE_MISMATCH`: the model's `hedged` value differs from the quote's wording ("may", "suggests",
-    "approximately"...);
-  - `CONTEXT_NOT_IN_QUOTE`: a context field the quote does not state.
+  - `HEDGE_MISMATCH`: the quote is hedged but the model says it is not. Modal words ("may", "suggests",
+    "likely"...) count anywhere; "about", "around", "roughly", "nearly", "approximately", "~" count only right
+    before a number. A model more cautious than the quote gets a note, not a flag;
+  - `CONTEXT_NOT_IN_QUOTE`: a context field the quote does not state;
+  - `POPULATION_NOT_IN_SECTION`: a population word not found in the chunk's text. The population may come
+    from the section, not only the quote.
 
 ## Model router (`steer.toml`)
 

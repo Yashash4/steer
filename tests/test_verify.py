@@ -158,7 +158,7 @@ def test_report_counts_and_cli(two, tmp_path):
     assert cli.main(["verify", str(claims_path), "--doc", str(doc_path), "-o", str(out)]) == 1
     report = json.loads(out.read_text())
     assert report["summary"] == {"claims": 2, "passed": 1, "passed_clean": 1, "needs_layout_check": 0, "short_quote": 0,
-                                 "rejected": 1}
+                                 "hedge_dropped": 0, "rejected": 1}
     assert [r["status"] for r in report["results"]] == ["pass", "reject"]
     assert report["gate_version"] == "gate-1" and report["min_words"] == 5
 
@@ -168,6 +168,10 @@ def test_hedge_dropped_is_a_warning_not_a_rejection(one):
          "(Gaesser et al., 2025).")
     r = run(one, "55% to 65% of lost weight returns within one year", q)
     assert r["status"] == "pass" and [w["code"] for w in r["warnings"]] == ["HEDGE_DROPPED"]
+    claim = {"claim_id": "h", "text": "55% to 65% of lost weight returns within one year",
+             "document_id": one["document_id"], "quote": q}
+    summary = verify([claim], [one])["summary"]
+    assert summary["hedge_dropped"] == 1 and summary["passed_clean"] == 0  # a dropped hedge is not clean
     r = run(one, "about 55% to 65% of lost weight returns within one year", q)
     assert r["status"] == "pass" and r["warnings"] == []
 
@@ -197,7 +201,7 @@ def test_page_level_uncertainty_flags_the_claim(two):
     assert [w["code"] for w in r["warnings"]] == ["LAYOUT_CHECK_NEEDED"]
     assert r["warnings"][0]["detail"].startswith("page 2, lines p0002-l")
     assert report["summary"] == {"claims": 1, "passed": 1, "passed_clean": 0, "needs_layout_check": 1, "short_quote": 0,
-                                 "rejected": 0}
+                                 "hedge_dropped": 0, "rejected": 0}
 
 
 def test_region_uncertainty_flags_only_overlapping_claims(two):

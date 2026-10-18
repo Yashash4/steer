@@ -116,7 +116,7 @@
    }
   ],
   "timing_seconds": {
-   "fetch_and_ingest": 3.343,
+   "fetch_and_ingest": 13.497,
    "verify": 0.013
   }
  },
@@ -129,6 +129,7 @@
    "passed_clean": 0,
    "needs_layout_check": 4,
    "short_quote": 0,
+   "hedge_dropped": 1,
    "rejected": 3
   },
   "results": [

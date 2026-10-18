@@ -7,11 +7,11 @@
 
 - 10 pages (6 two_column, 2 mixed, 2 single), 428 sentences, extraction `pdf-1` (pymupdf 1.28.2).
 - Warnings: UNCERTAIN_COLUMN_ORDER x3, TABLE_OR_FIGURE_TEXT x10.
-- Time (measured by the script): fetch + ingest 3.343 s, verify 0.013 s.
+- Time (measured by the script): fetch + ingest 13.497 s, verify 0.013 s.
 
 ## Claims checked by the gate
 
-7 claims: 4 passed (0 clean, 4 need a layout check: not verified until a reviewer compares them with the page), 3 rejected.
+7 claims: 4 passed (0 clean; 4 need a layout check, 0 short quote, 1 dropped hedge: not verified until a reviewer looks), 3 rejected.
 
 | Claim | Expected | Result | Where (page / sentence / lines) | Notes |
 |---|---|---|---|---|

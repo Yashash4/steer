@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .normalize import canonical
 from .router import Router, RouterError
-from .verify import _Doc, check_claim
+from .verify import REVIEW_WARNINGS, _Doc, check_claim
 
 CHUNK_SENTENCES = 40      # sentences per chunk when a document has no pages
 CHUNK_MAX_CHARS = 30_000  # a chunk prompt above this is split; far below the CLI and API limits
@@ -61,8 +61,9 @@ Rules:
 
 CAUSAL = re.compile(r"\b(causes?|caused|causing|leads? to|led to|results? in|resulted in|makes? you|because of|"
                     r"due to|triggers?|prevents?)\b", re.I)
-HEDGE_WORDS = re.compile(r"\b(may|might|could|suggests?|suggested|possibly|likely|appears? to|seems? to|"
-                         r"approximately|about|around|roughly|nearly)\b|[~≈]", re.I)
+# hedges: modal words anywhere; approximation words only directly before a number ("data about diet" is not one)
+MODAL_HEDGE = re.compile(r"\b(may|might|could|suggests?|suggested|possibly|likely|appears? to|seems? to)\b", re.I)
+NUMBER_HEDGE = re.compile(r"(\b(about|around|roughly|nearly|approximately)\s+|[~≈]\s*)[+\-−]?\d", re.I)
 LEAN = re.compile(r"\b(lean (body )?mass|fat-?free mass)\b", re.I)
 MUSCLE = re.compile(r"\bmuscles?\b", re.I)
 
@@ -101,8 +102,15 @@ def chunk_prompt(doc: dict, chunk: list[dict]) -> str:
     return f"Paper: {title}\nSection ({where}):\n\n{body}"
 
 
-def code_flags(claim: dict) -> list[dict]:
-    """Flags code adds to a passed claim (never rejections): wording the quote does not support."""
+def quote_hedged(quote: str) -> bool:
+    return bool(MODAL_HEDGE.search(quote) or NUMBER_HEDGE.search(quote))
+
+
+def code_flags(claim: dict, section: str | None = None) -> list[dict]:
+    """Flags code adds to a passed claim (never rejections): wording the quote does not support.
+
+    `section` is the chunk text; population is the one field allowed from the section, not the quote.
+    """
     text, quote = claim["claim_text"], claim["quote"]
     flags = []
     if MUSCLE.search(text) and LEAN.search(quote) and not MUSCLE.search(quote):
@@ -110,16 +118,30 @@ def code_flags(claim: dict) -> list[dict]:
     if CAUSAL.search(text) and not CAUSAL.search(quote):
         flags.append({"code": "CAUSAL_WORDING",
                       "detail": f"the claim says {CAUSAL.search(text).group(0)!r}; the quote states no cause"})
-    code_hedged = bool(HEDGE_WORDS.search(quote))
-    if code_hedged != bool(claim["hedged"]):
-        flags.append({"code": "HEDGE_MISMATCH",
-                      "detail": f"the model says hedged={claim['hedged']}; the quote's wording says hedged={code_hedged}"})
+    if quote_hedged(quote) and not claim["hedged"]:  # only the dangerous direction: a hedge the model missed
+        flags.append({"code": "HEDGE_MISMATCH", "detail": "the quote is hedged; the model says hedged=false"})
     cq = canonical(quote)[0]
     for f in CONTEXT_FIELDS:
         v = claim.get(f)
         if v and canonical(v)[0] not in cq:
             flags.append({"code": "CONTEXT_NOT_IN_QUOTE", "detail": f"{f} {v!r} is not stated in the quote"})
+    pop = claim.get("population")
+    if pop and section is not None:
+        # word-level: every word of 3+ letters (and every number) in the population must occur in the section,
+        # so "South Asian men with BMI <25 kg/m2" passes a section that says "BMI <25 kg/m2 ... South Asian men"
+        sec = set(re.findall(r"[^\W_]+", canonical(section)[0]))
+        missing = [w for w in re.findall(r"[^\W_]+", canonical(pop)[0]) if (len(w) >= 3 or w.isdigit()) and w not in sec]
+        if missing:
+            flags.append({"code": "POPULATION_NOT_IN_SECTION",
+                          "detail": f"population {pop!r}: {', '.join(missing)} not found in the section"})
     return flags
+
+
+def hedge_note(claim: dict) -> str | None:
+    """A note (not a flag) when the model is more cautious than the quote's wording."""
+    if claim["hedged"] and not quote_hedged(claim["quote"]):
+        return "the model marked this hedged; the quote's wording has no hedge"
+    return None
 
 
 def extract(doc: dict, router: Router, concurrency: int = CONCURRENCY) -> dict:
@@ -154,20 +176,29 @@ def extract(doc: dict, router: Router, concurrency: int = CONCURRENCY) -> dict:
             if gate["status"] == "reject":
                 rejected.append(item)
                 continue
-            item["flags"] = code_flags(c)
-            review = {w["code"] for w in gate["warnings"]} & {"LAYOUT_CHECK_NEEDED", "SHORT_QUOTE"}
-            (needs_check if review else passed).append(item)
+            item["flags"] = code_flags(c, " ".join(s["text"] for s in chunks[rec["index"]]))
+            if note := hedge_note(c):
+                item["note"] = note
+            # passed means clean: no review warning from the gate and no code flag
+            item["review_reasons"] = sorted({w["code"] for w in gate["warnings"]} & set(REVIEW_WARNINGS)
+                                            | {f["code"] for f in item["flags"]})
+            (needs_check if item["review_reasons"] else passed).append(item)
     reasons: dict[str, int] = {}
     for r in rejected:
         for x in r["gate"]["reasons"]:
             reasons[x["code"]] = reasons.get(x["code"], 0) + 1
+    by_review: dict[str, int] = {}
+    for c in needs_check:
+        for code in c["review_reasons"]:
+            by_review[code] = by_review.get(code, 0) + 1
     covered = [sid for rec in records for sid in rec["sids"]]
     return {
         "document_id": doc["document_id"],
         "chunks": [{k: v for k, v in rec.items() if k != "claims"} | {"proposed": len(rec["claims"])} for rec in records],
         "all_sentences_covered": covered == [s["sid"] for s in doc["sentences"]],
         "summary": {"proposed": sum(len(r["claims"]) for r in records), "passed": len(passed),
-                    "needs_check": len(needs_check), "rejected": len(rejected), "rejected_by_reason": reasons,
+                    "needs_check": len(needs_check), "needs_check_by_reason": by_review,
+                    "rejected": len(rejected), "rejected_by_reason": reasons,
                     "flagged": sum(bool(c["flags"]) for c in passed + needs_check),
                     "chunks_failed": sum(r["status"] != "ok" for r in records)},
         "passed": passed,
