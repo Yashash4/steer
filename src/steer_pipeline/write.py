@@ -122,7 +122,9 @@ Every line has a kind:
   Prefer everyday words when the meaning is exactly the same ("attenuated" -> "fade", "cessation" -> "stopping",
   "incident diabetes" -> "new cases of diabetes"), never changing the scope, strength or certainty of the claim.
 - framing: the reader's doubt as a question, a transition, or a scene from Indian daily life. No numbers at
-  all: no digits and no number words ("one", "four o'clock", "a dozen"), and no health assertion. Every framing line must make sense on its own: no "it", "this" or
+  all: no digits and no number words ("one", "four o'clock", "a dozen"), and no health assertion. Never give the reader
+  or the group an attribute the claims do not state: no activity, fitness, diet, food or habit ("active", "fit",
+  "healthy eating", "home food") unless a claim used says it. Every framing line must make sense on its own: no "it", "this" or
   "that" whose meaning sits on another line or slide.
 - brand: copy one of the brand lines given, exactly.
 - cta: copy one of the call-to-action lines given, exactly.

@@ -469,3 +469,12 @@ def test_every_artwork_ends_with_the_signoff():
     assert art(st) == ["STATIC_NO_SIGNOFF"]
     st["static"]["supporting"] = [L("signoff", "steerclub.com")]
     assert art(st) == []
+
+
+def test_a_framing_line_adds_no_lifestyle_attribute_the_claims_do_not_state():
+    from steer_pipeline.checks import framing_attributes
+    quote = "In women with BMI <25 kg/m2, the risk of diabetes was 5.27 times higher in South Asians"
+    assert framing_attributes("Lean, active, and still wondering?", quote) == ["active"]
+    assert framing_attributes("Slim, eating home food. Does this apply to me?", quote) == ["home food"]
+    assert framing_attributes("Lean, and still wondering?", quote) == []                   # body size: the BMI claims
+    assert framing_attributes("Active every day?", "participants who were physically active daily") == []   # stated

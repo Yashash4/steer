@@ -440,6 +440,20 @@ def crosscheck_lines(lines: list[dict], claims: dict[str, dict], router: Router,
     return res
 
 
+# Lifestyle and health attributes a framing line could give the reader or the group ("Lean, active, and still wondering?"
+# when the paper only conditioned on BMI): allowed only when a claim of the post states them. Body size words (lean, slim,
+# normal weight) are left to the BMI claims they stand for.
+ATTRIBUTE = re.compile(r"\b(active|inactive|fit|fitness|athletic|sporty|exercis\w*|work(?:ing)? out|workouts?|gym|walk(?:s|ing)?|"
+                       r"yoga|runs?|running|healthy (?:eat\w*|diet|food|habits?|lifestyle)|eat(?:s|ing)? (?:healthy|well|clean|right)|"
+                       r"home(?:-cooked| cooked)? (?:food|meals?)|diet(?:s|ing)?|vegetarian|vegan|non-?smok\w*|teetotal\w*|"
+                       r"sleep(?:s|ing)? well)\b", re.I)
+
+
+def framing_attributes(text: str, quotes: str) -> list[str]:
+    """The attribute words of a framing line that no claim quote of the post contains."""
+    return [m.group(0) for m in ATTRIBUTE.finditer(text) if not re.search(rf"\b{re.escape(m.group(0))}\b", quotes, re.I)]
+
+
 def check_post(post: dict, claims: dict[str, dict], brand: dict, rules: dict, boundaries: dict,
                router: Router | None, writer_endpoint: str, context: list[dict] = ()) -> dict:
     """Run every check; return {status, lines, post_failures, flags, needs_layout_check}."""
@@ -449,8 +463,12 @@ def check_post(post: dict, claims: dict[str, dict], brand: dict, rules: dict, bo
     # message and reasoning are shown in the studio and the submission: published text, checked against every claim used
     lines += [{"kind": k, "text": post[k], "claim_ids": used, "path": k, "surface": "studio", "unit": 0}
               for k in ("message", "reasoning")] + key_lines(post)
+    quotes = " ".join(claims[i]["quote"] for i in used if i in claims)
     for ln in lines:
         ln["failures"] = check_line(ln, claims, brand, rules, boundaries)
+        if ln["kind"] == "framing" and framing_attributes(ln["text"], quotes):
+            ln["failures"].append({"check": "wording", "code": "FRAMING_ADDS_ATTRIBUTE",
+                                   "detail": f"{framing_attributes(ln['text'], quotes)}: not stated by the post's claims"})
     checks = crosscheck_lines(lines, claims, router, writer_endpoint, context, brand["cta"]) if router else {}
     unavailable = False
     for ln in lines:
