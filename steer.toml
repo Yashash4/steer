@@ -1,0 +1,48 @@
+# Steer Content Intelligence Pipeline: model settings (hackathon prototype).
+# Each job names an ordered fallback chain of endpoints. A link whose key environment variable is
+# not set is skipped. Keys are never written here: only the NAME of the environment variable.
+version = 1
+
+[jobs.extract]
+chain = ["claude_sonnet", "claude_opus", "anthropic_sonnet", "opencode_go"]
+
+[jobs.label]
+chain = ["claude_haiku", "claude_sonnet", "anthropic_haiku", "opencode_go"]
+
+# Claude Code headless, on the logged-in Claude account (minimal context, no tools).
+[endpoints.claude_sonnet]
+connector = "claude_cli"
+model = "sonnet"
+timeout = 300
+
+[endpoints.claude_opus]
+connector = "claude_cli"
+model = "opus"
+timeout = 300
+
+[endpoints.claude_haiku]
+connector = "claude_cli"
+model = "haiku"
+timeout = 300
+
+# The Anthropic Messages API (for teams with their own key).
+[endpoints.anthropic_sonnet]
+connector = "anthropic_api"
+model = "claude-sonnet-5-5"
+key_env = "ANTHROPIC_API_KEY"
+timeout = 300
+
+[endpoints.anthropic_haiku]
+connector = "anthropic_api"
+model = "claude-haiku-5-5"
+key_env = "ANTHROPIC_API_KEY"
+timeout = 300
+
+# Any OpenAI-compatible endpoint (OpenAI, OpenCode Go, OpenRouter, a local vLLM or Ollama...).
+# OpenCode Go: pick a model that does not train on prompts.
+[endpoints.opencode_go]
+connector = "openai_compatible"
+base_url = "https://opencode.ai/inference/go/openai/v1"
+model = "deepseek-v4-pro"
+key_env = "OPENCODE_API_KEY"
+timeout = 300

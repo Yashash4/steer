@@ -181,6 +181,33 @@ numbers. Hedges ("approximately", "about", "around", "roughly", "nearly", "~") a
 comparison. When the quote hedges a number and the claim drops the hedge, the claim still passes, with
 a `HEDGE_DROPPED` warning for the reviewer.
 
+## Model router (`steer.toml`)
+
+Every AI step ("job") runs on an ordered fallback chain of model endpoints named in `steer.toml` (or another
+file). Default chains:
+- `extract`: Claude Sonnet, then Claude Opus (through Claude Code), then the Anthropic API, then an
+  OpenAI-compatible endpoint;
+- `label`: Claude Haiku, then Sonnet, then the same fallbacks.
+
+Edit the file to change models.
+
+- **Connectors:**
+  - `claude_cli` runs Claude Code headless on the logged-in account with a minimal context:
+    `claude -p … --output-format json --tools "" --strict-mcp-config --setting-sources "" --no-session-persistence
+    --disable-slash-commands --system-prompt … --model … --json-schema …`. That is no tools, no MCP, no settings,
+    no saved session, run in an empty temporary folder. The job output is the envelope's `structured_output`.
+  - `anthropic_api` calls the Messages API with the key in the environment variable named by `key_env`.
+  - `openai_compatible` works with OpenAI, OpenCode Go, OpenRouter, or a local vLLM or Ollama. It sends a
+    `User-Agent` and one `x-opencode-session` per run.
+- **Behaviour:**
+  - Each endpoint gets one call and one retry, then the chain moves to the next endpoint.
+  - An error, a timeout, output that is not JSON, or JSON that fails the job's schema counts as a failure.
+  - A link whose key variable is not set is skipped.
+- **Logging:** every attempt is logged (endpoint, model, latency, outcome, and token counts only when the
+  connector reports them). Keys never appear in settings files or logs.
+- Measured on Claude Code 2.1.302: a default `claude -p "say ok"` call carried 32,023 input tokens; with
+  the flags above, 612.
+
 ## Licence
 
 AGPL-3.0-only (see `LICENSE`). PDF reading uses [PyMuPDF](https://github.com/pymupdf/PyMuPDF), which is
