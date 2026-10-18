@@ -63,8 +63,9 @@ def parse_json_text(text: str) -> object:
 
 # --- connectors: call(endpoint, system, prompt, schema) -> (output, usage | None) ---
 
-def claude_command(endpoint: dict, system: str, prompt: str, schema: dict) -> list[str]:
-    return ["claude", "-p", prompt, *CLAUDE_FLAGS, "--system-prompt", system,
+def claude_command(endpoint: dict, system: str, schema: dict) -> list[str]:
+    """The argv; the prompt goes on stdin (one argv string is capped at 128 KB on Linux)."""
+    return ["claude", "-p", *CLAUDE_FLAGS, "--system-prompt", system,
             "--model", endpoint["model"], "--json-schema", json.dumps(schema)]
 
 
@@ -88,8 +89,8 @@ def parse_claude_envelope(stdout: str) -> tuple[object, dict | None]:
 def claude_cli(endpoint: dict, system: str, prompt: str, schema: dict, **_) -> tuple[object, dict | None]:
     with tempfile.TemporaryDirectory(prefix="steer-claude-") as cwd:  # an empty folder: nothing to read or touch
         try:
-            run = subprocess.run(claude_command(endpoint, system, prompt, schema), cwd=cwd, capture_output=True,
-                                 text=True, timeout=endpoint.get("timeout", 300))
+            run = subprocess.run(claude_command(endpoint, system, schema), input=prompt, cwd=cwd,
+                                 capture_output=True, text=True, timeout=endpoint.get("timeout", 300))
         except subprocess.TimeoutExpired as e:
             raise ConnectorError("timeout", f"claude CLI timed out after {e.timeout} s") from e
         except FileNotFoundError as e:

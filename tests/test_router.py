@@ -108,8 +108,8 @@ def test_default_settings_models():
 # --- claude_cli: command and envelope ---
 
 def test_claude_command_is_minimal_and_tool_less():
-    cmd = claude_command({"model": "sonnet"}, "SYS", "PROMPT", SCHEMA)
-    assert cmd[:3] == ["claude", "-p", "PROMPT"]
+    cmd = claude_command({"model": "sonnet"}, "SYS", SCHEMA)
+    assert cmd[:2] == ["claude", "-p"] and "PROMPT" not in cmd
     joined = " ".join(cmd)
     for flag in ("--output-format json", "--strict-mcp-config", "--no-session-persistence", "--disable-slash-commands",
                  "--model sonnet", "--system-prompt SYS"):
@@ -191,3 +191,22 @@ def test_live_claude_cli_has_no_tools(tmp_path, monkeypatch):
     assert out == {"n": 0}
     assert not marker.exists() and not (tmp_path / "ran.txt").exists()
     assert usage and usage["input_tokens"] < 5000  # the minimal flags keep the context small
+
+
+def test_large_prompt_goes_on_stdin_not_argv(monkeypatch):
+    # one argv string is capped at 128 KB on Linux (MAX_ARG_STRLEN); a 200 KB chunk must travel on stdin
+    big = "x" * 200_000
+    seen = {}
+
+    class Done:
+        returncode, stderr = 0, ""
+        stdout = json.dumps({"subtype": "success", "is_error": False, "structured_output": {"n": 1}})
+
+    def fake_run(argv, **kw):
+        seen["argv"], seen["input"] = argv, kw.get("input")
+        return Done()
+    monkeypatch.setattr("steer_pipeline.router.subprocess.run", fake_run)
+    out, _ = claude_cli({"model": "sonnet"}, "sys", big, SCHEMA)
+    assert out == {"n": 1}
+    assert seen["input"] == big
+    assert all(len(a) < 131072 for a in seen["argv"]) and big not in seen["argv"]

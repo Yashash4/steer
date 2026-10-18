@@ -7,6 +7,8 @@ from pathlib import Path
 import json
 
 from . import contract, verify
+from .extract import extract
+from .router import Router, load_settings
 from .fetch import FetchError, fetch
 from .pdf import OcrRequired, ingest_pdf
 from .text import ingest_text
@@ -36,7 +38,20 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--doc", action="append", required=True, help="a contract document (repeatable)")
     v.add_argument("--min-words", type=int, default=verify.MIN_WORDS)
     v.add_argument("-o", "--out", required=True)
+    x = sub.add_parser("extract", help="propose claims with a model and keep only those the gate verifies")
+    x.add_argument("doc", help="a contract document (role evidence)")
+    x.add_argument("--settings", help="model settings file (default: steer.toml)")
+    x.add_argument("-o", "--out", required=True)
     args = ap.parse_args(argv)
+
+    if args.cmd == "extract":
+        run = extract(contract.load(args.doc), Router(load_settings(args.settings)))
+        Path(args.out).write_text(json.dumps(run, ensure_ascii=False, indent=1), encoding="utf-8")
+        s = run["summary"]
+        print(f"{s['proposed']} proposed: {s['passed']} passed, {s['needs_check']} need a check, {s['rejected']} rejected "
+              f"{s['rejected_by_reason']}, {s['flagged']} flagged, {s['chunks_failed']} chunks failed -> {args.out}",
+              file=sys.stderr)
+        return 0
 
     if args.cmd == "verify":
         claims = json.loads(Path(args.claims).read_text(encoding="utf-8"))

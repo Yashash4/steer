@@ -194,6 +194,31 @@ numbers. Hedges ("approximately", "about", "around", "roughly", "nearly", "~") a
 comparison. When the quote hedges a number and the claim drops the hedge, the claim still passes, with
 a `HEDGE_DROPPED` warning for the reviewer.
 
+## Claim extraction
+
+```bash
+uv run steer extract paper.json -o claims.json     # paper.json from `steer ingest ... --role evidence`
+```
+
+A model proposes claims from the paper, and the gate decides which ones are kept.
+- **Chunks:** the paper is cut into chunks of whole sentences: one per page (a sentence crossing a page break
+  goes with its start page), or 40 sentences when there are no pages. A chunk prompt over 30,000 characters is
+  split at sentence boundaries, never sent whole. The run records every chunk's sentence IDs and whether all
+  sentences were covered.
+- **Model output:** for each chunk the model returns JSON (`claim_text`, verbatim `quote`, `claim_type`,
+  `population`, `hedged`, `direction`, and `outcome`, `comparison_group`, `time_point`, `limitations` only when
+  the quote states them). Output is validated against a schema.
+- **The gate:** every claim goes through the gate. Rejected claims are kept in a rejected log with the
+  reasons and are never repaired. Passes with `LAYOUT_CHECK_NEEDED` or `SHORT_QUOTE` go to `needs_check`, not
+  `passed`.
+- **Flags code adds to kept claims** (not rejections):
+  - `CAUSAL_WORDING`: the claim states a cause ("causes", "leads to", "results in", "makes you", "because
+    of", "due to", "triggers", "prevents") and the quote does not;
+  - `LEAN_MASS_WORDING`: "muscle" in the claim, lean or fat-free mass in the quote;
+  - `HEDGE_MISMATCH`: the model's `hedged` value differs from the quote's wording ("may", "suggests",
+    "approximately"...);
+  - `CONTEXT_NOT_IN_QUOTE`: a context field the quote does not state.
+
 ## Model router (`steer.toml`)
 
 Every AI step ("job") runs on an ordered fallback chain of model endpoints named in `steer.toml` (or another
