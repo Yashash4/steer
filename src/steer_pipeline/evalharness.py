@@ -32,6 +32,7 @@ LIMITS = [
     "The extraction coverage match is word-overlap on sentence ids plus number equality: a ceiling, it cannot judge meaning.",
     "S1 soft-hyphen quirk: some stored quotes keep a soft hyphen from the PDF; the gate normalises it, a reader may see it.",
     "The checker (cross-check model) can be wrong both ways; its false positives are counted in section 3 only for the known fixtures.",
+    "Control XC-G3 is a fixture weakness: its claim says 'normal weight', which is outside the gold quote fragment, so a checker verdict of unsupported on it is arguably right; it is counted as recorded, not rewritten.",
     "The store holds the runs of 3 papers (West, Laverde, Narayan); the Ismaiel safety paper has an export file but no run in this store.",
     "Human time is a timestamp estimate from review actions (gaps over 10 minutes excluded), not measured attention.",
 ]
@@ -456,14 +457,14 @@ def to_markdown(r: dict) -> str:
         if i["type"] == "error":
             a = i["actual"]
             L.append(f"| {i['id']} | {i['layer']} | {'yes' if i['synthetic'] else 'no'} | {i['mutation']} | {i['expect']['category']} {i['expect'].get('code', '')} | "
-                     f"{(a['category'] + ' ' + ','.join(a['codes'])) if a else 'not run'} | {i['result']} |")
+                     f"{(a['category'] + ' ' + ','.join(a['codes']) + (f" [{a['model']}, {a['independence']}]" if a.get('model') else '')) if a else 'not run'} | {i['result']} |")
     L += ["", "## 3. False alarms (known-good items blocked)", "", tag, "", f"- {s3['wording']}.", f"- Blocked or lost flag: {s3['ids'] or 'none'}. Not run offline: {s3['not_run'] or 'none'}.", "",
           "| id | layer | synthetic | known-good item | expected | actual | result |", "|---|---|---|---|---|---|---|"]
     for i in r["items"]:
         if i["type"] == "control":
             a = i["actual"]
             L.append(f"| {i['id']} | {i['layer']} | {'yes' if i['synthetic'] else 'no'} | {i['mutation']} | {i['expect']['category']} {i['expect'].get('code', '')} | "
-                     f"{(a['category'] + ' ' + ','.join(a['codes'])) if a else 'not run'} | {i['result']} |")
+                     f"{(a['category'] + ' ' + ','.join(a['codes']) + (f" [{a['model']}, {a['independence']}]" if a.get('model') else '')) if a else 'not run'} | {i['result']} |")
     for x in s3["recorded_known"]:
         L.append(f"| {x['id']} | recorded model verdict | no | {x['source']} | supported | {x['recorded_verdict']} | {'false_alarm' if x['blocked'] else 'ok'} |")
     L += ["", "## 4. Extraction coverage (gold claims)", "", tag, "", f"- {s4['wording']}.", ""]
