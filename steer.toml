@@ -46,3 +46,24 @@ base_url = "https://opencode.ai/inference/go/openai/v1"
 model = "deepseek-v4-pro"
 key_env = "OPENCODE_API_KEY"
 timeout = 300
+
+# Controlled vocabularies for labels (Steer can extend them). Codes, not free text.
+[labels]
+themes = ["glp1_how_it_works", "insulin_resistance", "lean_mass_during_weight_loss", "weight_regain",
+          "indian_food_and_life"]
+doubts = ["is_it_safe", "will_i_lose_muscle", "will_weight_come_back", "only_for_diabetics", "is_it_for_me"]
+batch = 20
+
+# Rules check (code only). Word lists are matched as whole words or phrases, case-insensitive; patterns
+# with numbers live in code. Bump the version whenever a list changes.
+[rules]
+version = "rules-1"
+drug_brands = ["Ozempic", "Wegovy", "Mounjaro", "Zepbound", "Rybelsus", "Saxenda", "Victoza", "Trulicity",
+               "Byetta", "Bydureon", "Adlyxin", "Xenical", "Qsymia", "Contrave"]
+drug_names = ["semaglutide", "tirzepatide", "liraglutide", "dulaglutide", "exenatide", "lixisenatide",
+              "orforglipron", "retatrutide", "cagrilintide", "orlistat", "phentermine"]
+promise_words = ["guaranteed", "guarantee", "miracle", "melt away", "melts fat", "melt fat", "effortless",
+                 "without dieting", "permanent weight loss", "cure obesity", "lose weight fast"]
+hype_words = ["outsmart", "secret", "shocking", "surprised even", "doctors hate", "game changer", "game-changer",
+              "breakthrough", "magic", "hack", "you won't believe"]
+before_after = ["before and after", "before/after", "before & after", "transformation photo", "body transformation"]

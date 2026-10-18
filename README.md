@@ -236,6 +236,25 @@ A model proposes claims from the paper, and the gate decides which ones are kept
   - `POPULATION_NOT_IN_SECTION`: a population word not found in the chunk's text. The population may come
     from the section, not only the quote.
 
+## Labels and rules
+
+- **Labels** (`label.py`): the model gives each claim one theme and zero or more reader doubts, from the
+  controlled vocabularies in `steer.toml` (`[labels]`). The JSON schema lists them as enums, so any other
+  label fails validation. Claims the model skips are recorded as unlabeled, never guessed.
+- **Rules** (`rules.py`, code only) return flags with a code, the matched text, the profile and the rules version.
+  Word lists come from `[rules]` in `steer.toml` and are matched literally (never as regular expressions).
+  Number patterns ("lose 10 kg", "in 8 weeks you will") and the causal list are fixed in code.
+
+| Code | `claim_library` | `publication` |
+|---|---|---|
+| `DRUG_BRAND` (Ozempic, Wegovy, Mounjaro...) | flag | block |
+| `DRUG_NAME` (semaglutide, tirzepatide...) | flag | flag |
+| `PROMISE` (guaranteed, miracle, "lose N kg", "N kg in N weeks"...) | flag | block |
+| `HYPE` (secret, shocking, breakthrough...) | flag | flag |
+| `STEER_TEAM_CLAIM` (statements about Steer's doctors, team or results, unless from a Steer source) | flag | block |
+| `BEFORE_AFTER` | flag | block |
+| `CAUSAL_WORDING` (a cause the source quote does not state) | flag | flag |
+
 ## Model router (`steer.toml`)
 
 Every AI step ("job") runs on an ordered fallback chain of model endpoints named in `steer.toml` (or another

@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .normalize import canonical
 from .router import Router, RouterError
+from .rules import CAUSAL
 from .verify import REVIEW_WARNINGS, _Doc, check_claim
 
 CHUNK_SENTENCES = 40      # sentences per chunk when a document has no pages
@@ -64,8 +65,6 @@ Rules:
   limitations and populations.
 - If the section has no claims worth keeping, return an empty list."""
 
-CAUSAL = re.compile(r"\b(causes?|caused|causing|leads? to|led to|results? in|resulted in|makes? you|because of|"
-                    r"due to|triggers?|prevents?)\b", re.I)
 # hedges: modal words anywhere; approximation words only directly before a number ("data about diet" is not one)
 MODAL_HEDGE = re.compile(r"\b(may|might|could|suggests?|suggested|possibly|likely|appears? to|seems? to)\b", re.I)
 NUMBER_HEDGE = re.compile(r"(\b(about|around|roughly|nearly|approximately)\s+|[~≈]\s*)[+\-−]?\d", re.I)
