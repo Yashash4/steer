@@ -19,6 +19,10 @@ h2{font-size:clamp(26px,7vw,34px);font-style:italic}
 h3{font-size:22px;font-style:italic}
 .small{font-size:13px;color:var(--clay)}
 .context{font-size:17px;color:var(--ink);font-weight:400;line-height:1.4}
+.context.small{font-size:15px;color:var(--clay)}
+.prompt{font-weight:600;font-size:18px;color:var(--maroon)}
+.quals.tiny{gap:2px}.quals.tiny li{font-size:13px;color:var(--clay);padding:0 0 0 10px;margin:0;border-left:3px solid var(--blush);border-bottom:0}
+h4{font:600 15px var(--sans);color:var(--maroon);margin:8px 0 0}
 p{margin:0}
 .btn{appearance:none;border:0;cursor:pointer;font:600 17px/1.2 var(--sans);min-height:56px;padding:14px 28px;border-radius:999px;background:var(--rust);color:var(--cream);transition:transform .15s,opacity .15s,background .15s;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center}
 .btn:hover{background:var(--maroon)}

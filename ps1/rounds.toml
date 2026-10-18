@@ -30,7 +30,7 @@ under = "You guessed below the study on {n} of {m}"
 over = "You guessed above the study on {n} of {m}"
 close = "You were close on {n} of {m}"
 direction = "You got the direction right on {n} of {m}"
-meaning_title = "What this study tells us — and what it doesn't"
+meaning_title = "What these studies tell us — and what they don't"
 
 [cta]
 primary = "See if the programme fits you"
@@ -50,6 +50,10 @@ preview_title = "What Steer would receive"
 copy_label = "Copy my questions"
 share_label = "Share my questions"
 copied = "Copied"
+consent_short = "Consent"
+yes_label = "yes"
+your_guess = "Your guess"
+the_study = "The study"
 share_title = "Questions to take to a doctor"
 
 [[doubt]]
@@ -87,6 +91,7 @@ opener = "chai"
 # who and what was studied: its numbers must be in the claim's quote or the paper's context quotes
 context = "South Asian women aged 45+ with BMI below 25 in Chennai, Delhi and Karachi, compared with US white women."
 question = "Think a 'normal' BMI rules out diabetes?"
+prompt = "Guess: how did diabetes rates compare?"
 # one tap = guess + reveal. The value of a stop is the lower end of its bin (compared, never drawn); the answer is scored
 # by the bin it falls in (5.3 -> the last bin), so no label is the answer's own number.
 stops = [["About the same", 1], ["About 2×", 2], ["About 3×", 3], ["5× or more", 5]]
@@ -157,8 +162,8 @@ answer = "stomach"
 sentence = "Nausea, vomiting, diarrhea, and constipation were the most common gastrointestinal adverse effects."
 # no number in this round: the label is drawn large instead
 reveal_number = ""
-reveal_label = "most common gastrointestinal adverse effects"
-qualifiers = ["These findings are about this class of medicines, not one product.", "Seen in trials, not in everyday use.",
+reveal_label = "Mostly stomach and gut side effects"
+qualifiers = ["These findings are about this class of medicines, not one product.", "Measured in clinical trials.",
               "A doctor weighs the benefits against the side effects for each person."]
 fallback_gap = "gap-safety"
 

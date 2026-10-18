@@ -77,7 +77,7 @@ claims = {
                    "body": "Our papers don't answer this well. This is one to ask a doctor, with your own history."}],
     "readout": {"under": "You guessed below the study on {n} of {m}", "over": "You guessed above the study on {n} of {m}",
                 "close": "You were close on {n} of {m}", "direction": "You got the direction right on {n} of {m}",
-                "meaning_title": "What this study tells us — and what it doesn't"},
+                "meaning_title": "What these studies tell us — and what they don't"},
     "doctor_questions": {"is_it_for_me": ["Should my lab tests be read differently because I am South Asian?"],
                          "will_weight_come_back": ["What would a planned exit look like for me?"],
                          "will_i_lose_muscle": ["How do we protect my muscle while I lose weight?"],
@@ -106,7 +106,10 @@ claims["warm_lead"] = {"title": "What your first conversation could start from",
     "doubts_label": "Questions picked", "guesses_label": "Guesses and the real numbers", "name_label": "Name",
     "phone_label": "Phone", "consent_label": "I agree to be contacted (demo only)", "show_label": "Show what Steer would receive",
     "preview_title": "What Steer would receive", "copy_label": "Copy my questions", "share_label": "Share my questions",
-    "copied": "Copied", "share_title": "Questions to take to a doctor"}
+    "copied": "Copied", "consent_short": "Consent", "yes_label": "yes", "your_guess": "Your guess", "the_study": "The study", "share_title": "Questions to take to a doctor"}
+for r in [claims["hook"], *claims["rounds"]]:
+    r["prompt"] = None
+claims["hook"]["prompt"] = "Guess: how did diabetes rates compare?"
 jsonschema.validate(claims, json.loads((HERE.parent / "claims.schema.json").read_text()))
 for r in [claims["hook"], *claims["rounds"]]:
     for rv in r["reveals"]:

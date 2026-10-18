@@ -77,6 +77,8 @@ def test_the_build_uses_a_verified_claim_and_writes_a_valid_claims_json(stored, 
     rep = ps1.build(stored, tmp_path / "site", SETTINGS, rounds_file(tmp_path), playable=False, fonts=False)
     out = json.loads((tmp_path / "site" / "claims.json").read_text())
     assert out["hook"]["reveals"][0]["number"] == "352" and out["hook"]["quote"].startswith("A total of 352")
+    src = out["hook"]["source"]   # the source line names the location once: the short cite is author and year only
+    assert "," not in src["short"] and src["location"] not in src["short"], src
     assert rep["rounds"][0].startswith("hook: ") and "(verified)" in rep["rounds"][0]
     assert out["cta"]["primary"]["url"] == "https://steerclub.com/?utm_source=steer_quiz&utm_campaign=guess_the_number"
     assert (tmp_path / "site" / "index.html").exists() and "woff2" in (tmp_path / "site" / "style.css").read_text()
@@ -216,3 +218,30 @@ def test_progress_and_warm_lead_copy_are_fixed_strings():
     note = "Prototype only. Nothing is sent or stored. Use test details, not real contact information."
     assert ROUNDS["warm_lead"]["note"] == note and note in ps1.DISCLAIMERS
     assert ROUNDS["ui"]["progress"].replace("{n}", "").replace("{m}", "")
+
+
+def test_the_gl1_digit_exception_is_only_the_exact_token():
+    assert not ps1.has_number("All weight-management medicines, not only GLP-1.")
+    for bad in ("Only GLP-2 was studied.", "Fell by 1 kg.", "GLP-10", "GLP-1 and 2 kg", "GLP-12"):
+        assert ps1.has_number(bad), bad
+
+
+def test_safety_qualifier_wording_and_titles():
+    r = ROUND["safety"]
+    assert "Measured in clinical trials." in r["qualifiers"] and not any("everyday" in q for q in r["qualifiers"])
+    b = checks.load_boundaries("PMC12532569")
+    assert any(checks._has("Measured in clinical trials.", w) for w in next(x for x in b["require_qualifier"] if "trials" in x["why"])["any_of"])
+    assert ROUNDS["readout"]["meaning_title"] == "What these studies tell us — and what they don't"
+    assert r["reveal_label"] == "Mostly stomach and gut side effects"
+    assert ROUND["hook"]["prompt"] == "Guess: how did diabetes rates compare?"
+
+
+def test_every_surface_draws_the_qualifiers_through_one_helper():
+    """The reveal, the readout, the form preview and the copied/shared text all take a round's qualifiers from quals()/qualList()
+    (the browser play in ps1/test/offline_check.py asserts the rendered text of each surface)."""
+    js = (ps1.PS1 / "app.js").read_text()
+    body = lambda name: js.split(f"function {name}(", 1)[1].split("\nfunction ", 1)[0]
+    assert "qualList(round)" in body("reveal") and "qualList(g.round" in body("readout")
+    assert "qualList(g.round" in body("warmLead") and "quals(g.round)" in body("warmLead")   # preview and copy/share text
+    for r in ROUNDS["round"]:   # a finding always has its own qualifiers, or the build-wide group-comparison note
+        assert r["qualifiers"] or ROUNDS["ui"]["reveal_note"], r["id"]

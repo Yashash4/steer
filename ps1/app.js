@@ -2,6 +2,8 @@
 const main = document.querySelector("main");
 const COMMA = String.fromCharCode(44);
 const COLON = String.fromCharCode(58);
+const DOT = String.fromCharCode(183);
+const NL = String.fromCharCode(10);
 let C;
 let S;
 
@@ -92,8 +94,9 @@ function slider(round, onChange) {
 
 function ask(round, done, n) {
   const nodes = [progress(n), h("p", "opener", round.opener)];
-  if (round.context) nodes.push(h("p", "context", round.context));
   nodes.push(h("h1", "q", round.question));
+  if (round.context) nodes.push(h("p", ["context", "small"], round.context));
+  if (round.prompt) nodes.push(h("p", "prompt", round.prompt));
   if (round.kind === "choice") {
     const box = h("div", "choices");
     round.stops.forEach((s, i) => {
@@ -112,6 +115,16 @@ function ask(round, done, n) {
   show(...nodes);
 }
 
+// a finding is never drawn without its qualifiers: the round's own, or the note that it is a group comparison
+function quals(round) {
+  return round.qualifiers.length ? round.qualifiers : (C.ui.reveal_note ? [C.ui.reveal_note] : []);
+}
+function qualList(round, cls) {
+  const ul = h("ul", cls || "quals");
+  quals(round).forEach((q) => ul.append(h("li", null, q)));
+  return ul;
+}
+
 function reveal(round, idx, next) {
   const nodes = [];
   round.reveals.forEach((rv) => {
@@ -126,9 +139,7 @@ function reveal(round, idx, next) {
   const g = h("p", "guess");
   g.append(h("span", null, C.ui.you_guessed), h("b", null, round.stops[idx].label));
   nodes.push(g);
-  const ul = h("ul", "quals");
-  round.qualifiers.forEach((q) => ul.append(h("li", null, q)));
-  if (C.ui.reveal_note && !round.qualifiers.length) ul.append(h("li", null, C.ui.reveal_note));   // never personal risk
+  const ul = qualList(round);
   if (ul.children.length) nodes.push(ul);
   const src = h("p", "src");
   src.append(h("span", null, round.source.short), h("span", null, round.source.location));
@@ -244,7 +255,12 @@ function readout() {
   const mean = h("div", "card");
   mean.append(h("h2", null, C.readout.meaning_title));
   const ul = h("ul", "list");
-  S.guesses.forEach((g) => g.round.reveals.forEach((rv) => ul.append(h("li", null, rv.sentence))));
+  S.guesses.forEach((g) => {
+    const li = h("li");
+    g.round.reveals.forEach((rv) => li.append(h("p", null, rv.sentence)));
+    li.append(qualList(g.round, ["quals", "tiny"]), h("p", "small", g.round.source.short));
+    ul.append(li);
+  });
   mean.append(ul);
   nodes.push(mean);
   const qs = questions();
@@ -300,19 +316,35 @@ function warmLead() {
   prev.hidden = true;
   const showBtn = button(w.show_label, () => {
     const sep = COLON + " ";
-    const rows = [[w.name_label, name.value], [w.phone_label, phone.value], [w.consent_label, tick.checked ? "x" : ""],
+    const rows = [[w.name_label, name.value], [w.phone_label, phone.value], [w.consent_short, tick.checked ? w.yes_label : ""],
       [w.doubts_label, S.picked.map((d) => d.label).join(COMMA + " ")]];
-    S.guesses.forEach((g) => rows.push([w.guesses_label,
-      g.round.stops[g.idx].label + sep + g.round.reveals.map((rv) => rv.number || rv.label).join(" ")]));
-    rows.push([C.ui.questions_title, questions().join(" ")]);
-    prev.replaceChildren(h("h3", null, w.preview_title), ...rows.map((r) => h("p", "prow", r[0] + sep + r[1])));
+    const gl = h("ul", "list");
+    S.guesses.forEach((g) => {
+      const li = h("li");
+      li.append(h("p", null, w.your_guess + sep + g.round.stops[g.idx].label + " " + DOT + " " + w.the_study + sep +
+        g.round.reveals.map((rv) => (rv.number ? rv.number + " " : "") + rv.label).join(" ")), qualList(g.round, ["quals", "tiny"]));
+      gl.append(li);
+    });
+    const ql = h("ul", "list");
+    questions().forEach((q) => ql.append(h("li", null, q)));
+    prev.replaceChildren(h("h3", null, w.preview_title), ...rows.map((r) => h("p", "prow", r[0] + sep + r[1])),
+      h("h4", null, w.guesses_label), gl, h("h4", null, C.ui.questions_title), ql);
     prev.hidden = false;
   }, "alt");
   showBtn.disabled = true;
   tick.addEventListener("change", () => { showBtn.disabled = !tick.checked; if (!tick.checked) prev.hidden = true; });
   const status = h("span", "small");
   status.setAttribute("role", "status");
-  const text = () => questions().join(String.fromCharCode(10));
+  // the questions, then what the studies said with the same qualifiers as on screen (never a finding alone)
+  const text = () => {
+    const out = [C.ui.questions_title].concat(questions(), [""]);
+    S.guesses.forEach((g) => {
+      g.round.reveals.forEach((rv) => out.push(rv.sentence));
+      quals(g.round).forEach((q) => out.push(q));
+      out.push(g.round.source.short, "");
+    });
+    return out.join(NL);
+  };
   const cp = button(w.copy_label, () => copyText(text(), status), "alt");
   const sh = button(w.share_label, () => {
     if (navigator.share) navigator.share({ title: w.share_title, text: text() }).catch(() => {});

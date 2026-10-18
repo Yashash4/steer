@@ -79,7 +79,8 @@
   "claim_ids": [
    "run-244d0fbd0c04/c004-01"
   ],
-  "opener": "Chai break at the office, and someone brings up blood sugar."
+  "opener": "Chai break at the office, and someone brings up blood sugar.",
+  "prompt": "Guess: how did diabetes rates compare?"
  },
  "doubts": [
   {
@@ -170,7 +171,8 @@
    "claim_ids": [
     "run-a7cddabed62e/c000-01"
    ],
-   "opener": "On the bus home, a reel about weight medicines pops up on the phone."
+   "opener": "On the bus home, a reel about weight medicines pops up on the phone.",
+   "prompt": null
   },
   {
    "id": "muscle-a",
@@ -211,7 +213,8 @@
     "full": "Laverde et al. GLP-1 receptor agonists and lean mass: systematic review and meta-analysis. International Journal of Obesity, 2026."
    },
    "claim_ids": [],
-   "opener": "Morning in the neighbourhood park, and a friend asks about sugar tests."
+   "opener": "Morning in the neighbourhood park, and a friend asks about sugar tests.",
+   "prompt": null
   },
   {
    "id": "muscle-b",
@@ -252,7 +255,8 @@
    "claim_ids": [
     "run-e4d5ed8559e6/c000-00"
    ],
-   "opener": "A cousin's wedding, and the aunties are comparing health reports."
+   "opener": "A cousin's wedding, and the aunties are comparing health reports.",
+   "prompt": null
   }
  ],
  "gap_cards": [
@@ -275,7 +279,7 @@
   "over": "You guessed above the study on {n} of {m}",
   "close": "You were close on {n} of {m}",
   "direction": "You got the direction right on {n} of {m}",
-  "meaning_title": "What this study tells us — and what it doesn't"
+  "meaning_title": "What these studies tell us — and what they don't"
  },
  "doctor_questions": {
   "is_it_for_me": [
@@ -317,6 +321,10 @@
   "copy_label": "Copy my questions",
   "share_label": "Share my questions",
   "copied": "Copied",
+  "consent_short": "Consent",
+  "yes_label": "yes",
+  "your_guess": "Your guess",
+  "the_study": "The study",
   "share_title": "Questions to take to a doctor"
  }
 }

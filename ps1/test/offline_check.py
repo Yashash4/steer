@@ -16,6 +16,18 @@ claims = json.loads(_html.split('<script type="application/json" id="claims">', 
 url = page_path.as_uri()
 if shots: shots.mkdir(parents=True, exist_ok=True)
 
+def quals_of(r):   # the qualifiers a finding must carry on every surface
+    return r["qualifiers"] or [claims["ui"]["reveal_note"]]
+
+def played():      # the rounds a full play (every open doubt picked) guesses
+    return [claims["hook"], *claims["rounds"]]
+
+def need_everywhere(text, where, only=None):
+    flat = " ".join(text.split()).replace("/m\u00b2", "/m2")   # the page draws kg/m2 as kg/m²
+    for r in only or played():
+        for q in quals_of(r): assert q in flat, f"{where}: {q!r} missing for {r['id']}"
+        for rv in r["reveals"]: assert rv["sentence"] in flat or where.startswith("preview"), f"{where}: {rv['sentence']!r} missing"
+
 def play(browser, w, h, tag):
     reqs = []
     ctx = browser.new_context(viewport={"width": w, "height": h}, device_scale_factor=1)
@@ -23,6 +35,8 @@ def play(browser, w, h, tag):
         if route.request.url == url: return route.continue_()
         reqs.append(route.request.url); route.abort()
     ctx.route("**/*", gate)
+    try: ctx.grant_permissions(["clipboard-read", "clipboard-write"])
+    except Exception: pass
     p = ctx.new_page()
     p.on("request", lambda r: reqs.append(r.url) if r.url != url else None)
     snap = lambda n: shots and (p.wait_for_timeout(450), p.screenshot(path=str(shots / f"{tag}-{n}.png"), full_page=True))
@@ -35,6 +49,10 @@ def play(browser, w, h, tag):
     assert p.locator(".btn").count() == 0, "a lock/next button on the hook"
     assert p.locator(".choice").count() == len(hook["stops"]) and p.locator(".choice.on").count() == 0
     assert [p.locator(".choice").nth(i).inner_text() for i in range(len(hook["stops"]))] == [s["label"] for s in hook["stops"]]
+    # order on the hook: opener, headline, context line, guess prompt, buttons
+    order = p.evaluate("[...document.querySelector('.screen').children].map(e => e.className.split(' ')[0])")
+    assert order == ["progress", "opener", "q", "context", "prompt", "choices"], order
+    assert p.inner_text(".prompt") == hook["prompt"]
     assert p.inner_text(".opener") == hook["opener"] and p.locator(".opener").is_visible(), "opener missing"
     assert p.inner_text(".progress") == claims["ui"]["progress_first"].replace("{n}", "1")
     snap("01-hook")
@@ -51,12 +69,18 @@ def play(browser, w, h, tag):
         if d["answered_by"] != ["hook"]: steps += d["answered_by"]
     total = 1 + len(steps)
     p.click(".btn")
-    k, seen_n = 6, 1
+    k, seen_n, readout_done = 6, 1, False
     while True:   # follow the screens this build has, in order
         p.wait_for_timeout(350)
         if p.locator(".warm").count():
             break
         if p.locator("h1.q").count() and p.inner_text("h1.q") == claims["ui"]["readout_title"]:
+            if not readout_done:
+                body = p.inner_text("main")
+                assert claims["readout"]["meaning_title"] in body
+                need_everywhere(body, "readout")
+                for r in played(): assert r["source"]["short"] in body, "short cite missing on the readout"
+                readout_done = True
             snap(f"{k:02}-readout"); k += 1; p.click(".btn"); continue
         if p.locator(".card.gap").count() or (p.locator("h1.q").count() or p.locator(".choice").count()):
             # an ask screen or an info card: opener and "Question N of M", N never above M and counting up
@@ -95,10 +119,19 @@ def play(browser, w, h, tag):
     prev = p.inner_text(".preview")
     w = claims["warm_lead"]
     for must in (w["preview_title"], w["name_label"] + ": Test Person", w["phone_label"] + ": 0000000000", w["doubts_label"] + ": ",
-                 w["guesses_label"] + ": ", claims["ui"]["questions_title"] + ": "):
+                 w["consent_short"] + ": " + w["yes_label"], w["guesses_label"], claims["ui"]["questions_title"]):
         assert must in prev, (must, prev)
+    assert prev.count(w["guesses_label"]) == 1 and prev.count(w["your_guess"] + ": ") == len(played())
+    assert "demo only): x" not in prev
+    need_everywhere(prev, "preview")
     p.locator(".warm .btn").nth(1).click(); p.wait_for_timeout(300)
     p.locator(".warm .btn").nth(2).click(); p.wait_for_timeout(300)
+    try:
+        copied = p.evaluate("navigator.clipboard.readText()")
+    except Exception:
+        copied = None
+    assert copied is not None and claims["ui"]["questions_title"] in copied, "the copied text could not be read back"
+    need_everywhere(copied, "copied text")
     assert p.evaluate("location.href") == here, "the url changed"
     snap(f"{k:02}-form-preview"); k += 1
     hrefs = [p.locator("a.btn").nth(i).get_attribute("href") for i in (0, 1)]

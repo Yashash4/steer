@@ -205,7 +205,7 @@
         },
         "meaning_title": {
           "type": "string",
-          "description": "'What this study tells us — and what it doesn't' (then the revealed sentences only)"
+          "description": "'What these studies tell us — and what they don't' (then the revealed sentences with their qualifiers and short cites)"
         },
         "direction": {
           "type": "string",
@@ -257,7 +257,11 @@
         "copy_label",
         "share_label",
         "copied",
-        "share_title"
+        "share_title",
+        "consent_short",
+        "yes_label",
+        "your_guess",
+        "the_study"
       ],
       "properties": {
         "title": {
@@ -299,6 +303,18 @@
           "type": "string"
         },
         "share_title": {
+          "type": "string"
+        },
+        "consent_short": {
+          "type": "string"
+        },
+        "yes_label": {
+          "type": "string"
+        },
+        "your_guess": {
+          "type": "string"
+        },
+        "the_study": {
           "type": "string"
         }
       }
@@ -361,7 +377,8 @@
         "quote",
         "source",
         "claim_ids",
-        "opener"
+        "opener",
+        "prompt"
       ],
       "properties": {
         "id": {
@@ -474,6 +491,13 @@
         "opener": {
           "type": "string",
           "description": "one daily-life framing line above the question: no health fact, no number, no attribute the claim does not state"
+        },
+        "prompt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "small guess prompt right above the buttons (framing)"
         }
       }
     }

@@ -31,9 +31,17 @@ DISCLAIMERS = {"Educational hackathon prototype · content pending review by a S
 FIXED_QUALIFIERS = {"An average across studies, not a prediction for you.", "All weight-management medicines, not only GLP-1.",
                     "Results varied a lot between studies.", "A comparison between groups in one study, not a prediction for you.",
                     # the safety paper's boundaries rules (class, in trials, a doctor weighs benefits and side effects)
-                    "These findings are about this class of medicines, not one product.", "Seen in trials, not in everyday use.",
+                    "These findings are about this class of medicines, not one product.", "Measured in clinical trials.",
                     "A doctor weighs the benefits against the side effects for each person."}
 # copy that must never appear anywhere in the quiz (the hook asks about the difference, not about "her" risk or a "slim" woman)
+GLP1 = re.compile(r"\bGLP-1\b(?![\w-])")
+
+
+def has_number(text: str) -> bool:
+    """A digit in a qualifier, except inside the exact class name "GLP-1" ("GLP-2", "GLP-10" and "1 kg" still count)."""
+    return bool(re.search(r"\d", GLP1.sub("", text)))
+
+
 FORBIDDEN_COPY = re.compile(r"\bslim\b|\bher risk\b", re.I)
 FALLS = re.compile(r"\b(fell|fall|falls|decrease[sd]?|lower|dropped|drop|loss|lost)\b", re.I)
 
@@ -69,11 +77,12 @@ def _run_for(con, pmcid: str) -> str:
     raise BuildError(f"no stored run for {pmcid}")
 
 
+# "short" is author and year only: the location is its own field
 def _source(doc: dict, claim: dict) -> dict:
     from .posts import sources
     from .render import journal_display, short_source
     s = sources([claim["claim_id"]], {claim["claim_id"]: claim}, doc)[0]
-    return {"short": short_source(s).rsplit(",", 1)[0], "location": s["location"], "doi": s["doi"] or "",
+    return {"short": short_source(s).split(",")[0], "location": s["location"], "doi": s["doi"] or "",
             "full": f"{s['authors']} {s['title']}. {journal_display(s['journal'])}, {s['year']}."}
 
 
@@ -118,7 +127,9 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
                 continue
             raise BuildError(why)
         # each revealed number in its quote; number and label exact substrings of the checked sentence
-        if r["reveal_number"] not in r["sentence"] or r["reveal_label"] not in r["sentence"]:
+        # with a number, number and label are copied from the sentence; a round without one has a plain headline instead,
+        # checked as a health line of its own (below)
+        if r["reveal_number"] and (r["reveal_number"] not in r["sentence"] or r["reveal_label"] not in r["sentence"]):
             raise BuildError(f"round {r['id']}: the reveal number and label must be copied from its sentence")
         if r["opener"] not in openers:
             raise BuildError(f"round {r['id']}: no opener {r['opener']!r}")
@@ -138,11 +149,15 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
             raise BuildError(f"round {r['id']}: a choice label must never be the answer itself")
         lines.append(("health", r["sentence"], [c["claim_id"]], f"{r['id']}/sentence", r["pmcid"]))
         lines.append(("framing", r["question"], [], f"{r['id']}/question", r["pmcid"]))
+        if r.get("prompt"):
+            lines.append(("framing", r["prompt"], [], f"{r['id']}/prompt", r["pmcid"]))
+        if not r["reveal_number"]:
+            lines.append(("health", r["reveal_label"], [c["claim_id"]], f"{r['id']}/headline", r["pmcid"]))
         lines.append(("opener", openers[r["opener"]], [], f"{r['id']}/opener", r["pmcid"]))
         lines += [("qualifier" if q in FIXED_QUALIFIERS else "framing", q, [c["claim_id"]], f"{r['id']}/qualifier", r["pmcid"])
                   for q in r.get("qualifiers", [])]
         out_rounds.append({"id": r["id"], "doubt": r["doubt"], "kind": r["kind"], "context": r.get("context"),
-                           "question": r["question"], "opener": openers[r["opener"]], "stops": [{"label": s[0], "value": s[1]} for s in r["stops"]],
+                           "question": r["question"], "opener": openers[r["opener"]], "prompt": r.get("prompt"), "stops": [{"label": s[0], "value": s[1]} for s in r["stops"]],
                            "answer": r["answer"],
                            "reveals": [{"number": r["reveal_number"], "label": r["reveal_label"], "sentence": r["sentence"]}],
                            "qualifiers": r.get("qualifiers", []), "quote": c["quote"], "source": _source(doc, c),
@@ -228,7 +243,7 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
                  if not (kind == "qualifier" and f["code"] == "FRAMING_HAS_NUMBER")
                  # the disclaimer states the review status ("content pending review by a Steer doctor"), like the draft mark
                  and not (kind == "disclaimer" and f["code"] == "STEER_TEAM_CLAIM")]
-        if kind == "qualifier" and re.search(r"\d", text.replace("GLP-1", "")):   # the class name, not a number
+        if kind == "qualifier" and has_number(text):
             fails.append({"code": "QUALIFIER_HAS_NUMBER", "detail": text})
         for f in fails:
             report["failures"].append(f"{where}: {f['code']} ({f.get('detail', '')})")
