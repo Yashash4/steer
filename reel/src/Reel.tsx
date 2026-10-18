@@ -41,7 +41,7 @@ const PresenterLayer = (p: { pr: Presenter; sceneStart: number; c: Colors; scale
         background: `linear-gradient(to bottom, transparent 0%, ${p.c.ground}d9 38%, ${p.c.ground} 70%)` }} />
       <div style={{
         position: "absolute", top: L.pill.top, left: 48, height: L.pill.height, boxSizing: "border-box", padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
-        fontSize: 26, color: LABEL_INK, background: LABEL_BG,
+        fontSize: 26, color: LABEL_INK, background: LABEL_BG, textShadow: "none",
       }}>{p.pr.label}</div>
     </Sequence>
   );

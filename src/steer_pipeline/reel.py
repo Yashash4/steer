@@ -346,7 +346,7 @@ def label_present(path: Path, t: float, box: tuple = None) -> bool:
         return False
     white = sum(1 for q in px if min(q) > 225) / len(px)
     dark = sum(1 for q in px if max(q) < 90) / len(px)
-    return white > 0.4 and dark > 0.03
+    return white > 0.3 and dark > 0.03   # the label's text is dense: a third of the box is still its white ground
 
 
 def transcript_table(scene_rounds: list[dict]) -> str:
