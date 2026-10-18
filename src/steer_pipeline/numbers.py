@@ -77,8 +77,14 @@ def _value(digits: str, sign: str | None) -> Decimal:
     return -v if sign == "-" else v
 
 
+_PRONOUN_ONE = re.compile(r"\b(?:any|no|every|each)\s+one\b", re.IGNORECASE)   # "one of" stays a number (checks.PRONOUNS)
+
+
 def _words_to_digits(text: str) -> str:
-    return re.sub(r"\b(" + "|".join(NUMBER_WORDS) + r")\b", lambda m: NUMBER_WORDS[m.group(1).lower()],
+    """Number words as digits, except "one" used as a pronoun ("any one person", "no one"): not a count."""
+    keep = [m.span() for m in _PRONOUN_ONE.finditer(text)]
+    return re.sub(r"\b(" + "|".join(NUMBER_WORDS) + r")\b",
+                  lambda m: m.group(1) if any(a <= m.start() < b for a, b in keep) else NUMBER_WORDS[m.group(1).lower()],
                   text, flags=re.IGNORECASE)
 
 

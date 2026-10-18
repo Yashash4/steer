@@ -1,6 +1,6 @@
 # Content boundaries for West S et al., BMJ 2026 (DOI 10.1136/bmj-2025-085304). No page layout (PMC text).
 # Editorial input, versioned. Claims are matched by text in their quote (canonical form).
-version = 3
+version = 4
 pmcid = "PMC12776922"
 doi = "10.1136/bmj-2025-085304"
 
@@ -32,10 +32,13 @@ any_of = ["back to", "came back", "back level with", "regained to", "returned to
 why = "'no different from control' must say the weight came back to the comparison groups' level, not that the medicine did nothing"
 
 # The 0.4 kg average covers all weight-management medicines: never present it as a GLP-1-only or drug-specific figure.
+# v4: the exact negation "not only GLP-1" is excepted: the studio clearance requires it on the same slide (require_qualifier
+# above), and it says the opposite of what the ban prevents. Any other use of "GLP-1" on the line stays banned.
 [[avoid_phrase]]
 text = "GLP-1"
 kinds = ["health"]
 when_claim_quote_contains = ["0.4 kg"]
+except = ["not only GLP-1"]
 why = "the 0.4 kg average is across all weight-management medicines, not GLP-1 only"
 
 [[avoid_phrase]]

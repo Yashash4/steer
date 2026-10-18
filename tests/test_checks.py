@@ -105,6 +105,14 @@ def test_avoid_phrases_are_scoped():
     assert "AVOID_PHRASE" in codes(L("framing", "You'll gain it all back"), WEST)
     assert "AVOID_PHRASE" in codes(L("health", "With GLP-1 medicines weight came back at 0.4 kg a month on average.",
                                      ["regain"]), WEST)
+    # v4: the exact negation the clearance requires passes; any other GLP-1 wording on the line stays banned
+    zero4 = lambda t: codes(L("health", t, ["regain"]), WEST)
+    assert "AVOID_PHRASE" not in zero4("On average, weight came back at 0.4 kg a month across all weight management medicines, "
+                                       "not only GLP-1, and not a prediction for you.")
+    assert "AVOID_PHRASE" not in zero4("On average, weight came back at 0.4 kg a month: not only GLP-1.")
+    assert "AVOID_PHRASE" in zero4("GLP-1 users regained 0.4 kg a month on average.")
+    assert "AVOID_PHRASE" in zero4("On average, not only GLP-1 users regained 0.4 kg a month.")
+    assert "AVOID_PHRASE" in zero4("Not only GLP-1, on average GLP-1 users regained 0.4 kg a month.")
     # Laverde: no drug-by-drug comparison
     assert "AVOID_PHRASE" in codes(L("health", "Semaglutide lowered absolute lean mass by −1.74 kg.", ["lean_abs"]), LAVERDE)
 
@@ -528,3 +536,9 @@ def test_a_setting_line_must_repeat_a_health_line_of_the_post_on_the_reel_only()
         if ln["kind"] == "setting":
             fails = not any(checks._norm(ln["text"]) in checks._norm(h) for h in texts)
             assert fails == (ln is lines[2]) or fails == (ln["text"] == bad["text"])
+
+
+def test_one_as_a_pronoun_is_not_a_number():
+    from steer_pipeline.numbers import _words_to_digits as w
+    assert w("not a prediction for any one person; no one at home; one of three") == "not a prediction for any one person; no one at home; 1 of 3"
+    assert w("one in two adults, ten times") == "1 in 2 adults, 10 times"

@@ -139,6 +139,15 @@ def _without_qualifiers(text: str, boundaries: dict) -> str:
     return text
 
 
+def _drop_exceptions(text: str, phrases: list[str]) -> str:
+    """The text without each exact exception phrase (e.g. the negation "not only GLP-1"), only where the phrase ends there:
+    at the end, before punctuation or before and/or/but/not; "not only GLP-1 users" is another phrase and stays."""
+    c = canonical(text)[0]
+    for p in phrases:
+        c = re.sub(re.escape(canonical(p)[0]) + r"(?=\s*(?:$|[^\w\s-]|(?:and|or|but|not)\b))", " ", c)
+    return c
+
+
 def _avoid_applies(rule: dict, line: dict, claims: list[dict]) -> bool:
     if line["kind"] not in rule.get("kinds", ["health"]):
         return False
@@ -203,7 +212,7 @@ def check_line(line: dict, claims: dict[str, dict], brand: dict, rules: dict, bo
                 fails.append({"check": "wording", "code": "COMPARATOR_NOT_IN_CLAIM",
                               "detail": f"{phrase!r} is not a comparison group of the line's claims"})
     for rule in boundaries.get("avoid_phrase", []):
-        if _avoid_applies(rule, line, used) and _has(text, rule["text"]):
+        if _avoid_applies(rule, line, used) and _has(_drop_exceptions(text, rule.get("except", [])), rule["text"]):
             fails.append({"check": "wording", "code": "AVOID_PHRASE", "detail": f"{rule['text']!r}: {rule.get('why', '')}"})
     line["flags"] = [f for f in flags if f["action"] == "flag" and f["code"] != "CAUSAL_WORDING"]
     return fails

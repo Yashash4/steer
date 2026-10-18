@@ -218,7 +218,8 @@ def write_prompt(brief: dict, claims: list[dict], brand: dict, boundaries: dict)
                          + " and ".join(f"a claim whose quote has one of {frags(e)}{label(e)}" for e in need)
                          + f"{where} ({r.get('why', '')})")
     for r in boundaries.get("avoid_phrase", []):
-        lines.append(f"- never write {r['text']!r} in {r.get('kinds', ['health'])} lines ({r.get('why', '')})")
+        exc = f", except in the exact phrase(s) {r['except']}" if r.get("except") else ""
+        lines.append(f"- never write {r['text']!r} in {r.get('kinds', ['health'])} lines{exc} ({r.get('why', '')})")
     return "\n".join(lines)
 
 
