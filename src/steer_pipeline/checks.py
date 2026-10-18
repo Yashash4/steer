@@ -472,8 +472,13 @@ def check_post(post: dict, claims: dict[str, dict], brand: dict, rules: dict, bo
     lines += [{"kind": k, "text": post[k], "claim_ids": used, "path": k, "surface": "studio", "unit": 0}
               for k in ("message", "reasoning")] + key_lines(post)
     quotes = " ".join(claims[i]["quote"] for i in used if i in claims)
+    health_text = [x["text"] for x in lines if x["kind"] == "health"]
     for ln in lines:
         ln["failures"] = check_line(ln, claims, brand, rules, boundaries)
+        # a setting line (reel only: shown, never spoken) repeats who was studied: it must be an exact run of a checked
+        # health line of this post, so it adds no fact of its own
+        if ln["kind"] == "setting" and (ln.get("surface") != "reel" or not any(_norm(ln["text"]) in _norm(h) for h in health_text)):
+            ln["failures"].append({"check": "structure", "code": "SETTING_NOT_FROM_A_LINE", "detail": ln["text"]})
         if ln["kind"] == "framing" and framing_attributes(ln["text"], quotes):
             ln["failures"].append({"check": "wording", "code": "FRAMING_ADDS_ATTRIBUTE",
                                    "detail": f"{framing_attributes(ln['text'], quotes)}: not stated by the post's claims"})

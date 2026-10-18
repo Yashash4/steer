@@ -513,3 +513,18 @@ def test_safety_boundaries_exclude_null_results_for_rare_events():
     assert checks.excluded({"quote": "At the same time, no significant increase in risk was observed for acute pancreatitis."}, b)
     assert checks.excluded({"quote": "The risk of gallstone-related complications, cholelithiasis, cholecystitis did not significantly increase."}, b)
     assert not checks.excluded({"quote": "A total of 29 trials were evaluated regarding the risk of nausea in patients receiving GLP-1 RAs."}, b)
+
+
+def test_a_setting_line_must_repeat_a_health_line_of_the_post_on_the_reel_only():
+    from steer_pipeline import checks
+    health = {"kind": "health", "text": "Adults aged 45 and over in Chennai, Delhi and Karachi had 5.3 times the risk.", "claim_ids": ["c"]}
+    ok = {"kind": "setting", "text": "adults aged 45 and over in Chennai, Delhi and Karachi", "claim_ids": []}
+    bad = {"kind": "setting", "text": "adults of all ages everywhere", "claim_ids": []}
+    post = {"message": "m", "reasoning": "r", "format": "carousel", "slides": [], "caption": {"lines": [], "hashtags": []},
+            "reel_script": {"scenes": [{"lines": [health]}, {"lines": [ok, bad]}]}}
+    lines = checks.post_lines(post)
+    texts = [x["text"] for x in lines if x["kind"] == "health"]
+    for ln in lines:
+        if ln["kind"] == "setting":
+            fails = not any(checks._norm(ln["text"]) in checks._norm(h) for h in texts)
+            assert fails == (ln is lines[2]) or fails == (ln["text"] == bad["text"])

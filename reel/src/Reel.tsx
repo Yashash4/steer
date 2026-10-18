@@ -262,7 +262,12 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
         }} />
       )}
       <div style={{ position: "absolute", left: 60, top: L.wordmark.top - 14, height: 4, width: 960 * rule, background: props.palette.blush }} />
-      {scene.lines.map((l, i) => l.cards && l.cards_style === "stack" ? (
+      {scene.lines.map((l, i) => l.kind === "setting" ? (
+        // shown, never spoken: who was studied, an exact run of the scene's checked health line
+        <div key={i} style={{ position: "absolute", left: 60, width: 960, top: L.setting.top, height: L.setting.height, display: "flex",
+          alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: SANS, fontWeight: 600,
+          fontSize: fit(l.text, SANS, 600, 2, 960, 30, 22).fontSize, lineHeight: 1.2, color: c.ink, opacity: 0.9 }}>{l.text}</div>
+      ) : l.cards && l.cards_style === "stack" ? (
         <div key={i}>
           <StackCards line={l} cards={l.cards} t={t} accent={props.palette.blush} />
           {l.evidence ? <PhoneEvidence e={l.evidence} t={t} ink={props.palette.ink} accent={props.palette.rust} /> : null}

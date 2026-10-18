@@ -63,5 +63,9 @@
   "checklist_presenter": {
     "top": 1060,
     "height": 440
+  },
+  "setting": {
+    "top": 272,
+    "height": 52
   }
 }

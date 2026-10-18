@@ -582,14 +582,18 @@ def build_timeline(script: dict, voice: dict, tts, health_hold: float = 0.0, end
     silence = lambda s: b"\x00\x00" * int(round(s * RATE))
     pcm += silence(LEAD)
     t = LEAD
-    lines_all = [ln for sc in script["scenes"] for ln in sc["lines"]]
+    lines_all = [ln for sc in script["scenes"] for ln in sc["lines"] if ln["kind"] != "setting"]   # setting: shown only
     t0 = time.perf_counter()
     takes = iter(one_take([spoken(ln["text"])[0] for ln in lines_all], voice, tts))   # ONE voice call per reel
     tts_s += time.perf_counter() - t0
     for si, sc in enumerate(script["scenes"]):
         scene = {"index": si, "kind": scene_kind(sc["lines"], si), "start": t - (LEAD if si == 0 else 0), "lines": [],
                  "captions": []}
+        settings = []
         for li, ln in enumerate(sc["lines"]):
+            if ln["kind"] == "setting":   # on screen for the whole scene, never voiced
+                settings.append(ln)
+                continue
             say, per_word = spoken(ln["text"])
             line_pcm, bounds = next(takes)
             dur = len(line_pcm) / 2 / RATE
@@ -606,6 +610,10 @@ def build_timeline(script: dict, voice: dict, tts, health_hold: float = 0.0, end
             scene["captions"] += captions_for_line(ln["text"], starts, t, t + dur)
             pcm += line_pcm + silence(gap)
             t += dur + gap
+        for ln in settings:
+            words = ln["text"].split()
+            scene["lines"].append(ln | {"spoken": "", "start": scene["start"], "end": scene["start"], "duration": 0.0,
+                                        "pcm": b"", "word_starts": [scene["start"]] * len(words), "hold_end": t})
         scene["end"] = t
         scenes.append(scene)
     for kind, secs in silent:   # v4: code-built scenes with no voice (checklist, pull-back), before the sources card
@@ -841,7 +849,7 @@ HERO = re.compile(r"^[−-]?\d+(?:\.\d+)?(?:\u00a0(?:times|kg|years?|months?)|%)
 
 def make_hero_cards(tokens: list[tuple[str, float]]) -> list[dict] | None:
     """v5: a health line holding two result numbers ("... 5.27 times ..., and men's 2.99 times.") as two stacked cards:
-    the line is split after the last comma before the second number (else at it), each card's number a hero part shown
+    the line is split at the last "and" before the second number (else after the last comma, else at it), each card's number a hero part shown
     large ("N times" -> "N×"), the rest text parts. Every part is an exact run of the display tokens and the cards cover
     the whole line. Each card appears when its number is spoken and both stay to the line's hold end. None unless the
     line has exactly two result numbers (a BMI threshold such as "25 kg/m²" is not one)."""
@@ -849,8 +857,9 @@ def make_hero_cards(tokens: list[tuple[str, float]]) -> list[dict] | None:
     if len(heroes) != 2:
         return None
     h1, h2 = heroes
+    ands = [k for k in range(h1 + 1, h2) if tokens[k][0].lower() == "and"]
     commas = [k for k in range(h1 + 1, h2) if tokens[k][0].endswith(",")]
-    cut = commas[-1] + 1 if commas else h2
+    cut = ands[-1] if ands else commas[-1] + 1 if commas else h2   # card 2 reads "and men 2.99× ..."
     out = []
     for lo, hi, h in ((0, cut, h1), (cut, len(tokens), h2)):
         parts = []
@@ -974,7 +983,7 @@ def voice_problems(props: dict) -> list[dict]:
     """v5: the voice covers >= VOICE_COVERAGE_MIN of the runtime and no silence lasts over MAX_SILENCE (the lead and
     the tail included)."""
     total = props["durationInFrames"] / FPS
-    spans = sorted((ln["start"], ln["end"]) for sc in props["scenes"] for ln in sc["lines"])
+    spans = sorted((ln["start"], ln["end"]) for sc in props["scenes"] for ln in sc["lines"] if ln["kind"] != "setting")
     voiced = sum(e - a for a, e in spans)
     edges = [0.0] + [x for a, e in spans for x in (a, e)] + [total]
     gaps = [edges[i + 1] - edges[i] for i in range(0, len(edges) - 1, 2)]
@@ -1280,6 +1289,8 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
     with tempfile.TemporaryDirectory(prefix="steer-stt-") as tmp:
         for sc in scenes:
             for ln in sc["lines"]:
+                if ln["kind"] == "setting":
+                    continue
                 wav = Path(tmp) / f"line-{sc['index']}-{len(rounds)}.wav"
                 _write_wav(wav, resample(ln["pcm"], 16000), 16000)
                 r = audio_numbers_match(ln["text"], transcribe(wav))
@@ -1320,7 +1331,7 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
                 subprocess.run([ffmpeg_exe(), "-loglevel", "error", "-y", "-ss", f"{sc['start']:.3f}", "-t",
                                 f"{sc['end'] - sc['start']:.3f}", "-i", str(mp4), "-vn", "-ac", "1", "-ar", "16000", str(wav)],
                                check=True)
-                text = " ".join(ln["text"] for ln in sc["lines"])
+                text = " ".join(ln["text"] for ln in sc["lines"] if ln["kind"] != "setting")
                 r = audio_numbers_match(text, transcribe(wav))
                 scene_rounds.append({"scene": sc["index"], "script": text} | r)
                 if not r["ok"]:

@@ -10,7 +10,7 @@ import jsonschema
 
 from .checks import split_rule, frags
 
-KINDS = ["health", "framing", "brand", "cta", "signoff"]
+KINDS = ["health", "framing", "brand", "cta", "signoff", "setting"]
 SLIDE_ROLES = ["hook", "point", "meaning", "brand", "cta"]
 
 
@@ -154,9 +154,12 @@ The reel script is spoken in about 30-40 seconds (50-75 words in all), ONE scene
    studied: ages, places, group) in the same line. When two claims share the same population and qualifiers, state
    both in this ONE line (list both claim_ids; each number exactly as its own claim gives it, each with its own
    comparison wording from its own quote).
-3. why (only if a claim offering a reason or mechanism is given): ONE health line from that claim that keeps the
-   claim's own construction and hedge ("the authors suggest ... may not be the main drivers ... may be ..."); never
-   state it as a fact, never add "more than" or any comparison the claim does not make.
+3. why (only if a claim offering a reason or mechanism is given): ONE short health line (at most 24 words) from that
+   claim that keeps the claim's own construction and hedge ("the authors suggest ... may not be the main drivers ...
+   may be more important"); never state it as a fact, never add any comparison the claim does not make. If the
+   editorial requirements ask for who was studied beside this claim, do NOT speak it: add to this scene a second line
+   of kind "setting" (shown on screen, not spoken, no claim_ids) that copies EXACTLY the who-was-studied words of the
+   numbers line (for example "adults aged 45 and over in Chennai, Delhi and Karachi").
 4. what it means: ONE framing line, no number, no new health assertion.
 5. the brand line.
 6. the call to action and the sign-off.

@@ -6,7 +6,7 @@ export type CardPart = { text: string; role: "setting" | "hero" | "text"; show: 
 export type Card = { start: number; parts: CardPart[] };
 export type Key = { number: string; label: string; at: number };
 export type Line = {
-  kind: "health" | "framing" | "brand" | "cta" | "signoff" | "status";
+  kind: "health" | "framing" | "brand" | "cta" | "signoff" | "status" | "setting";
   text: string; start: number; end: number; hold_end: number;
   beats: Beat[]; cards: Card[] | null; cards_style: "split" | "stack"; evidence: Evidence | null; emphasis: string | null; key: Key | null; source_label: string | null;
 };

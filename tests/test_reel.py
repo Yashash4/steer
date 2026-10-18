@@ -469,6 +469,7 @@ def test_v5_hero_cards_status_line_and_no_silent_beats(tmp_path):
     props = reel.build_props(scenes, record, BRAND, None, [], {i: "x" for i in range(5)}, plan, quotes, True, "pullback.png", v5=True)
     ln = props["scenes"][1]["lines"][0]
     assert ln["cards_style"] == "stack" and [q["show"] for c in ln["cards"] for q in c["parts"] if q["role"] == "hero"] == ["2.99×", "5.27×"]
+    assert ln["cards"][1]["parts"][0]["text"] == "5.27\u00a0times"   # no "and" here: split after the comma
     assert " ".join(q["text"] for c in ln["cards"] for q in c["parts"]) == ln["text"]        # cards cover the line
     assert ln["evidence"]["start"] > ln["cards"][-1]["start"]                                # after both heroes popped
     st = props["scenes"][4]
@@ -481,3 +482,16 @@ def test_v5_hero_cards_status_line_and_no_silent_beats(tmp_path):
     assert any("status line" in f["detail"] for f in reel.pool_check(props, bad, record, None, [], quotes))
     gappy = dict(props, durationInFrames=props["durationInFrames"] + 120)   # 4 s of silence at the end
     assert "MAX_SILENT_GAP" in [f["code"] for f in reel.voice_problems(gappy)]
+
+
+def test_a_setting_line_is_shown_for_the_scene_and_never_voiced():
+    calls = []
+    tts = lambda t, v: (calls.append(t), fake_tts(t, v))[1]
+    script = {"scenes": [{"lines": [{"kind": "health", "text": "The authors suggest it may be insulin.", "claim_ids": ["c1"]},
+                                    {"kind": "setting", "text": "adults aged 45 and over", "claim_ids": []}]}]}
+    scenes, pcm, _ = reel.build_timeline(script, {"name": "x"}, tts, reel.HEALTH_HOLD, 0.0, (), True)
+    st = [ln for ln in scenes[0]["lines"] if ln["kind"] == "setting"][0]
+    assert calls == ["The authors suggest it may be insulin."] and st["pcm"] == b"" and st["hold_end"] == scenes[0]["end"]
+    t = "Adults 45: women had 5.27 times higher risk and men 2.99 times higher."
+    cards = reel.make_hero_cards(reel.display_tokens(t, [i * 0.3 for i in range(len(t.split()))]))
+    assert cards[1]["parts"][0]["text"] == "and men" and cards[1]["parts"][1]["show"] == "2.99×"

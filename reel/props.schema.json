@@ -376,7 +376,8 @@
             "brand",
             "cta",
             "signoff",
-            "status"
+            "status",
+            "setting"
           ]
         },
         "text": {
