@@ -484,3 +484,10 @@ def test_safety_boundaries_exclude_named_drugs_only():
     b = checks.load_boundaries("PMC12532569")
     assert checks.excluded({"quote": "Only semaglutide (RR 1.42) was associated with increased risk."}, b)
     assert not checks.excluded({"quote": "Nausea, vomiting, diarrhea, and constipation were the most common gastrointestinal adverse effects."}, b)
+
+
+def test_safety_boundaries_exclude_null_results_for_rare_events():
+    b = checks.load_boundaries("PMC12532569")
+    assert checks.excluded({"quote": "At the same time, no significant increase in risk was observed for acute pancreatitis."}, b)
+    assert checks.excluded({"quote": "The risk of gallstone-related complications, cholelithiasis, cholecystitis did not significantly increase."}, b)
+    assert not checks.excluded({"quote": "A total of 29 trials were evaluated regarding the risk of nausea in patients receiving GLP-1 RAs."}, b)

@@ -20,6 +20,8 @@ done = "Already answered"
 readout_title = "Your readout"
 questions_title = "Questions to take to a doctor"
 restart = "Play again"
+progress = "Question {n} of {m}"
+progress_first = "Question {n}"
 # drawn under every reveal, so the quiz never reads as personal risk
 reveal_note = "A comparison between groups in one study, not a prediction for you."
 
@@ -37,14 +39,23 @@ url = "https://steerclub.com/?utm_source=steer_quiz&utm_campaign=guess_the_numbe
 
 [warm_lead]
 title = "What your first conversation could start from"
-note = "Shown, not sent: this page makes no network call and has no form."
+note = "Prototype only. Nothing is sent or stored. Use test details, not real contact information."
 doubts_label = "Questions picked"
 guesses_label = "Guesses and the real numbers"
+name_label = "Name"
+phone_label = "Phone"
+consent_label = "I agree to be contacted (demo only)"
+show_label = "Show what Steer would receive"
+preview_title = "What Steer would receive"
+copy_label = "Copy my questions"
+share_label = "Share my questions"
+copied = "Copied"
+share_title = "Questions to take to a doctor"
 
 [[doubt]]
 id = "is_it_safe"
 label = "Is it safe?"
-answered_by = ["gap-safety"]
+answered_by = ["safety"]
 
 [[doubt]]
 id = "will_i_lose_muscle"
@@ -71,11 +82,14 @@ id = "hook"
 doubt = "is_it_for_me"
 pmcid = "PMC8006839"
 quote_contains = "the risk of diabetes in those with BMI <25 kg/m2 was 5.3 times higher"
-kind = "slider"
+kind = "choice"
+opener = "chai"
 # who and what was studied: its numbers must be in the claim's quote or the paper's context quotes
 context = "South Asian women aged 45+ with BMI below 25 in Chennai, Delhi and Karachi, compared with US white women."
-question = "Guess the difference. How did diabetes incidence compare in this study?"
-stops = [["1×", 1], ["2×", 2], ["3×", 3], ["4×", 4], ["5×", 5], ["6×", 6], ["7×", 7], ["8×", 8], ["9×", 9], ["10×", 10]]
+question = "Think a 'normal' BMI rules out diabetes?"
+# one tap = guess + reveal. The value of a stop is the lower end of its bin (compared, never drawn); the answer is scored
+# by the bin it falls in (5.3 -> the last bin), so no label is the answer's own number.
+stops = [["About the same", 1], ["About 2×", 2], ["About 3×", 3], ["5× or more", 5]]
 answer = 5.3
 sentence = "South Asian women aged 45 and over in Chennai, Delhi and Karachi with BMI under 25 kg/m2 had a 5.3 times higher risk of diabetes than US whites."
 reveal_number = "5.3 times"
@@ -84,6 +98,7 @@ qualifiers = []
 
 [[round]]
 id = "regain"
+opener = "bus"
 doubt = "will_weight_come_back"
 pmcid = "PMC12776922"
 quote_contains = "The average monthly rate of weight regain was 0.4 kg"
@@ -99,6 +114,7 @@ fallback_gap = "gap-regain"
 
 [[round]]
 id = "muscle-a"
+opener = "park"
 doubt = "will_i_lose_muscle"
 pmcid = "PMC13461373"
 quote_contains = "a significant decrease was observed in the absolute change in lean mass"
@@ -106,14 +122,15 @@ kind = "choice"
 question = "On these medicines, does the amount of lean mass in kilograms go up, down or stay the same?"
 stops = [["Up", "up"], ["Down", "down"], ["No change", "same"]]
 answer = "down"
-sentence = "Absolute lean mass fell by 1.74 kg on average."
-reveal_number = "1.74 kg"
-reveal_label = "Absolute lean mass fell"
+sentence = "Absolute lean mass changed by −1.74 kg on average."
+reveal_number = "−1.74 kg"
+reveal_label = "Absolute lean mass changed"
 qualifiers = ["Results varied a lot between studies."]
 fallback_gap = "gap-muscle"
 
 [[round]]
 id = "muscle-b"
+opener = "wedding"
 doubt = "will_i_lose_muscle"
 pmcid = "PMC13461373"
 quote_contains = "lean mass as a proportion of total weight, with an observed increase of 1.81%"
@@ -127,25 +144,76 @@ reveal_label = "Lean mass as a share of total weight rose"
 qualifiers = []
 fallback_gap = "gap-muscle"
 
+[[round]]
+id = "safety"
+doubt = "is_it_safe"
+opener = "dinner"
+pmcid = "PMC12532569"
+quote_contains = "Nausea, vomiting, diarrhea, and constipation were the most common gastrointestinal adverse effects"
+kind = "choice"
+question = "Which kind of side effect was most common in these trials?"
+stops = [["Stomach and gut problems", "stomach"], ["Skin problems", "skin"], ["Sleep problems", "sleep"]]
+answer = "stomach"
+sentence = "Nausea, vomiting, diarrhea, and constipation were the most common gastrointestinal adverse effects."
+# no number in this round: the label is drawn large instead
+reveal_number = ""
+reveal_label = "most common gastrointestinal adverse effects"
+qualifiers = ["These findings are about this class of medicines, not one product.", "Seen in trials, not in everyday use.",
+              "A doctor weighs the benefits against the side effects for each person."]
+fallback_gap = "gap-safety"
+
 [[gap]]
 id = "gap-safety"
+opener = "dinner"
 title = "Is it safe?"
 body = "Our papers don't answer this well. Ask a doctor about it, with your own history."
 
 [[gap]]
 id = "gap-diabetics"
+opener = "balcony"
+# an info card, not a guess. Its context line is the paper's own population sentence (the gate-checked context quote
+# ctx-1 of the safety paper's boundaries file); context_phrase must be a substring of that quote.
+pmcid = "PMC12532569"
+context = "This review looked at non-diabetic subjects with overweight or obesity."
+context_phrase = "non-diabetic subjects with overweight or obesity"
 title = "Is this only for diabetics?"
 body = "Our papers don't answer this well. Ask a doctor about it, with your own history."
 
 [[gap]]
 id = "gap-regain"
+opener = "bus"
 title = "Will the weight come back?"
 body = "Our checked papers don't answer this well enough yet. Ask a doctor about it, with your own history."
 
 [[gap]]
 id = "gap-muscle"
+opener = "park"
 title = "Will I lose muscle?"
 body = "Our checked papers don't answer this well enough yet. Ask a doctor about it, with your own history."
+
+[[opener]]
+id = "chai"
+text = "Chai break at the office, and someone brings up blood sugar."
+
+[[opener]]
+id = "dinner"
+text = "Family dinner at home, and the talk turns to health check-ups."
+
+[[opener]]
+id = "park"
+text = "Morning in the neighbourhood park, and a friend asks about sugar tests."
+
+[[opener]]
+id = "wedding"
+text = "A cousin's wedding, and the aunties are comparing health reports."
+
+[[opener]]
+id = "bus"
+text = "On the bus home, a reel about weight medicines pops up on the phone."
+
+[[opener]]
+id = "balcony"
+text = "Tea with the neighbours on the balcony, and someone asks who these medicines are for."
 
 [doctor_questions]
 is_it_for_me = ["Should my lab tests be read differently because I am South Asian?"]

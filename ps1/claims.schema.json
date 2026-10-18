@@ -93,13 +93,15 @@
         "done",
         "readout_title",
         "questions_title",
-        "restart"
+        "restart",
+        "progress",
+        "progress_first"
       ],
       "description": "fixed button and heading words, checked as framing copy (no numbers, no health assertion)"
     },
     "hook": {
       "$ref": "#/$defs/round",
-      "description": "the first round (answers the doubt 'is_it_for_me')"
+      "description": "the first round (answers the doubt 'is_it_for_me'); one tap on a bin is the guess"
     },
     "doubts": {
       "type": "array",
@@ -151,7 +153,8 @@
         "required": [
           "id",
           "title",
-          "body"
+          "body",
+          "opener"
         ],
         "properties": {
           "id": {
@@ -162,6 +165,17 @@
           },
           "body": {
             "type": "string"
+          },
+          "opener": {
+            "type": "string",
+            "description": "daily-life framing line above the card"
+          },
+          "context": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "info card only: the paper's own gate-checked population sentence, as a context line"
           }
         }
       }
@@ -234,7 +248,16 @@
         "title",
         "note",
         "doubts_label",
-        "guesses_label"
+        "guesses_label",
+        "name_label",
+        "phone_label",
+        "consent_label",
+        "show_label",
+        "preview_title",
+        "copy_label",
+        "share_label",
+        "copied",
+        "share_title"
       ],
       "properties": {
         "title": {
@@ -243,12 +266,39 @@
         },
         "note": {
           "type": "string",
-          "description": "'Shown, not sent: this page makes no network call and has no form.'"
+          "description": "the exact demo label: 'Prototype only. Nothing is sent or stored. Use test details, not real contact information.'"
         },
         "doubts_label": {
           "type": "string"
         },
         "guesses_label": {
+          "type": "string"
+        },
+        "name_label": {
+          "type": "string"
+        },
+        "phone_label": {
+          "type": "string"
+        },
+        "consent_label": {
+          "type": "string"
+        },
+        "show_label": {
+          "type": "string"
+        },
+        "preview_title": {
+          "type": "string"
+        },
+        "copy_label": {
+          "type": "string"
+        },
+        "share_label": {
+          "type": "string"
+        },
+        "copied": {
+          "type": "string"
+        },
+        "share_title": {
           "type": "string"
         }
       }
@@ -283,7 +333,7 @@
       "properties": {
         "number": {
           "type": "string",
-          "description": "the revealed number, an EXACT substring of sentence (drawn large)"
+          "description": "the revealed number, an EXACT substring of sentence (drawn large); empty when the round reveals no number (the label is drawn large instead)"
         },
         "label": {
           "type": "string",
@@ -310,7 +360,8 @@
         "qualifiers",
         "quote",
         "source",
-        "claim_ids"
+        "claim_ids",
+        "opener"
       ],
       "properties": {
         "id": {
@@ -354,7 +405,7 @@
               }
             }
           },
-          "description": "slider stops (ordered) or choices; the page starts on no stop, never on the answer"
+          "description": "slider stops (ordered) or choices; a choice with numeric values is a bin scale (value = lower end of the bin, compared never drawn); the page starts on no stop, never on the answer"
         },
         "answer": {
           "type": [
@@ -419,6 +470,10 @@
             "null"
           ],
           "description": "who and what was studied, built from the paper's boundaries qualifiers and context quotes (the only place numbers appear outside stops and reveals), e.g. 'Adults aged 45+ in Chennai, Delhi and Karachi · BMI below 25 · South Asian women vs US white women'"
+        },
+        "opener": {
+          "type": "string",
+          "description": "one daily-life framing line above the question: no health fact, no number, no attribute the claim does not state"
         }
       }
     }

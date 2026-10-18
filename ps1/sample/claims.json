@@ -32,54 +32,32 @@
   "done": "Already answered",
   "readout_title": "Your readout",
   "questions_title": "Questions to take to a doctor",
-  "restart": "Play again"
+  "restart": "Play again",
+  "progress": "Question {n} of {m}",
+  "progress_first": "Question {n}"
  },
  "hook": {
   "id": "hook",
   "doubt": "is_it_for_me",
-  "kind": "slider",
+  "kind": "choice",
   "context": "Adults aged 45+ in Chennai, Delhi and Karachi · BMI below 25 · South Asian women vs US white women",
-  "question": "Guess the difference. How did diabetes incidence compare in this study?",
+  "question": "Think a 'normal' BMI rules out diabetes?",
   "stops": [
    {
-    "label": "1×",
+    "label": "About the same",
     "value": 1
    },
    {
-    "label": "2×",
+    "label": "About 2×",
     "value": 2
    },
    {
-    "label": "3×",
+    "label": "About 3×",
     "value": 3
    },
    {
-    "label": "4×",
-    "value": 4
-   },
-   {
-    "label": "5×",
+    "label": "5× or more",
     "value": 5
-   },
-   {
-    "label": "6×",
-    "value": 6
-   },
-   {
-    "label": "7×",
-    "value": 7
-   },
-   {
-    "label": "8×",
-    "value": 8
-   },
-   {
-    "label": "9×",
-    "value": 9
-   },
-   {
-    "label": "10×",
-    "value": 10
    }
   ],
   "answer": 5.3,
@@ -100,7 +78,8 @@
   },
   "claim_ids": [
    "run-244d0fbd0c04/c004-01"
-  ]
+  ],
+  "opener": "Chai break at the office, and someone brings up blood sugar."
  },
  "doubts": [
   {
@@ -190,7 +169,8 @@
    },
    "claim_ids": [
     "run-a7cddabed62e/c000-01"
-   ]
+   ],
+   "opener": "On the bus home, a reel about weight medicines pops up on the phone."
   },
   {
    "id": "muscle-a",
@@ -230,7 +210,8 @@
     "location": "page 1",
     "full": "Laverde et al. GLP-1 receptor agonists and lean mass: systematic review and meta-analysis. International Journal of Obesity, 2026."
    },
-   "claim_ids": []
+   "claim_ids": [],
+   "opener": "Morning in the neighbourhood park, and a friend asks about sugar tests."
   },
   {
    "id": "muscle-b",
@@ -270,19 +251,23 @@
    },
    "claim_ids": [
     "run-e4d5ed8559e6/c000-00"
-   ]
+   ],
+   "opener": "A cousin's wedding, and the aunties are comparing health reports."
   }
  ],
  "gap_cards": [
   {
    "id": "gap-safety",
    "title": "Is it safe?",
-   "body": "Our papers don't answer this well. This is one to ask a doctor, with your own history."
+   "body": "Our papers don't answer this well. This is one to ask a doctor, with your own history.",
+   "opener": "Family dinner at home, and the talk turns to health check-ups."
   },
   {
    "id": "gap-diabetics",
    "title": "Is this only for diabetics?",
-   "body": "Our papers don't answer this well. This is one to ask a doctor, with your own history."
+   "body": "Our papers don't answer this well. This is one to ask a doctor, with your own history.",
+   "opener": "Tea with the neighbours on the balcony, and someone asks who these medicines are for.",
+   "context": "This review looked at non-diabetic subjects with overweight or obesity."
   }
  ],
  "readout": {
@@ -320,9 +305,18 @@
   }
  },
  "warm_lead": {
-  "title": "What Steer's team would see",
-  "note": "Shown, not sent: this page makes no network call and has no form.",
+  "title": "What your first conversation could start from",
+  "note": "Prototype only. Nothing is sent or stored. Use test details, not real contact information.",
   "doubts_label": "Questions picked",
-  "guesses_label": "Guesses and the real numbers"
+  "guesses_label": "Guesses and the real numbers",
+  "name_label": "Name",
+  "phone_label": "Phone",
+  "consent_label": "I agree to be contacted (demo only)",
+  "show_label": "Show what Steer would receive",
+  "preview_title": "What Steer would receive",
+  "copy_label": "Copy my questions",
+  "share_label": "Share my questions",
+  "copied": "Copied",
+  "share_title": "Questions to take to a doctor"
  }
 }

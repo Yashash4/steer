@@ -17,6 +17,11 @@ context_quotes = [
 quote_any_of = ["orforglipron", "exenatide", "tirzepatide", "semaglutide", "liraglutide", "cagrilinitide", "cagrilintide", "Ozempic", "Wegovy", "Mounjaro", "Zepbound", "Saxenda", "Victoza", "mg"]
 why = "names or compares specific medicines or doses; posts talk about the class, never one drug"
 
+# No significant increase in a rare event in these trials is not evidence of no risk.
+[[exclude_from_posts]]
+quote_any_of = ["acute pancreatitis", "gallstone-related complications", "cholelithiasis"]
+why = "absence of a significant result is not evidence of no risk"
+
 # Whatever a post takes from this paper: as a class, in trials, and the doctor weighs benefits against side effects.
 [[require_qualifier]]
 when_claim_quote_contains = []

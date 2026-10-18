@@ -88,6 +88,25 @@ claims = {
     "warm_lead": {"title": "What Steer's team would see", "note": "Shown, not sent: this page makes no network call and has no form.",
                   "doubts_label": "Questions picked", "guesses_label": "Guesses and the real numbers"},
 }
+# v2: one-tap hook (bins), openers on every round and card, progress strings, the demo form's strings
+claims["ui"] |= {"progress": "Question {n} of {m}", "progress_first": "Question {n}"}
+claims["hook"] |= {"kind": "choice", "question": "Think a 'normal' BMI rules out diabetes?",
+                   "stops": [{"label": "About the same", "value": 1}, {"label": "About 2×", "value": 2},
+                             {"label": "About 3×", "value": 3}, {"label": "5× or more", "value": 5}]}
+for r, o in zip([claims["hook"], *claims["rounds"]], ["Chai break at the office, and someone brings up blood sugar.",
+                "On the bus home, a reel about weight medicines pops up on the phone.",
+                "Morning in the neighbourhood park, and a friend asks about sugar tests.", "A cousin's wedding, and the aunties are comparing health reports."]):
+    r["opener"] = o
+for g in claims["gap_cards"]:
+    g["opener"] = "Family dinner at home, and the talk turns to health check-ups."
+claims["gap_cards"][1] |= {"context": "This review looked at non-diabetic subjects with overweight or obesity.",
+                           "opener": "Tea with the neighbours on the balcony, and someone asks who these medicines are for."}
+claims["warm_lead"] = {"title": "What your first conversation could start from",
+    "note": "Prototype only. Nothing is sent or stored. Use test details, not real contact information.",
+    "doubts_label": "Questions picked", "guesses_label": "Guesses and the real numbers", "name_label": "Name",
+    "phone_label": "Phone", "consent_label": "I agree to be contacted (demo only)", "show_label": "Show what Steer would receive",
+    "preview_title": "What Steer would receive", "copy_label": "Copy my questions", "share_label": "Share my questions",
+    "copied": "Copied", "share_title": "Questions to take to a doctor"}
 jsonschema.validate(claims, json.loads((HERE.parent / "claims.schema.json").read_text()))
 for r in [claims["hook"], *claims["rounds"]]:
     for rv in r["reveals"]:

@@ -1,6 +1,7 @@
 // Draws only strings from claims.json. Only computed numbers: readout counts n and m.
 const main = document.querySelector("main");
 const COMMA = String.fromCharCode(44);
+const COLON = String.fromCharCode(58);
 let C;
 let S;
 
@@ -23,6 +24,11 @@ function button(label, onclick, cls) {
   b.type = "button";
   b.addEventListener("click", onclick);
   return b;
+}
+// "Question N of M": M counts the hook and every step picked (gap cards count, unscored); the hook has no M yet
+function fill(t, n, m) { return t.replace("{n}", String(n)).replace("{m}", String(m)); }
+function progress(n) {
+  return h("p", "progress", S.total ? fill(C.ui.progress, n, S.total) : fill(C.ui.progress_first, n, 0));
 }
 function allRounds() { return [C.hook].concat(C.rounds); }
 
@@ -84,8 +90,8 @@ function slider(round, onChange) {
   return wrap;
 }
 
-function ask(round, done) {
-  const nodes = [];
+function ask(round, done, n) {
+  const nodes = [progress(n), h("p", "opener", round.opener)];
   if (round.context) nodes.push(h("p", "context", round.context));
   nodes.push(h("h1", "q", round.question));
   if (round.kind === "choice") {
@@ -111,7 +117,9 @@ function reveal(round, idx, next) {
   round.reveals.forEach((rv) => {
     const card = h("div", "reveal");
     const row = h("div", "numrow");
-    row.append(h("span", "num", rv.number), h("span", "rlabel", rv.label));
+    // a round with no number draws its label large instead
+    if (rv.number) row.append(h("span", "num", rv.number), h("span", "rlabel", rv.label));
+    else row.append(h("span", ["rlabel", "lead"], rv.label));
     card.append(row, h("p", "sentence", rv.sentence));
     nodes.push(card);
   });
@@ -120,7 +128,7 @@ function reveal(round, idx, next) {
   nodes.push(g);
   const ul = h("ul", "quals");
   round.qualifiers.forEach((q) => ul.append(h("li", null, q)));
-  if (C.ui.reveal_note) ul.append(h("li", null, C.ui.reveal_note));   // never personal risk
+  if (C.ui.reveal_note && !round.qualifiers.length) ul.append(h("li", null, C.ui.reveal_note));   // never personal risk
   if (ul.children.length) nodes.push(ul);
   const src = h("p", "src");
   src.append(h("span", null, round.source.short), h("span", null, round.source.location));
@@ -140,17 +148,19 @@ function reveal(round, idx, next) {
   show(...nodes);
 }
 
-function playRound(round, next) {
+function playRound(round, next, n) {
   ask(round, (idx) => {
     S.guesses.push({ round, idx });
     reveal(round, idx, next);
-  });
+  }, n);
 }
 
-function gapCard(card, next) {
+// an info card, not a guess: nothing is asked and nothing enters S.guesses
+function gapCard(card, next, n) {
   const c = h("div", ["card", "gap"]);
+  if (card.context) c.append(h("p", "context", card.context));
   c.append(h("h2", null, card.title), h("p", null, card.body));
-  show(c, button(C.ui.next, next));
+  show(progress(n), h("p", "opener", card.opener), c, button(C.ui.next, next));
 }
 
 function picker() {
@@ -185,29 +195,40 @@ function run(i) {
     if (r) steps.push({ round: r });
     else steps.push({ card: C.gap_cards.find((x) => x.id === id) });
   }));
+  S.total = steps.length + 1;
   const go = (k) => {
     if (k >= steps.length) return readout();
     const st = steps[k];
-    if (st.round) playRound(st.round, () => go(k + 1));
-    else gapCard(st.card, () => go(k + 1));
+    if (st.round) playRound(st.round, () => go(k + 1), k + 2);
+    else gapCard(st.card, () => go(k + 1), k + 2);
   };
   go(i);
 }
 
+// a choice with numeric stops is a bin scale (value = lower end of the bin): scored by the bin the answer falls in
+const isNumber = (g) => typeof g.round.stops[0].value === "number";
 function score(g) {
   const a = g.round.answer;
   const v = g.round.stops[g.idx].value;
+  if (g.round.kind === "choice" && isNumber(g)) {
+    const bin = g.round.stops.filter((s) => s.value <= a).length - 1;
+    return g.idx < bin ? "under" : g.idx > bin ? "over" : "close";
+  }
   if (g.round.kind === "choice") return v === a ? "close" : "under";
   if (v < a * 0.9) return "under";
   if (v > a * 1.1) return "over";
   return "close";
 }
-function fill(t, n, m) { return t.replace("{n}", String(n)).replace("{m}", String(m)); }
+function questions() {
+  const qs = [];
+  S.picked.map((d) => d.id).concat("is_it_for_me").forEach((id) => (C.doctor_questions[id] || []).forEach((q) => qs.push(q)));
+  return qs.slice(0, 3);
+}
 
 function readout() {
   const nodes = [h("h1", "q", C.ui.readout_title)];
-  const nums = S.guesses.filter((g) => g.round.kind === "slider");
-  const dirs = S.guesses.filter((g) => g.round.kind === "choice");
+  const nums = S.guesses.filter((g) => g.round.kind === "slider" || isNumber(g));
+  const dirs = S.guesses.filter((g) => g.round.kind === "choice" && !isNumber(g));
   const card = h("div", "card");
   if (nums.length) {
     const cnt = { under: 0, over: 0, close: 0 };
@@ -226,12 +247,11 @@ function readout() {
   S.guesses.forEach((g) => g.round.reveals.forEach((rv) => ul.append(h("li", null, rv.sentence))));
   mean.append(ul);
   nodes.push(mean);
-  const qs = [];
-  S.picked.map((d) => d.id).concat("is_it_for_me").forEach((id) => (C.doctor_questions[id] || []).forEach((q) => qs.push(q)));
+  const qs = questions();
   const qc = h("div", "card");
   qc.append(h("h2", null, C.ui.questions_title));
   const ql = h("ul", "list");
-  qs.slice(0, 3).forEach((q) => ql.append(h("li", null, q)));
+  qs.forEach((q) => ql.append(h("li", null, q)));
   qc.append(ql);
   nodes.push(qc, button(C.ui.next, nextStep));
   show(...nodes);
@@ -243,31 +263,72 @@ function link(l, cls) {
   return a;
 }
 
-function nextStep() {
+function copyText(text, status) {
+  const done = () => { status.textContent = C.warm_lead.copied; };
+  const old = () => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); } catch (x) { /* nothing to do */ }
+    ta.remove();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, old);
+  else old();
+}
+
+// demo only: nothing is submitted, stored or put in a URL; the preview is drawn from the page's own state
+function warmLead() {
   const w = C.warm_lead;
   const card = h("div", ["card", "warm"]);
-  card.append(h("h2", null, w.title), h("p", "small", w.note), h("h3", null, w.doubts_label));
-  const tags = h("div", "tags");
-  S.picked.forEach((d) => tags.append(h("span", "tag", d.label)));
-  card.append(tags, h("h3", null, w.guesses_label));
-  const ul = h("ul", "list");
-  S.guesses.forEach((g) => {
-    const li = h("li");
-    li.append(h("b", null, g.round.stops[g.idx].label));
-    g.round.reveals.forEach((rv) => {
-      const row = h("div", "row");
-      row.append(h("span", "num", rv.number), h("span", "rlabel", rv.label));
-      li.append(row);
-    });
-    ul.append(li);
-  });
-  card.append(ul);
-  show(link(C.cta.primary), link(C.cta.secondary, "alt"), card, button(C.ui.restart, start, "alt"));
+  card.append(h("h2", null, w.title), h("p", ["small", "demo"], w.note));
+  const field = (label, type) => {
+    const l = h("label", "field");
+    const i = document.createElement("input");
+    i.type = type;
+    i.autocomplete = "off";
+    l.append(h("span", null, label), i);
+    return [l, i];
+  };
+  const [nl, name] = field(w.name_label, "text");
+  const [pl, phone] = field(w.phone_label, "tel");
+  const cl = h("label", "consent");
+  const tick = document.createElement("input");
+  tick.type = "checkbox";
+  cl.append(tick, h("span", null, w.consent_label));
+  const prev = h("div", "preview");
+  prev.hidden = true;
+  const showBtn = button(w.show_label, () => {
+    const sep = COLON + " ";
+    const rows = [[w.name_label, name.value], [w.phone_label, phone.value], [w.consent_label, tick.checked ? "x" : ""],
+      [w.doubts_label, S.picked.map((d) => d.label).join(COMMA + " ")]];
+    S.guesses.forEach((g) => rows.push([w.guesses_label,
+      g.round.stops[g.idx].label + sep + g.round.reveals.map((rv) => rv.number || rv.label).join(" ")]));
+    rows.push([C.ui.questions_title, questions().join(" ")]);
+    prev.replaceChildren(h("h3", null, w.preview_title), ...rows.map((r) => h("p", "prow", r[0] + sep + r[1])));
+    prev.hidden = false;
+  }, "alt");
+  showBtn.disabled = true;
+  tick.addEventListener("change", () => { showBtn.disabled = !tick.checked; if (!tick.checked) prev.hidden = true; });
+  const status = h("span", "small");
+  status.setAttribute("role", "status");
+  const text = () => questions().join(String.fromCharCode(10));
+  const cp = button(w.copy_label, () => copyText(text(), status), "alt");
+  const sh = button(w.share_label, () => {
+    if (navigator.share) navigator.share({ title: w.share_title, text: text() }).catch(() => {});
+    else copyText(text(), status);
+  }, "alt");
+  card.append(nl, pl, cl, showBtn, prev, cp, sh, status);
+  return card;
+}
+
+function nextStep() {
+  show(link(C.cta.primary), link(C.cta.secondary, "alt"), warmLead(), button(C.ui.restart, start, "alt"));
 }
 
 function start() {
-  S = { picked: [], guesses: [] };
-  playRound(C.hook, picker);
+  S = { picked: [], guesses: [], total: 0 };
+  playRound(C.hook, picker, 1);
 }
 
 async function load() {

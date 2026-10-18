@@ -86,6 +86,16 @@ p{margin:0}
 .tags{display:flex;flex-wrap:wrap;gap:8px}
 .tag{padding:6px 14px;border-radius:999px;background:var(--blush);color:var(--maroon);font-size:14px;font-weight:600}
 .warm b{font-family:var(--serif);font-style:italic;color:var(--maroon);font-weight:600}
+.progress{font-size:14px;font-weight:600;color:var(--clay)}
+.opener{font-family:var(--serif);font-style:italic;font-size:18px;line-height:1.35;color:var(--clay);font-variation-settings:'WONK' 0,'SOFT' 50}
+.rlabel.lead{font-size:clamp(28px,8vw,40px);color:var(--rust);line-height:1.1}
+.field{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--clay)}
+.field input{font:500 17px var(--sans);min-height:48px;padding:8px 14px;border-radius:12px;border:2px solid var(--blush);background:var(--cream);color:var(--ink)}
+.consent{display:flex;align-items:center;gap:12px;min-height:48px;font-size:15px}
+.consent input{width:24px;height:24px;accent-color:var(--maroon);flex:none}
+.demo{font-weight:600;color:var(--maroon)}
+.preview{background:var(--paper);border:1px solid var(--blush);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px;font-size:15px}
+.preview[hidden]{display:none}
 @media(min-width:760px){
 body{font-size:19px}
 header,main,footer{max-width:640px}

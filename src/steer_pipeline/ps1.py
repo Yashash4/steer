@@ -17,7 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import store
-from .checks import _has, check_line, crosscheck_lines, frags, load_boundaries, split_rule, study_context, writable
+from .checks import (_has, check_line, crosscheck_lines, frags, framing_attributes, load_boundaries, split_rule, study_context,
+                     writable)
 from .numbers import find_numbers
 from .posts import claims_from_store, load_brand
 
@@ -26,9 +27,14 @@ FONTS = Path(__file__).resolve().parents[2] / "fonts"
 # fixed, code-defined strings: the only lines allowed the "disclaimer" kind (exempt from STEER_TEAM_CLAIM only) and the
 # only qualifiers exempt from a paper's avoid phrases; rounds.toml must use them verbatim, anything else is checked as usual
 DISCLAIMERS = {"Educational hackathon prototype · content pending review by a Steer doctor · not a medical assessment",
-               "Shown, not sent: this page makes no network call and has no form."}
+               "Prototype only. Nothing is sent or stored. Use test details, not real contact information."}
 FIXED_QUALIFIERS = {"An average across studies, not a prediction for you.", "All weight-management medicines, not only GLP-1.",
-                    "Results varied a lot between studies.", "A comparison between groups in one study, not a prediction for you."}
+                    "Results varied a lot between studies.", "A comparison between groups in one study, not a prediction for you.",
+                    # the safety paper's boundaries rules (class, in trials, a doctor weighs benefits and side effects)
+                    "These findings are about this class of medicines, not one product.", "Seen in trials, not in everyday use.",
+                    "A doctor weighs the benefits against the side effects for each person."}
+# copy that must never appear anywhere in the quiz (the hook asks about the difference, not about "her" risk or a "slim" woman)
+FORBIDDEN_COPY = re.compile(r"\bslim\b|\bher risk\b", re.I)
 FALLS = re.compile(r"\b(fell|fall|falls|decrease[sd]?|lower|dropped|drop|loss|lost)\b", re.I)
 
 
@@ -85,13 +91,18 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
     gap_ids = {g["id"]: g for g in spec["gap"]}
     lines = []   # (kind, text, claim_ids, where) for the PS2 checks
 
-    for r in spec["round"]:
-        if r["pmcid"] not in papers:
-            run = _run_for(con, r["pmcid"])
+    openers = {o["id"]: o["text"] for o in spec.get("opener", [])}
+
+    def paper(pm):
+        if pm not in papers:
+            run = _run_for(con, pm)
             claims, doc = claims_from_store(con, run)
-            b = load_boundaries(r["pmcid"])
-            papers[r["pmcid"]] = (run, claims, doc, b, study_context(b, doc))
-        run, claims, doc, b, ctx = papers[r["pmcid"]]
+            b = load_boundaries(pm)
+            papers[pm] = (run, claims, doc, b, study_context(b, doc))
+        return papers[pm]
+
+    for r in spec["round"]:
+        run, claims, doc, b, ctx = paper(r["pmcid"])
         hits = sorted((c for c in claims.values() if _has(c["quote"], r["quote_contains"])), key=lambda c: c["claim_id"])
         if not hits:
             raise BuildError(f"round {r['id']}: no stored claim of {r['pmcid']} has the quote fragment {r['quote_contains']!r}")
@@ -109,19 +120,29 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
         # each revealed number in its quote; number and label exact substrings of the checked sentence
         if r["reveal_number"] not in r["sentence"] or r["reveal_label"] not in r["sentence"]:
             raise BuildError(f"round {r['id']}: the reveal number and label must be copied from its sentence")
-        if not number_in_quote(r["reveal_number"], r["reveal_label"], c["quote"]):
+        if r["opener"] not in openers:
+            raise BuildError(f"round {r['id']}: no opener {r['opener']!r}")
+        # a round without a number says so in the file (reveal_number = ""); then the sentence must hold no number either
+        if not r["reveal_number"]:
+            if find_numbers(r["sentence"]):
+                raise BuildError(f"round {r['id']}: a round without a revealed number must have a sentence without numbers")
+        elif not number_in_quote(r["reveal_number"], r["reveal_label"], c["quote"]):
             raise BuildError(f"round {r['id']}: {r['reveal_number']!r} is not a number in the claim's quote")
         if r.get("context"):
             allowed = _values(c["quote"]) | {v for q in ctx for v in _values(q["quote"])}
             bad = _values(r["context"]) - allowed
             if bad:
                 raise BuildError(f"round {r['id']}: context numbers {sorted(map(str, bad))} are not in the quote or the paper's context quotes")
+        if r["kind"] == "choice" and (any(r["reveal_number"] and r["reveal_number"] in s[0] for s in r["stops"]) or \
+                (isinstance(r["answer"], (int, float)) and any(str(r["answer"]) in s[0] for s in r["stops"]))):
+            raise BuildError(f"round {r['id']}: a choice label must never be the answer itself")
         lines.append(("health", r["sentence"], [c["claim_id"]], f"{r['id']}/sentence", r["pmcid"]))
         lines.append(("framing", r["question"], [], f"{r['id']}/question", r["pmcid"]))
+        lines.append(("opener", openers[r["opener"]], [], f"{r['id']}/opener", r["pmcid"]))
         lines += [("qualifier" if q in FIXED_QUALIFIERS else "framing", q, [c["claim_id"]], f"{r['id']}/qualifier", r["pmcid"])
                   for q in r.get("qualifiers", [])]
         out_rounds.append({"id": r["id"], "doubt": r["doubt"], "kind": r["kind"], "context": r.get("context"),
-                           "question": r["question"], "stops": [{"label": s[0], "value": s[1]} for s in r["stops"]],
+                           "question": r["question"], "opener": openers[r["opener"]], "stops": [{"label": s[0], "value": s[1]} for s in r["stops"]],
                            "answer": r["answer"],
                            "reveals": [{"number": r["reveal_number"], "label": r["reveal_label"], "sentence": r["sentence"]}],
                            "qualifiers": r.get("qualifiers", []), "quote": c["quote"], "source": _source(doc, c),
@@ -165,13 +186,25 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
 
     # every line of copy through the PS2 checks
     for k, v in spec["ui"].items():
+        v = v.replace("{n}", "").replace("{m}", "")
         lines.append(("qualifier" if v in FIXED_QUALIFIERS else "framing", v, [], f"ui/{k}", None))
     for k in ("under", "over", "close", "direction", "meaning_title"):
         lines.append(("framing", spec["readout"][k].replace("{n}", "").replace("{m}", ""), [], f"readout/{k}", None))
     for d in spec["doubt"]:
         lines.append(("framing", d["label"], [], f"doubt/{d['id']}", None))
     for g in gaps_used.values():
-        lines += [("framing", g["title"], [], f"{g['id']}/title", None), ("framing", g["body"], [], f"{g['id']}/body", None)]
+        if g["opener"] not in openers:
+            raise BuildError(f"gap card {g['id']}: no opener {g['opener']!r}")
+        lines += [("framing", g["title"], [], f"{g['id']}/title", None), ("framing", g["body"], [], f"{g['id']}/body", None),
+                  ("opener", openers[g["opener"]], [], f"{g['id']}/opener", None)]
+        if g.get("context"):   # an info card's context line: the paper's own gate-checked context quote, nothing else
+            _, _, _, _, gctx = paper(g["pmcid"])
+            if not any(_has(q["quote"], g["context_phrase"]) for q in gctx):
+                raise BuildError(f"gap card {g['id']}: the context phrase is not in a context quote of {g['pmcid']}")
+            if _values(g["context"]) - {v for q in gctx for v in _values(q["quote"])}:
+                raise BuildError(f"gap card {g['id']}: the context line has numbers outside the context quotes")
+            if not _has(g["context"], g["context_phrase"]):
+                raise BuildError(f"gap card {g['id']}: the context line must contain its context phrase")
     for doubt, qs in spec["doctor_questions"].items():
         lines += [("framing", q, [], f"questions/{doubt}", None) for q in qs]
     for k, v in spec["warm_lead"].items():
@@ -180,23 +213,30 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
               ("signoff", spec["signoff"], [], "signoff", None),
               ("cta", spec["cta"]["primary"], [], "cta/primary", None), ("cta", spec["cta"]["secondary"], [], "cta/secondary", None)]
     rules = settings["rules"]
+    quotes = {x["id"]: x["quote"] for x in out_rounds}
     for kind, text, ids, where, pm in lines:
         _, claims, _, b, _ = papers.get(pm, (None, {}, None, {}, None))
-        line = {"kind": "framing" if kind in ("qualifier", "disclaimer") else kind, "text": text, "claim_ids": ids,
+        if FORBIDDEN_COPY.search(text):
+            report["failures"].append(f"{where}: FORBIDDEN_COPY ({FORBIDDEN_COPY.search(text).group(0)!r})")
+        if kind == "opener":   # daily-life framing: no number, no health fact, no attribute the round's claim does not state
+            attrs = framing_attributes(text, quotes.get(where.split("/")[0], ""))
+            if attrs:
+                report["failures"].append(f"{where}: FRAMING_ADDS_ATTRIBUTE ({attrs})")
+        line = {"kind": "framing" if kind in ("qualifier", "disclaimer", "opener") else kind, "text": text, "claim_ids": ids,
                 "path": where}
         fails = [f for f in check_line(line, claims, brand, rules, b if kind != "qualifier" else {})
                  if not (kind == "qualifier" and f["code"] == "FRAMING_HAS_NUMBER")
                  # the disclaimer states the review status ("content pending review by a Steer doctor"), like the draft mark
                  and not (kind == "disclaimer" and f["code"] == "STEER_TEAM_CLAIM")]
-        if kind == "qualifier" and re.search(r"\d", text):
+        if kind == "qualifier" and re.search(r"\d", text.replace("GLP-1", "")):   # the class name, not a number
             fails.append({"code": "QUALIFIER_HAS_NUMBER", "detail": text})
         for f in fails:
             report["failures"].append(f"{where}: {f['code']} ({f.get('detail', '')})")
     if router is not None:
         groups = [(pm, claims, ctx) for pm, (run, claims, doc, b, ctx) in papers.items()] + [(None, {}, ())]
         for pm, claims, ctx in groups:   # the last group: copy tied to no paper (gap cards, questions, UI words)
-            ls = [{"kind": k if k != "qualifier" else "framing", "text": t, "claim_ids": i, "path": w}
-                  for k, t, i, w, p in lines if p == pm and k in ("health", "framing")]
+            ls = [{"kind": k if k not in ("qualifier", "opener") else "framing", "text": t, "claim_ids": i, "path": w}
+                  for k, t, i, w, p in lines if p == pm and k in ("health", "framing", "opener")]
             if not ls:
                 continue
             res = crosscheck_lines(ls, claims, router, "claude_sonnet", ctx)
@@ -217,7 +257,8 @@ def build(db: str | Path, out: str | Path, settings: dict, rounds_path: str | Pa
         "ui": spec["ui"], "hook": hook,
         "doubts": [{"id": d["id"], "label": d["label"], "answered_by": answered[d["id"]]} for d in spec["doubt"]],
         "rounds": [r for r in out_rounds if r["id"] != "hook"],
-        "gap_cards": [{"id": g["id"], "title": g["title"], "body": g["body"]} for g in gaps_used.values()],
+        "gap_cards": [{"id": g["id"], "title": g["title"], "body": g["body"], "opener": openers[g["opener"]],
+                       "context": g.get("context")} for g in gaps_used.values()],
         "readout": spec["readout"], "doctor_questions": spec["doctor_questions"],
         "cta": {"primary": {"label": spec["cta"]["primary"], "url": spec["cta"]["url"]},
                 "secondary": {"label": spec["cta"]["secondary"], "url": spec["cta"]["url"]}},
