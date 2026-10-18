@@ -87,7 +87,25 @@ def test_retracted_is_refused_unless_allowed():
     with pytest.raises(RetractedError, match="retracted"):
         fetch("PMC13564392", "evidence", client=recorded(**over))
     doc = fetch("PMC13564392", "evidence", client=recorded(**over), allow_retracted=True)
-    assert {"code": "RETRACTED", "page": None, "detail": "PMC marks this article as retracted"} in doc["warnings"]
+    assert {"code": "RETRACTED", "page": None, "detail": "PMC or Europe PMC marks this article as retracted"} in doc["warnings"]
+
+
+def test_retracted_in_europepmc_on_the_abstract_path():
+    # a real record (PMID 39549083): pubType "Retracted Publication" and a "Retraction in" link; not in PMC
+    over = {"idconv": httpx.Response(200, json={"records": [{"pmid": 39549083, "doi": "10.1007/s10029-024-03185-8"}]}),
+            "europepmc": httpx.Response(200, content=(HTTP / "europepmc-retracted.json").read_bytes())}
+    with pytest.raises(RetractedError, match="retracted"):
+        fetch("39549083", "evidence", client=recorded(**over))
+    epmc = json.loads((HTTP / "europepmc-retracted.json").read_text())
+    rec = epmc["resultList"]["result"][0]
+    rec["abstractText"] = "This letter comments on case volume and complications in hernia surgery."
+    rec["pubTypeList"] = {"pubType": ["Letter"]}  # only the correction link left
+    over["europepmc"] = httpx.Response(200, json=epmc)
+    with pytest.raises(RetractedError):
+        fetch("39549083", "evidence", client=recorded(**over))
+    doc = fetch("39549083", "evidence", client=recorded(**over), allow_retracted=True)
+    assert doc["citation"]["retracted"] is True
+    assert {w["code"] for w in doc["warnings"]} == {"RETRACTED", "ABSTRACT_ONLY"}
 
 
 def test_abstract_only_when_not_open_access(validate):
@@ -185,3 +203,5 @@ def test_full_text_from_pmc_plain_text_when_no_pdf(validate):
     assert doc["source"]["access"] == "full_text" and doc["extraction_version"] == "pmc-text-1"
     assert doc["source"]["provenance"]["resolved_url"].endswith("PMC13564392.1.txt")
     assert doc["sentences"][-1]["text"] == "Weight regain was seen in 8,993 patients after stopping treatment."
+    assert {"code": "NO_PAGE_LAYOUT", "page": None,
+            "detail": "PMC plain-text rendering: no pages or bounding boxes; locate claims by sentence"} in doc["warnings"]

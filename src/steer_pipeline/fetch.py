@@ -150,6 +150,15 @@ def html_to_text(fragment: str) -> str:
     return "\n\n".join(x.replace("\n", " ") for x in paras if x)
 
 
+def europepmc_retracted(epmc: dict | None) -> bool:
+    """Europe PMC marks a retracted paper by publication type or by a 'Retraction in' correction link."""
+    if not epmc:
+        return False
+    types = (epmc.get("pubTypeList") or {}).get("pubType") or []
+    links = (epmc.get("commentCorrectionList") or {}).get("commentCorrection") or []
+    return "Retracted Publication" in types or any(c.get("type") == "Retraction in" for c in links)
+
+
 def _citation_from(oa: dict | None, epmc: dict | None, ids: dict) -> dict:
     c = {"title": None, "authors": [], "journal": None, "year": None,
          "doi": ids.get("doi"), "pmid": ids.get("pmid"), "pmcid": ids.get("pmcid"), "license": None, "retracted": None}
@@ -162,10 +171,11 @@ def _citation_from(oa: dict | None, epmc: dict | None, ids: dict) -> dict:
         c["doi"] = c["doi"] or epmc.get("doi")
         c["pmid"] = c["pmid"] or epmc.get("pmid")
         c["pmcid"] = c["pmcid"] or epmc.get("pmcid")
+        c["retracted"] = europepmc_retracted(epmc)
     if oa:  # the OA record is the authority for what we actually downloaded
         c["title"] = oa.get("title") or c["title"]
         c["license"] = oa.get("license_code") or c["license"]
-        c["retracted"] = bool(oa.get("is_retracted"))
+        c["retracted"] = bool(oa.get("is_retracted")) or bool(c["retracted"])
         c["doi"] = oa.get("doi") or c["doi"]
         c["pmid"] = str(oa["pmid"]) if oa.get("pmid") else c["pmid"]
         c["pmcid"] = oa.get("pmcid") or c["pmcid"]
@@ -209,8 +219,8 @@ def _fetch(source: str, role: str, client: httpx.Client, allow_retracted: bool) 
     warnings = []
     if citation["retracted"]:
         if not allow_retracted:
-            raise RetractedError(f"{ids.get('pmcid')} is marked retracted in PMC; refusing to ingest it")
-        warnings.append({"code": "RETRACTED", "page": None, "detail": "PMC marks this article as retracted"})
+            raise RetractedError(f"{source} is marked retracted (PMC or Europe PMC); refusing to ingest it")
+        warnings.append({"code": "RETRACTED", "page": None, "detail": "PMC or Europe PMC marks this article as retracted"})
 
     if oa:
         # the article PDF when PMC has one; otherwise PMC's plain-text rendering of the full article
@@ -228,7 +238,9 @@ def _fetch(source: str, role: str, client: httpx.Client, allow_retracted: bool) 
             extraction_version=PMC_TEXT_VERSION, extractor={"name": "steer_pipeline.fetch", "version": PMC_TEXT_VERSION},
             pages=[{"page": 1, "width": None, "height": None, "layout": "single",
                     "lines": text_lines(content.decode("utf-8-sig"))}],
-            citation=citation, warnings=warnings)
+            citation=citation, warnings=warnings + [{
+                "code": "NO_PAGE_LAYOUT", "page": None,
+                "detail": "PMC plain-text rendering: no pages or bounding boxes; locate claims by sentence"}])
 
     if not epmc or not epmc.get("abstractText"):
         raise FetchError(f"{source}: not in the PMC open-access set and no abstract found in Europe PMC")

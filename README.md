@@ -43,9 +43,11 @@ A DOI, PubMed ID or URL, PMC ID or URL, or a direct PDF link is resolved like th
    [PMC Article Datasets on AWS](https://registry.opendata.aws/ncbi-pmc/) (public bucket `pmc-oa-opendata`).
    - The article PDF is MD5-checked against the record and then read like any PDF.
    - When PMC has no article PDF, PMC's plain-text version of the full article is used instead
-     (`extraction_version` `pmc-text-1`, no page coordinates).
-   - The licence and the retraction flag come from the record. A retracted article is refused unless
-     `--allow-retracted` is given; then it carries a `RETRACTED` warning.
+     (`extraction_version` `pmc-text-1`, warning `NO_PAGE_LAYOUT`: no pages or coordinates, claims are located by sentence).
+   - The licence comes from the record.
+   - An article marked retracted, by PMC's record or by Europe PMC ("Retracted Publication", or a
+     "Retraction in" link), is refused on every route unless `--allow-retracted` is given; then it carries a
+     `RETRACTED` warning.
 3. Otherwise only the abstract is taken from Europe PMC (`access: abstract_only`, warning `ABSTRACT_ONLY`).
    The abstract's HTML is parsed with an HTML parser:
    - entities are decoded and `<sup>`/`<sub>` text is kept (kg/m<sup>2</sup> → kg/m2);
@@ -74,7 +76,7 @@ The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
 - `sentences[]`: `sid` (`p0004-s0017`, numbered per page, taking the page where the sentence starts), its text,
   its spans in `text` and `raw_text`, and the lines it covers.
 - `warnings[]`: limitations, never hidden. The codes are `ABSTRACT_ONLY`, `OCR_REQUIRED_PAGE`, `EMPTY_PAGE`,
-  `UNCERTAIN_COLUMN_ORDER`, `NO_CITATION_METADATA`, `RETRACTED` and `TABLE_OR_FIGURE_TEXT`.
+  `UNCERTAIN_COLUMN_ORDER`, `NO_CITATION_METADATA`, `RETRACTED`, `TABLE_OR_FIGURE_TEXT` and `NO_PAGE_LAYOUT`.
 - `extraction_version`: changes whenever the parser's output can change. Sentence IDs are only comparable
   within one extraction version.
 
