@@ -528,6 +528,50 @@ def scene_kind(scene_lines: list[dict], index: int) -> str:
     return "cta" if kinds & {"cta", "signoff"} else "point"
 
 
+def one_take(says: list[str], voice: dict, tts) -> list[tuple[bytes, list]]:
+    """The whole script voiced in ONE call (one consistent prosody and loudness: separate calls made the Expressive voice
+    restart its style on every line), then cut back into lines at the word boundaries. Returns, per line, its PCM and its
+    word boundaries rebased to the cut."""
+    text = " ".join(x if x.rstrip()[-1:] in ".?!:" else x.rstrip() + "." for x in says)
+    audio, bounds = tts(text, voice)
+    pcm = decode_pcm(audio)
+    total = len(pcm) / 2 / RATE
+    words = [(k, w) for k, x in enumerate(says) for w in x.split()]
+    owner, j = [], 0                                  # each boundary -> the line whose word it matches, in order
+    nm = lambda w: _norm(w).rstrip(".")                # the take adds a full stop where a line had none
+    for btext, off, dur in bounds:
+        for m in range(j, min(j + 4, len(words))):
+            if nm(words[m][1]) == nm(btext) or (nm(btext) and nm(btext) in nm(words[m][1])):
+                owner.append((words[m][0], btext, off, dur))
+                j = m + 1
+                break
+    spans = []
+    for k in range(len(says)):
+        mine = [(o, d) for kk, _, o, d in owner if kk == k]
+        spans.append((mine[0][0], mine[-1][0] + mine[-1][1]) if mine else None)
+    for k, sp in enumerate(spans):
+        if sp is None:
+            raise VoiceError(f"one take: no word boundaries matched line {k}: {says[k]!r}")
+    # one cut per pause, halfway between a line's last word and the next line's first: no audio lost or repeated
+    cuts = [0.0] + [(spans[k - 1][1] + spans[k][0]) / 2 for k in range(1, len(says))] + [total]
+    out = []
+    for k in range(len(says)):
+        a0, a1 = cuts[k], cuts[k + 1]
+        i0, i1 = int(round(a0 * RATE)) * 2, int(round(a1 * RATE)) * 2
+        rel = [(t_, o - a0, d) for kk, t_, o, d in owner if kk == k]
+        out.append((pcm[i0:i1], rel))
+    return out
+
+
+def loudnorm(pcm: bytes, target: float = -16.0) -> bytes:
+    """The master track normalised to target LUFS (ffmpeg loudnorm, one pass), same length and rate."""
+    r = subprocess.run([ffmpeg_exe(), "-loglevel", "error", "-f", "s16le", "-ac", "1", "-ar", str(RATE), "-i", "pipe:0",
+                        "-af", f"loudnorm=I={target}:TP=-1.5:LRA=11", "-ar", str(RATE), "-f", "s16le", "-ac", "1", "pipe:1"],
+                       input=pcm, capture_output=True, check=True)
+    out = r.stdout[:len(pcm)]
+    return out + b"\x00" * (len(pcm) - len(out))
+
+
 def build_timeline(script: dict, voice: dict, tts, health_hold: float = 0.0, end_card: float = END_CARD,
                    silent: tuple = ()) -> tuple[list[dict], bytes, dict]:
     """Voice every line; return the scenes with line/caption/word times, the full PCM track and timing stats.
@@ -536,15 +580,16 @@ def build_timeline(script: dict, voice: dict, tts, health_hold: float = 0.0, end
     silence = lambda s: b"\x00\x00" * int(round(s * RATE))
     pcm += silence(LEAD)
     t = LEAD
+    lines_all = [ln for sc in script["scenes"] for ln in sc["lines"]]
+    t0 = time.perf_counter()
+    takes = iter(one_take([spoken(ln["text"])[0] for ln in lines_all], voice, tts))   # ONE voice call per reel
+    tts_s += time.perf_counter() - t0
     for si, sc in enumerate(script["scenes"]):
         scene = {"index": si, "kind": scene_kind(sc["lines"], si), "start": t - (LEAD if si == 0 else 0), "lines": [],
                  "captions": []}
         for li, ln in enumerate(sc["lines"]):
             say, per_word = spoken(ln["text"])
-            t0 = time.perf_counter()
-            audio, bounds = tts(say, voice)
-            tts_s += time.perf_counter() - t0
-            line_pcm = decode_pcm(audio)
+            line_pcm, bounds = next(takes)
             dur = len(line_pcm) / 2 / RATE
             starts = word_times(per_word, bounds, dur)
             gap = GAP_LINE if li + 1 < len(sc["lines"]) else GAP_SCENE
@@ -565,6 +610,7 @@ def build_timeline(script: dict, voice: dict, tts, health_hold: float = 0.0, end
     end = {"index": len(scenes), "kind": "sources", "start": t, "end": t + end_card, "lines": [], "captions": []}
     pcm += silence(end_card)
     scenes.append(end)
+    pcm = loudnorm(pcm)
     return scenes, pcm, {"tts_seconds": round(tts_s, 2), "timeline_seconds": round(end["end"], 3)}
 
 

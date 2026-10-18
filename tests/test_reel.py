@@ -109,9 +109,11 @@ def test_a_short_reel_encodes_with_captions_and_the_draft_mark(tmp_path):
                                      "claim_ids": ["c1"]}]}]}
     said = []
     tts = lambda t, v: (said.append(t), fake_tts(t, v))[1]
-    heard = lambda wav: said.pop(0) if wav.name.startswith("line") else \
+    per_line = [reel.spoken(ln["text"])[0] for sc in script["scenes"] for ln in sc["lines"]]
+    heard = lambda wav: per_line.pop(0) if wav.name.startswith("line") else \
         " ".join(reel.spoken(ln["text"])[0] for ln in script["scenes"][int(wav.stem.split("-")[1])]["lines"])
     t = reel.make_reel(record, script, BRAND, tmp_path, {"provider": "fake", "name": "fake"}, tts=tts, transcribe=heard)
+    assert said == ["Will the weight come back? On average 0.4 kilograms a month, not a personal promise."]   # ONE take
     assert t["probe"]["width"] == 1080 and t["probe"]["height"] == 1920 and t["probe"]["fps"] == 30.0
     assert t["probe"]["audio"]
     # the only failure of this 2-scene test reel is its length (under the 20 s floor)
@@ -264,7 +266,7 @@ def test_elevenlabs_voice_credit_fallback_and_no_fallback_under_a_presenter(tmp_
 
     ok = run(tmp_path / "ok", lambda url, body, k: eleven_reply(body["text"]))
     assert ok["voice"]["credit"] == "Voice: AI-generated (ElevenLabs)" and ok["voice"]["fallback"] is None
-    assert [c["cache_hit"] for c in ok["voice"]["calls"]] == [False, False]
+    assert [c["cache_hit"] for c in ok["voice"]["calls"]] == [False]          # the whole script in one call
     assert (tmp_path / "ok" / "caption.txt").read_text().rstrip().endswith("Voice: AI-generated (ElevenLabs)")
     for f in ("reel_trace.json", "caption.txt", "reel_transcript.md"):
         assert "sk-TESTSECRET" not in (tmp_path / "ok" / f).read_text()      # the key is never written anywhere
@@ -419,3 +421,20 @@ def test_the_pull_back_never_shows_a_non_cc_by_page():
     assert reel.pullback_problems(bad | {"page_images": False}) == []
     assert reel.pullback_problems({"licence": "CC BY", "page_images": True, "page_images_drawn": 1}) == []
     assert reel.pullback_problems(None) == []
+
+
+def test_one_take_cuts_the_single_call_back_into_its_lines_at_the_word_boundaries():
+    calls = []
+    tts = lambda t, v: (calls.append(t), fake_tts(t, v))[1]
+    says = ["Will the weight come back?", "On average 0.4 kilograms a month.", "Talk to a Steer doctor"]
+    parts = reel.one_take(says, {"name": "x"}, tts)
+    assert len(calls) == 1 and calls[0].endswith("Talk to a Steer doctor.")
+    assert [len(b) for _, b in parts] == [5, 6, 5] and all(b[0][1] >= 0 for _, b in parts)   # rebased word times
+    total = len(reel.decode_pcm(fake_tts(calls[0], None)[0]))
+    assert sum(len(p) for p, _ in parts) == total and all(len(p) > 0 for p, _ in parts)   # nothing lost, nothing repeated
+
+
+def test_presenter_clips_carry_no_sound_in_the_composition():
+    src = (reel.REEL_DIR / "src" / "Reel.tsx").read_text()
+    assert "<OffthreadVideo src={staticFile(p.pr.video)} muted" in src
+    assert "<OffthreadVideo src={staticFile(p.b.video)} muted" in (reel.REEL_DIR / "src" / "Fx.tsx").read_text()
