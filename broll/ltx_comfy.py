@@ -7,7 +7,7 @@ size, latent x2 upscale, 3 steps, CFG 1). Two additions follow Lightricks' LTX-2
 - --audio: OUR checked TTS WAV, encoded by the audio VAE and FROZEN (noise mask 0) in both stages, so the model moves
   the mouth to it and never rewrites it. The model's audio is never kept: clips are written muted and the reel muxes
   our voice track (the Whisper round trip runs on the final reel).
-Modality guidance stays off (reported to deform mouths, HF Lightricks/LTX-2.5 discussion 44).
+Modality guidance is off by default (reported to deform mouths, HF Lightricks/LTX-2.5 discussion 44); --modality turns it on.
 
 Usage (one GPU job at a time, under the box's GPU lock):
   python ltx_comfy.py --prompt "..." --out clip.mp4 [--width 768 --height 1280] [--seconds 4] [--seed 7]
@@ -40,7 +40,7 @@ NEG = ("text, letters, words, captions, subtitles, logo, watermark, numbers, sig
        "video game, ugly, doctor, medical setting, scrubs, lanyard, ID badge")
 
 
-def graph(prompt, w, h, frames, seed, sampler, image=None, audio=None, seconds=None):
+def graph(prompt, w, h, frames, seed, sampler, image=None, audio=None, seconds=None, modality=1.0):
     g = {
         "dit": {"class_type": "UNETLoader", "inputs": {"unet_name": DIT, "weight_dtype": "default"}},
         "clip": {"class_type": "CLIPLoader", "inputs": {"clip_name": CLIP, "type": "ltxv", "device": "default"}},
@@ -51,7 +51,11 @@ def graph(prompt, w, h, frames, seed, sampler, image=None, audio=None, seconds=N
         "neg": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["clip", 0], "text": NEG}},
         "cond": {"class_type": "LTXVConditioning", "inputs": {"positive": ["pos", 0], "negative": ["neg", 0], "frame_rate": FPS}},
         "v1": {"class_type": "EmptyLTXVLatentVideo", "inputs": {"width": w // 2, "height": h // 2, "length": frames, "batch_size": 1}},
-        "guide": {"class_type": "CFGGuider", "inputs": {"model": ["dit", 0], "positive": ["cond", 0], "negative": ["cond", 1], "cfg": 1}},
+        # modality > 1: LTXVModalityGuidance (an extra pass per step with the audio<->video cross-attention cut, pushing
+        # toward the coupled prediction: stronger lip-sync; it runs as a post-CFG step, so it works at CFG 1)
+        "mg": {"class_type": "LTXVModalityGuidance", "inputs": {"model": ["dit", 0], "modality_scale": modality,
+                                                               "start_percent": 0.0, "end_percent": 1.0}},
+        "guide": {"class_type": "CFGGuider", "inputs": {"model": ["mg", 0], "positive": ["cond", 0], "negative": ["cond", 1], "cfg": 1}},
         "ks": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": sampler}},
         "sg1": {"class_type": "ManualSigmas", "inputs": {"sigmas": S1}},
         "sg2": {"class_type": "ManualSigmas", "inputs": {"sigmas": S2}},
@@ -129,6 +133,7 @@ def main():
     a.add_argument("--sampler", default="euler_ancestral", choices=["euler", "euler_ancestral"])
     a.add_argument("--image")
     a.add_argument("--audio")
+    a.add_argument("--modality", type=float, default=1.0, help="audio->video modality guidance scale (1 = off; reference 3)")
     a = a.parse_args()
     tag = uuid.uuid4().hex[:8]
     seconds = a.seconds or 4.0
@@ -145,7 +150,7 @@ def main():
     if a.audio:
         audio = f"steer_{tag}.wav"
         padded_wav(Path(a.audio), inp / audio, clip_s)
-    g = graph(a.prompt, a.width, a.height, frames, a.seed, a.sampler, image, audio, clip_s)
+    g = graph(a.prompt, a.width, a.height, frames, a.seed, a.sampler, image, audio, clip_s, a.modality)
     with open(LOCK, "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         t0 = time.time()
@@ -165,7 +170,7 @@ def main():
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src, a.out)
     meta = {"out": a.out, "seconds": round(took, 1), "frames": frames, "fps": FPS, "clip_s": round(clip_s, 3), "seed": a.seed,
-            "sampler": a.sampler, "size": [a.width, a.height], "image": a.image, "audio": a.audio, "prompt": a.prompt,
+            "sampler": a.sampler, "modality": a.modality, "size": [a.width, a.height], "image": a.image, "audio": a.audio, "prompt": a.prompt,
             "negative": NEG, "transformer": DIT, "text_encoder": CLIP}
     Path(a.out).with_suffix(".json").write_text(json.dumps(meta, indent=1))
     print("DONE", json.dumps(meta))

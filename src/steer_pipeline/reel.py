@@ -155,6 +155,16 @@ def audio_numbers_match(line_text: str, transcript: str | None) -> dict:
 # --- voice and transcription (replaceable for tests) ---
 
 def edge_tts_voice(text: str, voice: dict) -> tuple[bytes, list[tuple[str, float, float]]]:
+    try:
+        audio, words = _edge_tts(text, voice)
+    except Exception as e:   # network, service: a clean voice failure, as for ElevenLabs
+        raise VoiceError(f"edge-tts failed: {type(e).__name__}") from None
+    if not audio:
+        raise VoiceError("edge-tts returned no audio")
+    return audio, words
+
+
+def _edge_tts(text: str, voice: dict) -> tuple[bytes, list[tuple[str, float, float]]]:
     import edge_tts
 
     async def run():
@@ -873,11 +883,11 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
         scenes, pcm, timings = build_timeline(script, voice, tts, *holds)
     except VoiceError as e:
         out_dir.mkdir(parents=True, exist_ok=True)
-        if presenter:   # the presenter clips move to THIS voice: another voice under the face is not an option
+        if presenter or not eleven:   # presenter clips move to THIS voice (any provider); edge-tts has no fallback
             trace = {"post_id": record["post_id"], "run_id": record["run_id"], "status": "failed", "engine": engine,
                      "voice": {k: v for k, v in voice.items()},
-                     "failures": [{"code": "VOICE_FAILED", "detail": f"{e}; the reel has presenter clips animated from "
-                                   "this voice, so there is no edge-tts fallback"}]}
+                     "failures": [{"code": "VOICE_FAILED", "detail": f"{e}; " + ("the reel has presenter clips animated "
+                                   "from this voice, so no other voice may replace it" if presenter else "no fallback voice")}]}
             (out_dir / "reel_trace.json").write_text(json.dumps(trace, ensure_ascii=False, indent=1), encoding="utf-8")
             return trace
         fallback = {"error": str(e), "to": "edge-tts"}   # the whole reel in one voice, never mixed

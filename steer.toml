@@ -104,7 +104,7 @@ brief_claims = 4   # claims picked for an automatic brief
 # (ELEVENLABS_API_KEY); audio cached in ~/.cache/steer-tts; "Voice: AI-generated (ElevenLabs)" goes in the caption.
 # If it fails, the whole reel is voiced with edge-tts (name/rate below), unless the reel has presenter clips: then it fails.
 [voice]
-provider = "elevenlabs"         # Sarah, picked by the user from trials/voice-1 (edge-tts settings below: the fallback)
+provider = "edge-tts"           # the user's final pick (Neerja); "elevenlabs" (Sarah, trials/voice-1) stays an option
 name = "en-IN-NeerjaExpressiveNeural"
 rate = "+8%"
 voice_id = "EXAVITQu4vr4xnSDxMaL"   # ElevenLabs premade "Sarah - Mature, Reassuring, Confident"

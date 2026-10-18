@@ -279,6 +279,18 @@ def test_elevenlabs_voice_credit_fallback_and_no_fallback_under_a_presenter(tmp_
     assert pr["status"] == "failed" and [f["code"] for f in pr["failures"]] == ["VOICE_FAILED"]
     assert not (tmp_path / "presenter" / "reel.mp4").exists()
 
+def test_an_edge_tts_failure_fails_the_reel_cleanly_with_or_without_a_presenter(tmp_path, monkeypatch):
+    record = {"post_id": "p1", "run_id": "r1", "sources": []}
+    script = {"scenes": [{"lines": [{"kind": "framing", "text": "Will the weight come back?", "claim_ids": []}]}]}
+    def down(text, voice):
+        raise ConnectionError("no route")
+    monkeypatch.setattr(reel, "_edge_tts", down)
+    voice = {"provider": "edge-tts", "name": "en-IN-NeerjaExpressiveNeural"}
+    for name, presenter in (("plain", None), ("presenter", {0: "clip.mp4"})):
+        t = reel.make_reel(record, script, BRAND, tmp_path / name, voice, transcribe=lambda w: "", presenter=presenter)
+        assert t["status"] == "failed" and [f["code"] for f in t["failures"]] == ["VOICE_FAILED"]
+        assert "edge-tts failed: ConnectionError" in t["failures"][0]["detail"] and not (tmp_path / name / "reel.mp4").exists()
+
 
 def test_a_long_health_line_becomes_two_cards_split_at_its_colon():
     text = ("Aged 45+ in Chennai, Delhi and Karachi, with body mass index under 25 kg/m2: diabetes risk was 5.27 times higher "
