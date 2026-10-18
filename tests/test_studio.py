@@ -349,6 +349,8 @@ def test_a_400_character_clearance_wraps_inside_its_card(tmp_path, width, height
         pg.wait_for_selector(".review-status .clearances p")
         assert pg.inner_text(".review-status .chip") == "verified"
         assert " IST" in pg.inner_text(".review-status .clearances")
+        status_row = pg.evaluate("""() => [...document.querySelectorAll('dt')].find(d => d.textContent === 'Status').nextElementSibling.innerText""")
+        assert " IST" in status_row and "+00:00" not in status_row and "T11:" not in status_row, status_row
         r = pg.evaluate("""() => { const card = document.querySelector('.review-status'), blk = document.querySelector('.review-status .clearances');
             const a = card.getBoundingClientRect(), x = blk.getBoundingClientRect();
             return {sw: blk.scrollWidth, cw: blk.clientWidth, inside: x.left >= a.left && x.right <= a.right && x.top >= a.top && x.bottom <= a.bottom}; }""")

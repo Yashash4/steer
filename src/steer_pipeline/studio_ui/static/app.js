@@ -56,6 +56,8 @@
   function stClass(c) { return c.bucket === "rejected" ? "st-rejected" : (c.usable ? "st-passed" : "st-needs"); }
   var IST = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
   function ist(iso) { var d = new Date(iso); return isNaN(d) ? String(iso) : IST.format(d) + " IST"; }
+  // any ISO time inside a stored status text, shown in IST like the rest of the page
+  function istText(t) { return String(t).replace(/\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)/g, ist); }
   function statusPill(c) { return '<span class="chip ' + stClass(c) + '">' + esc(c.status_word) + "</span>"; }
   function reviewStatus(c) {
     var cl = c.clearances || [];
@@ -74,7 +76,7 @@
     var cc = c.crosscheck ? esc(c.crosscheck.verdict) + " (" + esc(c.crosscheck.independence || "no independence recorded") + (c.crosscheck.model ? ", " + esc(c.crosscheck.model) : "") + ")" : "not run";
     return '<dl class="kv">' +
       "<dt>Claim ID</dt><dd>" + esc(c.claim_id) + " (" + esc(p.short) + ", " + esc(c.paper) + ")</dd>" +
-      "<dt>Status</dt><dd>" + statusPill(c) + '<div class="small">' + esc(c.status) + "</div></dd>" +
+      "<dt>Status</dt><dd>" + statusPill(c) + '<div class="small">' + esc(istText(c.status)) + "</div></dd>" +
       "<dt>Claim text</dt><dd>" + esc(c.claim_text) + "</dd>" +
       "<dt>Source</dt><dd>" + esc(cit.title) + ", " + esc(cit.journal) + " " + esc(cit.year) + ' (<a href="https://doi.org/' + esc(cit.doi) + '">doi ' + esc(cit.doi) + "</a>, licence " + esc(cit.license) + ")</dd>" +
       "<dt>Exact quote</dt><dd><blockquote>" + esc(c.quote) + "</blockquote></dd>" +
