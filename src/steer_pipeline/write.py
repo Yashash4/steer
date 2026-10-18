@@ -109,7 +109,8 @@ Every line has a kind:
 Never write sources: the sources slide is added by code.
 State the message (the one thing the audience should take away) and the reasoning (why this post, for whom,
 which doubt it answers). Both are published with the post and checked like health lines: the message may only
-say what the claims used say, and neither may hold a number that is not in those claims: no claim ids, no
+combine what the claims used say, plus at most one call to talk to a doctor; no advice or recommendation of
+your own (not "so do X", not "X is no reason to skip Y"). Neither may hold a number that is not in those claims: no claim ids, no
 slide numbers, no counts, no number words such as "one study" or "three cities". Follow every editorial requirement given for the paper."""
 
 

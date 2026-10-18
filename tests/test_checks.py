@@ -281,3 +281,18 @@ def test_message_and_reasoning_are_checked_as_published_text():
     assert "message" in seen and "reasoning" not in seen
     assert r["status"] == "blocked"
     assert [f["code"] for f in next(x for x in r["lines"] if x["path"] == "message")["failures"]] == ["OVERSTATED"]
+
+
+def test_a_message_that_adds_advice_is_blocked():
+    advice = copy.deepcopy(GOOD) | {"message": "Weight came back at 0.4 kg a month on average, so never stop a medicine."}
+
+    def answer(hp, fp):  # the checker's fake output: the added advice is unsupported
+        out = says()(hp, fp)
+        for v in out["health"]:
+            if v["line_id"] == "message":
+                v |= {"verdict": "unsupported", "reason": "the quotes give no advice about stopping a medicine"}
+        return out
+    r = checks.check_post(advice, CLAIMS, BRAND, RULES, WEST, fake_router(["opencode_glm"], {"glm-5.3": answer}), "claude_sonnet")
+    assert r["status"] == "blocked"
+    assert [f["code"] for f in next(x for x in r["lines"] if x["path"] == "message")["failures"]] == ["UNSUPPORTED"]
+    assert 'line_id "message"' in checks.LINE_SYSTEM and "advice" in checks.LINE_SYSTEM
