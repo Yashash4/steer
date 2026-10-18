@@ -151,7 +151,15 @@ claim also states. Every match is reported with its sentence IDs and lines. Two 
 - A `LAYOUT_CHECK_NEEDED` warning when it touches a page or region with an unresolved reading-order warning.
   **A pass with this warning is not a verified claim until a reviewer has compared it with the page.**
 
-The report summary counts such claims apart: `passed`, `passed_clean`, `needs_layout_check`, `rejected`.
+- A `SHORT_QUOTE` warning when the quote has fewer than 5 words and passed only because it holds the claim's
+  number: check its context on the page.
+
+A quote made only of numbers and units ("0.4 kg") is rejected as `QUOTE_NO_CONTEXT`, because it cannot show
+what is measured. The exception is table text: a table row's meaning comes from its column headers, which the
+reviewer checks on the page.
+
+The report summary counts flagged passes apart: `passed`, `passed_clean`, `needs_layout_check`, `short_quote`,
+`rejected`.
 
 The canonical form, applied in this order:
 1. Unicode NFKC (ligatures, superscript digits such as "²", full-width forms).
@@ -199,6 +207,7 @@ Edit the file to change models.
   - `anthropic_api` calls the Messages API with the key in the environment variable named by `key_env`.
   - `openai_compatible` works with OpenAI, OpenCode Go, OpenRouter, or a local vLLM or Ollama. It sends a
     `User-Agent` and one `x-opencode-session` per run.
+    The `opencode_go` model name in `steer.toml` is unverified until a key is set.
 - **Behaviour:**
   - Each endpoint gets one call and one retry, then the chain moves to the next endpoint.
   - An error, a timeout, output that is not JSON, or JSON that fails the job's schema counts as a failure.

@@ -7,7 +7,7 @@
 
 - 10 pages (6 two_column, 2 mixed, 2 single), 409 sentences, extraction `pdf-1` (pymupdf 1.28.2).
 - Warnings: UNCERTAIN_COLUMN_ORDER x3, TABLE_OR_FIGURE_TEXT x10.
-- Time (measured by the script): fetch + ingest 9.115 s, verify 0.013 s.
+- Time (measured by the script): fetch + ingest 3.368 s, verify 0.013 s.
 
 ## Claims checked by the gate
 

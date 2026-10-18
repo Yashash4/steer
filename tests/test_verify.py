@@ -157,7 +157,8 @@ def test_report_counts_and_cli(two, tmp_path):
     out = tmp_path / "report.json"
     assert cli.main(["verify", str(claims_path), "--doc", str(doc_path), "-o", str(out)]) == 1
     report = json.loads(out.read_text())
-    assert report["summary"] == {"claims": 2, "passed": 1, "passed_clean": 1, "needs_layout_check": 0, "rejected": 1}
+    assert report["summary"] == {"claims": 2, "passed": 1, "passed_clean": 1, "needs_layout_check": 0, "short_quote": 0,
+                                 "rejected": 1}
     assert [r["status"] for r in report["results"]] == ["pass", "reject"]
     assert report["gate_version"] == "gate-1" and report["min_words"] == 5
 
@@ -195,7 +196,8 @@ def test_page_level_uncertainty_flags_the_claim(two):
     assert r["status"] == "pass"
     assert [w["code"] for w in r["warnings"]] == ["LAYOUT_CHECK_NEEDED"]
     assert r["warnings"][0]["detail"].startswith("page 2, lines p0002-l")
-    assert report["summary"] == {"claims": 1, "passed": 1, "passed_clean": 0, "needs_layout_check": 1, "rejected": 0}
+    assert report["summary"] == {"claims": 1, "passed": 1, "passed_clean": 0, "needs_layout_check": 1, "short_quote": 0,
+                                 "rejected": 0}
 
 
 def test_region_uncertainty_flags_only_overlapping_claims(two):
@@ -211,3 +213,31 @@ def test_region_uncertainty_flags_only_overlapping_claims(two):
     far = run(doc, "People were followed up every fortnight",
               "Thus, it is reasonable to hypothesize that providing healthier foods could improve")
     assert far["status"] == "pass" and far["warnings"] == []
+
+
+# --- E7: short quotes ---
+
+def test_short_quote_with_matching_number_passes_with_a_warning(two):
+    r = run(two, "352 people completed the study", "352 participants")
+    assert r["status"] == "pass" and [w["code"] for w in r["warnings"]] == ["SHORT_QUOTE"]
+    report = verify([{"claim_id": "s", "text": "352 people completed the study", "document_id": two["document_id"],
+                      "quote": "352 participants"}], [two])
+    assert report["summary"]["passed_clean"] == 0 and report["summary"]["short_quote"] == 1
+
+
+def test_e7_bare_number_quote(tmp_path):
+    from steer_pipeline.text import ingest_text
+    p = tmp_path / "e7.txt"
+    p.write_text("Weight fell by 0.4 kg in the group.\n")
+    doc = ingest_text(p, "evidence")
+    r = run(doc, "Weight fell by 0.4 kg", "0.4 kg")
+    assert r["status"] == "reject" and [x["code"] for x in r["reasons"]] == ["QUOTE_NO_CONTEXT"]
+    ok = run(doc, "Weight fell by 0.4 kg", "fell by 0.4 kg")
+    assert ok["status"] == "pass" and [w["code"] for w in ok["warnings"]] == ["SHORT_QUOTE"]
+
+
+def test_table_row_numbers_only_still_pass(two):
+    # a table row's meaning comes from its headers, which the reviewer checks on the page
+    q = "71.8 ± 11.3 71.8 ± 11.5 0.0 ± 1.7 1.00"
+    r = run(two, "Control body weight was 71.8 ± 11.3 at baseline", q)
+    assert r["status"] == "pass" and r["from_table_text"] is True

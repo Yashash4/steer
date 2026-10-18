@@ -4,9 +4,11 @@ Code only, no AI. A failing claim is rejected with every reason; it is never rep
 Claim input: {"claim_id", "text", "document_id", "quote"}.
 """
 
+import re
+
 from .assemble import raw_to_line, text_to_raw
 from .normalize import canonical
-from .numbers import find_numbers
+from .numbers import UNITS, find_numbers
 
 GATE_VERSION = "gate-1"
 MIN_WORDS = 5
@@ -63,6 +65,12 @@ class _Doc:
         return out
 
 
+def _has_context(quote: str) -> bool:
+    """True when the quote has a word of 3 or more letters that is not a unit ("0.4 kg" has none)."""
+    words = re.findall(r"[^\W\d_]{3,}", quote)
+    return any(w.lower() not in UNITS for w in words)
+
+
 def _reason(code: str, detail: str) -> dict:
     return {"code": code, "detail": detail}
 
@@ -87,21 +95,28 @@ def check_claim(claim: dict, docs: dict[str, _Doc], min_words: int = MIN_WORDS) 
 
     claim_nums, quote_nums = find_numbers(claim.get("text", "")), find_numbers(quote)
     quote_keys = {n.key() for n in quote_nums}
-    warnings = []
+    hedge_warnings = []
     for n in claim_nums:
         if n.key() in quote_keys and not n.hedged and any(q.hedged and q.key() == n.key() for q in quote_nums):
-            warnings.append(_reason("HEDGE_DROPPED", f"the quote hedges {n.text!r} (for example 'approximately'); "
+            hedge_warnings.append(_reason("HEDGE_DROPPED", f"the quote hedges {n.text!r} (for example 'approximately'); "
                                                      "the claim states it without a hedge"))
         if n.key() not in quote_keys:
             reasons.append(_reason("NUMBER_NOT_IN_QUOTE", f"{n.text!r} (value {n.low}"
                                    + (f" to {n.high}" if n.high is not None else "")
                                    + f", unit {n.unit}, comparator {n.comparator}) is not in the quote"))
-    if quote and len(quote.split()) < min_words:
+    warnings = []  # filled below; kept even when the claim is rejected
+    short = bool(quote) and len(quote.split()) < min_words
+    if short:
         claim_keys = {n.key() for n in claim_nums}
         if not any(n.key() in claim_keys for n in quote_nums):
             reasons.append(_reason("QUOTE_TOO_SHORT",
                                    f"{len(quote.split())} words (minimum {min_words}, unless it holds a number of the claim)"))
+        else:
+            warnings.append(_reason("SHORT_QUOTE", f"quote has {len(quote.split())} words; check its context on the page"))
+    if quote and matches and not _has_context(quote) and not all(m["from_table_text"] for m in matches):
+        reasons.append(_reason("QUOTE_NO_CONTEXT", "the quote is only numbers and units, so it cannot show what is measured"))
 
+    warnings = hedge_warnings + warnings
     result = {
         "claim_id": claim.get("claim_id"),
         "document_id": claim.get("document_id"),
@@ -124,13 +139,15 @@ def verify(claims: list[dict], documents: list[dict], min_words: int = MIN_WORDS
     docs = {doc["document_id"]: _Doc(doc) for doc in documents}
     results = [check_claim(c, docs, min_words) for c in claims]
     passed = sum(r["status"] == "pass" for r in results)
-    layout = sum(r["status"] == "pass" and any(w["code"] == "LAYOUT_CHECK_NEEDED" for w in r["warnings"])
-                 for r in results)
+    flagged = lambda r, code: r["status"] == "pass" and any(w["code"] == code for w in r["warnings"])
+    layout = sum(flagged(r, "LAYOUT_CHECK_NEEDED") for r in results)
+    short = sum(flagged(r, "SHORT_QUOTE") for r in results)
+    review = sum(flagged(r, "LAYOUT_CHECK_NEEDED") or flagged(r, "SHORT_QUOTE") for r in results)
     return {
         "gate_version": GATE_VERSION,
         "min_words": min_words,
         # a pass that needs a layout check is not a verified claim until a reviewer compares it with the page
-        "summary": {"claims": len(results), "passed": passed, "passed_clean": passed - layout,
-                    "needs_layout_check": layout, "rejected": len(results) - passed},
+        "summary": {"claims": len(results), "passed": passed, "passed_clean": passed - review,
+                    "needs_layout_check": layout, "short_quote": short, "rejected": len(results) - passed},
         "results": results,
     }
