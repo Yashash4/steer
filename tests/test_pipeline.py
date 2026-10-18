@@ -23,13 +23,20 @@ PAGE2 = [  # hand-written model output (fake connector), Frontiers page 2
     claim("Almonds cure diabetes.", "Almonds cured diabetes in all participants."),
     claim("Insulin resistance (HOMA IR) and oral insulin disposition index (DIo) were calculated.",
           "Insulin resistance (homeostasis assessment model-HOMA IR) and oral insulin disposition index (DIo) were calculated."),
+    claim("Total cholesterol changed by −5.4 mg/dl in the intervention group compared to the control group.",   # needs_check:
+          "total cholesterol (−5.4 mg/dl (−10.2, −0.6); p = 0.03) in the intervention group compared to the control group"),
 ]
+MIRACLE = claim("A total of 352 participants completed the study: a miracle.",  # planted hype, otherwise clean
+                "A total of 352 participants completed the study.")
+
+
+EXTRA: list = []
 
 
 def fake_router():
     def connector(ep, system, prompt, schema, **kw):
         if "claims" in schema["properties"]:   # extraction
-            return {"claims": PAGE2 if "Section (page 2)" in prompt else []}, {"input_tokens": 10, "output_tokens": 5}
+            return {"claims": PAGE2 + EXTRA if "Section (page 2)" in prompt else []}, {"input_tokens": 10, "output_tokens": 5}
         ids = schema["properties"]["labels"]["items"]["properties"]["claim_id"]["enum"]   # labels
         return {"labels": [{"claim_id": i, "theme": "insulin_resistance", "doubts": ["is_it_for_me"]} for i in ids]}, None
     settings = SETTINGS | {"jobs": {"extract": {"chain": ["f"]}, "label": {"chain": ["f"]}},
@@ -40,16 +47,18 @@ def fake_router():
 def test_run_and_store(tmp_path):
     rec = pipeline.run(str(FIX / "gayathri2023-frontiers-two-column.pdf"), "evidence", SETTINGS, router=fake_router())
     s = rec["summary"]
-    assert (s["proposed"], s["passed"], s["rejected"]) == (4, 2, 2)
-    assert s["labelled"] == 2 and s["unlabeled"] == 0
+    assert (s["proposed"], s["passed"], s["needs_check"], s["rejected"]) == (5, 2, 1, 2)
+    assert s["labelled"] == 3 and s["unlabeled"] == 0  # passed AND needs_check are labelled, rejected never
     assert set(rec["timings"]) == {"ingest", "extract_and_verify", "label", "rules"}
-    assert all(c["labels"] == {"theme": "insulin_resistance", "doubts": ["is_it_for_me"]} for c in rec["passed"])
+    for c in rec["passed"] + rec["needs_check"]:
+        assert c["labels"] == {"theme": "insulin_resistance", "doubts": ["is_it_for_me"]}
+    assert all("labels" not in c for c in rec["rejected"])
 
     db = tmp_path / "steer.db"
     con = store.connect(db)
     store.save_run(con, rec)
     rows = con.execute("SELECT status, count(*) FROM claims GROUP BY status ORDER BY status").fetchall()
-    assert rows == [("passed", 2), ("rejected", 2)]
+    assert rows == [("needs_check", 1), ("passed", 2), ("rejected", 2)]
     # nothing unverified is stored as passed
     for status, gate in con.execute("SELECT status, gate FROM claims"):
         assert (json.loads(gate)["status"] == "pass") == (status != "rejected")
@@ -60,8 +69,8 @@ def test_run_and_store(tmp_path):
     assert len(json.loads(run_row[3])) == len(rec["model_calls"]) > 0
 
     exported = store.export_run(con, rec["run_id"])
-    assert exported["run"]["summary"]["passed"] == 2 and len(exported["claims"]) == 4
-    assert {c["status"] for c in exported["claims"]} == {"passed", "rejected"}
+    assert exported["run"]["summary"]["passed"] == 2 and len(exported["claims"]) == 5
+    assert {c["status"] for c in exported["claims"]} == {"passed", "needs_check", "rejected"}
 
     # a second run of the same paper adds a run; the document row is replaced, not duplicated
     rec2 = pipeline.run(str(FIX / "gayathri2023-frontiers-two-column.pdf"), "evidence", SETTINGS, router=fake_router())
@@ -85,7 +94,7 @@ def test_cli_run(tmp_path, monkeypatch):
     assert cli.main(["run", str(FIX / "gayathri2023-frontiers-two-column.pdf"), "--db", str(db), "--export", str(out)]) == 0
     data = json.loads(out.read_text())
     assert data["run"]["summary"]["passed"] == 2
-    assert sqlite3.connect(db).execute("SELECT count(*) FROM claims").fetchone()[0] == 4
+    assert sqlite3.connect(db).execute("SELECT count(*) FROM claims").fetchone()[0] == 5
 
 
 @pytest.mark.network
@@ -104,3 +113,15 @@ def test_live_run_on_narayan(tmp_path):
     passed = con.execute("SELECT theme FROM claims WHERE status = 'passed'").fetchall()
     assert all(t[0] in SETTINGS["labels"]["themes"] or t[0] is None for t in passed)
     print(json.dumps({"summary": s, "timings": rec["timings"]}))
+
+
+def test_library_rule_hits_move_a_clean_claim_to_needs_check():
+    EXTRA.append(MIRACLE)
+    try:
+        rec = pipeline.run(str(FIX / "gayathri2023-frontiers-two-column.pdf"), "evidence", SETTINGS, router=fake_router())
+    finally:
+        EXTRA.clear()
+    m = next(c for c in rec["needs_check"] if c["claim_text"].endswith("a miracle."))
+    assert m["review_reasons"] == ["PROMISE"] and m["flags"] == []  # clean at extraction, moved by the rules check
+    assert not any(c["claim_text"].endswith("a miracle.") for c in rec["passed"])
+    assert rec["summary"]["needs_check_by_reason"].get("PROMISE") == 1

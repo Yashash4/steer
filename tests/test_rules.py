@@ -70,3 +70,12 @@ def test_second_person_and_percentage_promises():
     finding = "Participants in clinical trials of semaglutide and tirzepatide lost 15-20% of their baseline body weight."
     assert [c[0] for c in codes(finding)] == ["DRUG_NAME", "DRUG_NAME"]
     assert codes("Weight fell by 5% in the trial group.") == []
+
+
+def test_second_person_only_blocks_promises():
+    assert any(c[0] == "PROMISE" for c in codes("You could lose 5 kg"))
+    assert any(c[0] == "PROMISE" for c in codes("You'll lose weight fast"))
+    assert any(c[0] == "PROMISE" for c in codes("You can drop 10% of your weight"))
+    assert not any(c[0] == "PROMISE" for c in codes("Will you lose muscle?"))
+    assert not any(c[0] == "PROMISE" for c in codes("You could lose muscle strength if you skip protein"))
+    assert not any(c[0] == "PROMISE" for c in codes("When you lose weight, hunger hormones rise."))

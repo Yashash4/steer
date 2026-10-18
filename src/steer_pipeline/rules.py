@@ -28,8 +28,10 @@ PROMISE_PATTERNS = [  # fixed, simple patterns with numbers
     re.compile(rf"\b(lose|losing|drop|dropping|shed|shedding|burn|melt)\s+(up to\s+)?\d+(\.\d+)?\s*{_UNIT}\b", re.I),
     re.compile(r"\bin (just )?\d+\s*(days?|weeks?|months?),? you('ll| will)\b", re.I),
     re.compile(rf"\b\d+(\.\d+)?\s*{_UNIT} in (just )?\d+\s*(days?|weeks?|months?)\b", re.I),
-    # second person: a weight-loss outcome promised to the reader ("you could lose ...")
-    re.compile(r"\byou(?:'ll| will| could| can| may| might| would)?\s+(?:easily\s+)?(?:lose|drop|shed|burn)\b", re.I),
+    # second person, promised: "you" + a modal + lose/drop/shed/burn, and a weight word or a number within the
+    # next 3 words. "Will you lose muscle?" and "When you lose weight, ..." are framing, not promises.
+    re.compile(r"\byou(?:'ll| will| could| can| would| may| might)\s+(?:lose|drop|shed|burn)\s+(?:\S+\s+){0,2}?"
+               r"(?:weight|kilos?|kgs?|kg|pounds?|lbs?|fat|inches|sizes?|\d)", re.I),
     # percentages promised to the reader ("lose up to 15%", "lose 15% of your weight")
     re.compile(r"\b(lose|drop|shed)\s+up to\s+\d+(\.\d+)?\s*%", re.I),
     re.compile(r"\b(lose|drop|shed)\s+\d+(\.\d+)?\s*%\s+of\s+your\b", re.I),
