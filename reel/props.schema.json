@@ -242,7 +242,8 @@
         "beats",
         "emphasis",
         "key",
-        "source_label"
+        "source_label",
+        "cards"
       ],
       "properties": {
         "kind": {
@@ -355,6 +356,66 @@
             "null"
           ],
           "description": "health lines: the short source built by code, e.g. 'West et al. 2026, section text, no page layout'"
+        },
+        "cards": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "start",
+                  "parts"
+                ],
+                "properties": {
+                  "start": {
+                    "$ref": "#/$defs/seconds"
+                  },
+                  "parts": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "text",
+                        "role",
+                        "show",
+                        "at"
+                      ],
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "description": "an exact run of the line's display words; all parts in order = the line"
+                        },
+                        "role": {
+                          "enum": [
+                            "setting",
+                            "hero",
+                            "text"
+                          ]
+                        },
+                        "show": {
+                          "type": "string",
+                          "description": "what is drawn: text itself, or for a hero the one transform 'N times' -> 'N×'"
+                        },
+                        "at": {
+                          "$ref": "#/$defs/seconds"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "description": "a long health line as 2 cards split by code at its first colon (setting, then findings with hero numbers); null = phrase build-up"
         }
       }
     },

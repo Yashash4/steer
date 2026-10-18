@@ -29,3 +29,10 @@ export const visibleTexts = (line: Line, t: number, appear: number = line.start)
   const s = onScreen(line, t, appear);
   return s ? line.beats.slice(0, s.shown).map((b) => b.text) : [];
 };
+
+/** A line laid out as 2 cards: how many are on screen at t (card 1 alone while the setting is spoken; card 1 kept as
+ * a strip with card 2 complete from its first word, through the hold), or null. Never part of a card. */
+export const cardsShown = (line: Line, t: number): number | null => {
+  if (!line.cards || t < line.start || t >= line.hold_end) return null;
+  return t < line.cards[1].start ? 1 : 2;
+};

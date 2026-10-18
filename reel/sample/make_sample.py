@@ -32,7 +32,7 @@ def line(kind, text, beats_n=3, per=0.32, hold=0.8, key=None, emph=None, src=Non
     if key:
         at = next(starts[j] for j, w in enumerate(words) if w.startswith(key[0]))
         k = {"number": key[0], "label": key[1], "at": at}
-    return {"kind": kind, "text": text, "start": starts[0], "end": end, "hold_end": hold_end, "beats": beats,
+    return {"kind": kind, "text": text, "start": starts[0], "end": end, "hold_end": hold_end, "beats": beats, "cards": None,
             "emphasis": emph, "key": k, "source_label": src}
 
 

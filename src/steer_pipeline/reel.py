@@ -587,6 +587,36 @@ def make_beats(tokens: list[tuple[str, float]]) -> list[dict]:
              "words": [{"text": t, "start": round(s0, 3)} for t, s0 in b]} for b in beats]
 
 
+def times_x(tok: str) -> str:
+    """The one display transform for a hero number: "5.27 times" -> "5.27×" (the voice still says "times")."""
+    return re.sub(r"^(\d+(?:\.\d+)?)\u00a0times$", "\\1×", tok)
+
+
+def make_cards(tokens: list[tuple[str, float]], max_words: int = 22) -> list[dict] | None:
+    """A long health line as 2 visual cards, split by code at its first colon: card 1 the setting (who was studied),
+    card 2 the findings, each number token a hero part (shown large, "N times" as "N×") with the words after it.
+    Every part is an exact run of the line's display tokens. None when the line has no colon, a card would exceed
+    max_words, or card 2 holds no number: the line then builds up phrase by phrase."""
+    cut = next((k for k, (tok, _) in enumerate(tokens) if tok.endswith(":")), None)
+    if cut is None or cut == len(tokens) - 1:
+        return None
+    one, two = tokens[:cut + 1], tokens[cut + 1:]
+    if len(one) > max_words or len(two) > max_words or not any(re.match(r"^[−-]?\d", t) for t, _ in two):
+        return None
+    parts = []
+    for tok, t0 in two:
+        if re.match(r"^[−-]?\d", tok):
+            parts.append({"text": tok, "role": "hero", "show": times_x(tok), "at": round(t0, 3)})
+        elif parts and parts[-1]["role"] == "text":
+            parts[-1]["text"] += " " + tok
+            parts[-1]["show"] = parts[-1]["text"]
+        else:
+            parts.append({"text": tok, "role": "text", "show": tok, "at": round(t0, 3)})
+    setting = " ".join(t for t, _ in one)
+    return [{"start": round(one[0][1], 3), "parts": [{"text": setting, "role": "setting", "show": setting, "at": round(one[0][1], 3)}]},
+            {"start": round(two[0][1], 3), "parts": parts}]
+
+
 def checked_keys(post: dict) -> list[dict]:
     """The post's key pairs that passed its checks (slides and static): number, label and the claims behind them."""
     units = list(post.get("slides") or []) + ([post["static"]] if post.get("static") else [])
@@ -638,7 +668,11 @@ def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | N
                     key = {"number": display(k["number"]), "label": display(k["label"]), "at": round(at, 3)}
                     break
             labels = [rd.short_source(e) for e in rd.source_entries([by_claim[i] for i in ln["claim_ids"] if i in by_claim])]
+            cards = make_cards(tokens) if ln["kind"] == "health" else None
+            if cards:
+                key = None   # the hero numbers are the scene's large type
             lines.append({"kind": ln["kind"], "text": text, "start": round(ln["start"], 3), "end": round(ln["end"], 3),
+                          "cards": cards,
                           "hold_end": round(ln["hold_end"], 3), "beats": make_beats(tokens),
                           "emphasis": display(emphasis) if sc["kind"] == "hook" and emphasis and display(emphasis) in text
                           and ln is sc["lines"][0] else None,
@@ -684,6 +718,13 @@ def pool_check(props: dict, script: dict, record: dict, emphasis: str | None, ke
                         bad("word", w["text"])
             if ln["emphasis"] is not None and (ln["emphasis"] != display(emphasis or "") or ln["emphasis"] not in ln["text"]):
                 bad("emphasis", ln["emphasis"])
+            if ln["cards"] is not None:   # the cards cover the line exactly, and only heroes are transformed
+                parts = [q for c in ln["cards"] for q in c["parts"]]
+                if " ".join(q["text"] for q in parts) != ln["text"]:
+                    bad("cards", [q["text"] for q in parts])
+                for q in parts:
+                    if q["show"] != (times_x(q["text"]) if q["role"] == "hero" else q["text"]):
+                        bad("card part", q)
             k = ln["key"]
             if k is not None and ((k["number"], k["label"]) not in keys_ok or k["number"] not in ln["text"]
                                   or k["label"] not in ln["text"]):

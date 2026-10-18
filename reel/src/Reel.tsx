@@ -3,9 +3,9 @@ import {
   AbsoluteFill, Audio, Easing, OffthreadVideo, Sequence, cancelRender, continueRender, delayRender, spring,
   staticFile, useCurrentFrame,
 } from "remotion";
-import { DIM, buildsUp, onScreen } from "./beats";
+import { DIM, buildsUp, cardsShown, onScreen } from "./beats";
 import { SANS, SERIF, SERIF_ITALIC, SERIF_VARS, fit } from "./fit";
-import type { Ground, Line, Palette, Presenter, ReelProps, Scene } from "./types";
+import type { Card, Ground, Line, Palette, Presenter, ReelProps, Scene } from "./types";
 
 const FPS = 30;
 const WIPE_S = 0.35;
@@ -73,6 +73,56 @@ const lineFit = (text: string, family: string, weight: number, height: number, m
     if (r.lines.length * r.fontSize * LH <= height) return r.fontSize;
     size = r.fontSize - 3;
   }
+};
+
+// A long health line as 2 cards (reel.py make_cards): the setting alone while it is spoken, then kept as a dimmed strip
+// above the findings card, which is complete from its first word; each hero number pops when it is spoken.
+const CardsView = (p: { line: Line; cards: Card[]; t: number; c: Colors; top: number; height: number; heroInk: string }) => {
+  const { line, cards, t, c } = p;
+  const setting = cards[0].parts[0].show;
+  const big = useMemo(() => fit(setting, SANS, 800, 7, BOX - 20, 88, 48), [setting]);
+  const strip = useMemo(() => fit(setting, SANS, 600, 4, BOX - 20, 42, 36), [setting]);
+  const sizes = useMemo(() => cards[1].parts.map((q) => q.role === "hero" ? fit(q.show, SERIF, 700, 1, BOX, 210, 96).fontSize
+    : fit(q.show, SANS, 700, 3, BOX - 20, 58, 40).fontSize), [cards]);
+  const n = cardsShown(line, t);
+  if (n === null) return null;
+  const enter2 = ease(clamp01((t - cards[1].start) / 0.25));
+  return (
+    <>
+      {n === 1 ? (
+        <div style={{ position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: p.top, height: p.height, display: "flex",
+          alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: SANS, fontWeight: 800,
+          fontSize: big.fontSize, lineHeight: LH, color: c.ink, opacity: ease(clamp01((t - line.start) / 0.25)) }}>{setting}</div>
+      ) : (
+        <div style={{ position: "absolute", left: (1080 - BOX) / 2, width: BOX, top: p.top, height: p.height, display: "flex",
+          flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+          <div style={{ fontFamily: SANS, fontWeight: 600, fontSize: strip.fontSize, lineHeight: 1.25, color: c.ink, opacity: DIM,
+            paddingBottom: 36 }}>{setting}</div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
+            opacity: enter2, transform: `translateY(${(1 - enter2) * 40}px)` }}>
+            {cards[1].parts.map((q, i) => {
+              if (q.role !== "hero") {
+                return (<div key={i} style={{ fontFamily: SANS, fontWeight: 700, fontSize: sizes[i], lineHeight: 1.2, color: c.ink }}>{q.show}</div>);
+              }
+              const said = t >= q.at;
+              const pop = said ? ease(clamp01((t - q.at) / 0.18)) : 0;
+              return (
+                <div key={i} style={{ fontFamily: SERIF, fontVariationSettings: SERIF_VARS, fontWeight: 700, fontSize: sizes[i],
+                  lineHeight: 1.05, whiteSpace: "nowrap", color: p.heroInk, opacity: 0.5 + 0.5 * pop,
+                  transform: `scale(${0.92 + 0.08 * pop})` }}>{q.show}</div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {line.source_label ? (
+        <div style={{
+          position: "absolute", left: (1080 - BOX) / 2, width: BOX, bottom: 200, textAlign: "center", fontFamily: SANS,
+          fontWeight: 500, fontSize: 26, lineHeight: 1.25, color: c.sub,
+        }}>{line.source_label}</div>
+      ) : null}
+    </>
+  );
 };
 
 // A health line builds up phrase by phrase (earlier phrases stay, dimmed; nothing leaves before the hold ends); any
@@ -203,7 +253,10 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; props: ReelPr
         transform: `translate(${Math.sin(t / 3) * 24}px, ${Math.cos(t / 4) * 30}px)`,
       }} />
       <div style={{ position: "absolute", left: 60, bottom: 150, height: 4, width: 960 * rule, background: props.palette.blush }} />
-      {scene.lines.map((l, i) => (
+      {scene.lines.map((l, i) => l.cards ? (
+        <CardsView key={i} line={l} cards={l.cards} t={t} c={c} top={box.top} height={box.height}
+          heroInk={scene.ground === "cream" ? c.emph : c.ink} />
+      ) : (
         <LineView key={i} line={l} t={t} c={c} top={box.top} height={box.height} appear={i === 0 ? scene.start : l.start}
           big={scene.kind === "hook" && i === 0} />
       ))}

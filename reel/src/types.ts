@@ -2,11 +2,13 @@ export type Ground = "cream" | "rust" | "maroon";
 export type Palette = Record<"cream" | "rust" | "maroon" | "ink" | "clay" | "blush" | "paper", string>;
 export type Word = { text: string; start: number };
 export type Beat = { text: string; start: number; words: Word[] };
+export type CardPart = { text: string; role: "setting" | "hero" | "text"; show: string; at: number };
+export type Card = { start: number; parts: CardPart[] };
 export type Key = { number: string; label: string; at: number };
 export type Line = {
   kind: "health" | "framing" | "brand" | "cta" | "signoff";
   text: string; start: number; end: number; hold_end: number;
-  beats: Beat[]; emphasis: string | null; key: Key | null; source_label: string | null;
+  beats: Beat[]; cards: Card[] | null; emphasis: string | null; key: Key | null; source_label: string | null;
 };
 export type Sources = {
   heading: string; entries: { before: string; journal: string; after: string }[]; footnote: string; url: string;

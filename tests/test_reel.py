@@ -274,3 +274,22 @@ def test_elevenlabs_voice_credit_fallback_and_no_fallback_under_a_presenter(tmp_
     pr = run(tmp_path / "presenter", quota, presenter={0: "clip.mp4"})   # a presenter: no other voice, the reel fails
     assert pr["status"] == "failed" and [f["code"] for f in pr["failures"]] == ["VOICE_FAILED"]
     assert not (tmp_path / "presenter" / "reel.mp4").exists()
+
+
+def test_a_long_health_line_becomes_two_cards_split_at_its_colon():
+    text = ("Aged 45+ in Chennai, Delhi and Karachi, with body mass index under 25 kg/m2: diabetes risk was 5.27 times higher "
+            "in South Asian women and 2.99 times in men than US whites.")
+    toks = reel.display_tokens(text, [i * 0.3 for i in range(len(text.split()))])
+    one, two = reel.make_cards(toks)
+    assert one["parts"] == [{"text": "Aged 45+ in Chennai, Delhi and Karachi, with body mass index under 25\u00a0kg/m²:",
+                             "role": "setting", "show": "Aged 45+ in Chennai, Delhi and Karachi, with body mass index under 25\u00a0kg/m²:",
+                             "at": 0.0}]
+    assert [(q["role"], q["show"]) for q in two["parts"]] == [
+        ("text", "diabetes risk was"), ("hero", "5.27×"), ("text", "higher in South Asian women and"), ("hero", "2.99×"),
+        ("text", "in men than US whites.")]
+    assert " ".join(q["text"] for c in (one, two) for q in c["parts"]) == reel.display(text)   # nothing added or lost
+    assert two["start"] == two["parts"][0]["at"] and two["parts"][1]["at"] == toks[16][1]          # the hero's spoken time
+    assert reel.times_x("1.4\u00a0years") == "1.4\u00a0years"                                    # only "N times" changes
+    assert reel.make_cards(reel.display_tokens("On average 0.4 kg a month.", [0.0] * 6)) is None      # no colon: build-up
+    many = "In this very long setting " + "word " * 20 + "here: 2.99 times higher."
+    assert reel.make_cards(reel.display_tokens(many, [0.0] * len(many.split()))) is None              # > 22 words a card
