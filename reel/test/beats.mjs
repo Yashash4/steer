@@ -31,5 +31,19 @@ if (!pins.includes(0)) problems.push("the opening beat is not pinned");
 const q = { ...LINE, beats: [...LINE.beats, { text: "only in this study", start: LINE.end - 0.5, words: [] }] };
 if (!pinnedSet(q).has(q.beats.length - 1)) problems.push("a qualifier beat is not pinned");
 if (pinnedSet({ ...LINE, kind: "framing" }).size) problems.push("a framing line pins beats");
+// at most 2 pinned blocks + the current beat at every frame; with a key pair on screen, at most 1 pinned beat
+const many = { ...LINE, beats: LINE.beats.map((b, k) => (k % 2 ? { ...b, text: b.text + " may" } : b)) };
+for (let f = Math.ceil(many.start * 30); f / 30 < many.end; f++) {
+  const t = f / 30;
+  const s = onScreen(many, t), sk = onScreen(many, t, true);
+  if (s.pinned.length > 2) problems.push(`t=${t.toFixed(3)}: ${s.pinned.length} pinned beats`);
+  if (sk.pinned.length > 1) problems.push(`t=${t.toFixed(3)}: ${sk.pinned.length} pinned beats beside a key pair`);
+  if (s.pinned.length && s.pinned[0] !== 0) problems.push(`t=${t.toFixed(3)}: the opening beat is not the first pinned`);
+  if (!visibleTexts(many, t, true).some((x) => x.includes("No evidence"))) problems.push(`t=${t.toFixed(3)}: key scene lost "No evidence"`);
+}
+const last = onScreen(many, many.end - 0.01);
+const quals = [...pinnedSet(many)].filter((k) => k !== 0 && k < last.current);
+if (last.pinned[1] !== quals[quals.length - 1]) problems.push("the pinned qualifier is not the most recent one");
 if (problems.length) { console.error(problems.slice(0, 10).join("\n")); process.exit(1); }
-console.log(`beats ok: ${frames.length} frames, "No evidence" on screen in every one; pinned ${JSON.stringify(pins)}`);
+console.log(`beats ok: ${frames.length} frames, "No evidence" on screen in every one; pinned ${JSON.stringify(pins)}; ` +
+  "at most 2 pinned (1 beside a key pair) on every frame");

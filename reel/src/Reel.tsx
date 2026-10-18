@@ -120,7 +120,7 @@ const HoldView = (p: { line: Line; c: Colors; top: number; height: number; t: nu
 // until the hold: a still frame never loses "No evidence was found that ..." (beats.ts).
 const PIN_MAX = 64, PIN_MIN = 32, PIN_GAP = 12;
 
-const LineView = (p: { line: Line; t: number; c: Colors; hasKey: boolean }) => {
+const LineView = (p: { line: Line; t: number; c: Colors; hasKey: boolean; keyAt: number | null }) => {
   const { line, t, c } = p;
   const flags = useMemo(() => emphasisFlags(line), [line]);
   const st = beatStyle(line);
@@ -128,7 +128,7 @@ const LineView = (p: { line: Line; t: number; c: Colors; hasKey: boolean }) => {
     const pins = pinnedSet(line);
     return line.beats.map((b, k) => (pins.has(k) ? fit(b.text, st.family, st.weight, 2, BOX, PIN_MAX, PIN_MIN) : null));
   }, [line, st.family, st.weight]);
-  const s = onScreen(line, t);
+  const s = onScreen(line, t, p.keyAt !== null && t >= p.keyAt);   // a key pair on screen counts as a pinned block
   if (!s) return null;
   const top = p.hasKey ? 700 : 240;
   const pinH = s.pinned.reduce((a, k) => a + (pinFits[k]?.lines.length ?? 1) * (pinFits[k]?.fontSize ?? PIN_MAX) * 1.12 + PIN_GAP, 0);
@@ -239,7 +239,7 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; props: ReelPr
         transform: `translate(${Math.sin(t / 3) * 24}px, ${Math.cos(t / 4) * 30}px)`,
       }} />
       <div style={{ position: "absolute", left: 60, bottom: 150, height: 4, width: 960 * rule, background: props.palette.blush }} />
-      {scene.lines.map((l, i) => <LineView key={i} line={l} t={t} c={c} hasKey={hasKey} />)}
+      {scene.lines.map((l, i) => <LineView key={i} line={l} t={t} c={c} hasKey={hasKey} keyAt={keyLine?.key?.at ?? null} />)}
       {keyLine && keyLine.key ? (
         <KeyPair number={keyLine.key.number} label={keyLine.key.label} at={keyLine.key.at} t={t} frame={frame}
           fromFrame={p.from} c={c} ground={scene.ground} />
