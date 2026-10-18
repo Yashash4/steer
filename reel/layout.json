@@ -55,5 +55,13 @@
   "checklist": {
     "top": 420,
     "height": 900
+  },
+  "hero_cards": {
+    "top": 840,
+    "height": 660
+  },
+  "checklist_presenter": {
+    "top": 1060,
+    "height": 440
   }
 }

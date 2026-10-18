@@ -6,9 +6,9 @@ export type CardPart = { text: string; role: "setting" | "hero" | "text"; show: 
 export type Card = { start: number; parts: CardPart[] };
 export type Key = { number: string; label: string; at: number };
 export type Line = {
-  kind: "health" | "framing" | "brand" | "cta" | "signoff";
+  kind: "health" | "framing" | "brand" | "cta" | "signoff" | "status";
   text: string; start: number; end: number; hold_end: number;
-  beats: Beat[]; cards: Card[] | null; evidence: Evidence | null; emphasis: string | null; key: Key | null; source_label: string | null;
+  beats: Beat[]; cards: Card[] | null; cards_style: "split" | "stack"; evidence: Evidence | null; emphasis: string | null; key: Key | null; source_label: string | null;
 };
 export type Sources = {
   heading: string; entries: { before: string; journal: string; after: string }[]; footnote: string; url: string;
@@ -19,9 +19,9 @@ export type Evidence = { kind: "page" | "quote"; header: string; quote: string; 
 export type Checklist = { items: { text: string; at: number }[] };
 export type Presenter = { video: string; start: number; end: number; label: string };
 export type Scene = {
-  kind: "hook" | "point" | "brand" | "cta" | "checklist" | "pullback" | "sources"; ground: Ground; start: number; end: number;
+  kind: "hook" | "point" | "brand" | "cta" | "status" | "checklist" | "pullback" | "sources"; ground: Ground; start: number; end: number;
   transition_in: "wipe" | "none" | "zoom"; broll: Broll | null; presenter: Presenter | null; captions: boolean; zoom: Zoom[];
-  checklist: Checklist | null; pullback: string | null; lines: Line[]; sources: Sources | null;
+  checklist: Checklist | null; pullback: string | null; sources_at: number | null; lines: Line[]; sources: Sources | null;
 };
 export type ReelProps = {
   version: 3; fps: 30; width: 1080; height: 1920; durationInFrames: number; audio: string;

@@ -438,3 +438,46 @@ def test_presenter_clips_carry_no_sound_in_the_composition():
     src = (reel.REEL_DIR / "src" / "Reel.tsx").read_text()
     assert "<OffthreadVideo src={staticFile(p.pr.video)} muted" in src
     assert "<OffthreadVideo src={staticFile(p.b.video)} muted" in (reel.REEL_DIR / "src" / "Fx.tsx").read_text()
+
+
+def v5_script():
+    return {"scenes": [
+        {"lines": [{"kind": "framing", "text": "Is diabetes talk meant for someone else?", "claim_ids": []}]},
+        {"lines": [{"kind": "health", "claim_ids": ["c1"], "text": "Aged 45 and over in Chennai, Delhi and Karachi, BMI under "
+                    "25 kg/m2: diabetes risk 2.99 times higher in South Asian men, 5.27 times higher in South Asian women, than US whites."}]},
+        {"lines": [{"kind": "framing", "text": "Worth a calm chat with a doctor who knows your history.", "claim_ids": []}]},
+        {"lines": [{"kind": "brand", "text": "Built for India. Local meals, culture and appetite.", "claim_ids": []}]},
+        {"lines": [{"kind": "cta", "text": "See if the programme fits you", "claim_ids": []},
+                   {"kind": "signoff", "text": "steerclub.com", "claim_ids": []}]}]}
+
+
+def test_v5_hero_cards_status_line_and_no_silent_beats(tmp_path):
+    record = {"post_id": "p1", "run_id": "r1", "sources": [
+        {"claim_id": "c1", "authors": "Narayan KMV et al.", "title": "Incidence", "journal": "BMJ Open Diabetes Research & Care",
+         "year": 2021, "doi": "10.1/n", "location": "page 5"}]}
+    script = v5_script()
+    at = 4
+    s5 = {"scenes": script["scenes"][:at] + [{"lines": [{"kind": "status", "text": reel.STATUS_LINE, "claim_ids": []}]}]
+          + script["scenes"][at:]}
+    scenes, pcm, _ = reel.build_timeline(s5, {"name": "x"}, fake_tts, reel.HEALTH_HOLD, 0.0, (), True)
+    assert scenes[-1]["kind"] == "cta" and all(sc["kind"] != "sources" for sc in scenes)    # no silent end card
+    assert scenes[4]["kind"] == "status"
+    plan = reel.edit_plan(scenes, {"presenter": {0: "a", 1: "b", 2: "c", 3: "d", 4: "e"}, "broll": {"lane": "l.mp4"}}, v5=True)
+    assert plan[1]["presenter"] and plan[1]["evidence"] and plan[-1]["pullback"] and plan[-1]["sources"]
+    assert not plan[4]["captions"]
+    quotes = {"c1": "the risk of diabetes in women was 5.27 times and in men 2.99 times higher in South Asians"}
+    props = reel.build_props(scenes, record, BRAND, None, [], {i: "x" for i in range(5)}, plan, quotes, True, "pullback.png", v5=True)
+    ln = props["scenes"][1]["lines"][0]
+    assert ln["cards_style"] == "stack" and [q["show"] for c in ln["cards"] for q in c["parts"] if q["role"] == "hero"] == ["2.99×", "5.27×"]
+    assert " ".join(q["text"] for c in ln["cards"] for q in c["parts"]) == ln["text"]        # cards cover the line
+    assert ln["evidence"]["start"] > ln["cards"][-1]["start"]                                # after both heroes popped
+    st = props["scenes"][4]
+    assert [i["text"] for i in st["checklist"]["items"]] == list(reel.CHECK_LINES)
+    cta = props["scenes"][-1]
+    assert cta["pullback"] == "pullback.png" and cta["sources"] and cta["sources_at"] == cta["lines"][1]["start"]
+    assert reel.pool_check(props, s5, record, None, [], quotes) == [] and reel.timing_problems(props) == []
+    assert reel.voice_problems(props) == [], reel.voice_problems(props)
+    bad = dict(s5, scenes=s5["scenes"][:4] + [{"lines": [{"kind": "status", "text": "Doctors love this.", "claim_ids": []}]}] + s5["scenes"][5:])
+    assert any("status line" in f["detail"] for f in reel.pool_check(props, bad, record, None, [], quotes))
+    gappy = dict(props, durationInFrames=props["durationInFrames"] + 120)   # 4 s of silence at the end
+    assert "MAX_SILENT_GAP" in [f["code"] for f in reel.voice_problems(gappy)]

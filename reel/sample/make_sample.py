@@ -32,7 +32,7 @@ def line(kind, text, beats_n=3, per=0.32, hold=0.8, key=None, emph=None, src=Non
     if key:
         at = next(starts[j] for j, w in enumerate(words) if w.startswith(key[0]))
         k = {"number": key[0], "label": key[1], "at": at}
-    return {"kind": kind, "text": text, "start": starts[0], "end": end, "hold_end": hold_end, "beats": beats, "cards": None, "evidence": None,
+    return {"kind": kind, "text": text, "start": starts[0], "end": end, "hold_end": hold_end, "beats": beats, "cards": None, "cards_style": "split", "evidence": None,
             "emphasis": emph, "key": k, "source_label": src}
 
 
@@ -42,7 +42,7 @@ scenes = []
 def scene(kind, ground, lines, trans="wipe"):
     s0 = max(0.0, lines[0]["start"] - 0.3) if scenes else 0.0
     scenes.append({"kind": kind, "ground": ground, "start": round(s0, 3), "end": round(t, 3), "transition_in": trans,
-                   "broll": None, "presenter": None, "captions": False, "zoom": [], "checklist": None, "pullback": None, "lines": lines, "sources": None})
+                   "broll": None, "presenter": None, "captions": False, "zoom": [], "checklist": None, "pullback": None, "sources_at": None, "lines": lines, "sources": None})
 
 
 SRC = "West et al. 2026, section text, no page layout"
@@ -56,7 +56,7 @@ scene("cta", "cream", [line("cta", "Talk to a Steer doctor", hold=0.3), line("si
 start = t
 t += 5.0
 scenes.append({"kind": "sources", "ground": "cream", "start": round(start, 3), "end": round(t, 3), "transition_in": "wipe",
-               "broll": None, "presenter": None, "captions": False, "zoom": [], "checklist": None, "pullback": None, "lines": [], "sources": {
+               "broll": None, "presenter": None, "captions": False, "zoom": [], "checklist": None, "pullback": None, "sources_at": None, "lines": [], "sources": {
                    "heading": "Sources",
                    "entries": [{"before": "West S, Scragg J, Aveyard P et al. Weight regain after cessation of medication for "
                                           "weight management: systematic review and meta-analysis.",

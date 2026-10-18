@@ -4,7 +4,7 @@ import {
   staticFile, useCurrentFrame,
 } from "remotion";
 import { DIM, buildsUp, cardsShown, onScreen } from "./beats";
-import { BrollBg, Captions, ChecklistView, PhoneEvidence, PullBack, zoomAt } from "./Fx";
+import { BrollBg, Captions, ChecklistView, PhoneEvidence, PullBack, StackCards, zoomAt } from "./Fx";
 import { SANS, SERIF, SERIF_ITALIC, SERIF_VARS, fit } from "./fit";
 import L from "../layout.json";
 import type { Card, Ground, Line, Palette, Presenter, ReelProps, Scene } from "./types";
@@ -262,7 +262,12 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
         }} />
       )}
       <div style={{ position: "absolute", left: 60, top: L.wordmark.top - 14, height: 4, width: 960 * rule, background: props.palette.blush }} />
-      {scene.lines.map((l, i) => l.cards ? (
+      {scene.lines.map((l, i) => l.cards && l.cards_style === "stack" ? (
+        <div key={i}>
+          <StackCards line={l} cards={l.cards} t={t} accent={props.palette.blush} />
+          {l.evidence ? <PhoneEvidence e={l.evidence} t={t} ink={props.palette.ink} accent={props.palette.rust} /> : null}
+        </div>
+      ) : scene.kind === "status" ? null : l.cards ? (
         <div key={i}>
           {media ? (   // glass card: a frosted panel behind the two cards
             <div style={{ position: "absolute", left: 50, width: 980, top: box.top - 40, height: box.height + 80, borderRadius: 40,
@@ -285,7 +290,7 @@ const SceneView = (p: { scene: Scene; from: number; wipe: boolean; zoomIn: boole
         <KeyPair number={keyLine.key.number} label={keyLine.key.label} at={keyLine.key.at} t={t} frame={frame}
           fromFrame={p.from} c={c} ground={scene.ground} {...keyBox} />
       ) : null}
-      {scene.checklist ? <ChecklistView c={scene.checklist} t={t} ink={c.ink} accent={props.palette.rust} /> : null}
+      {scene.checklist ? <ChecklistView c={scene.checklist} t={t} ink={c.ink} accent={props.palette.rust} low={media} /> : null}
       {scene.sources ? <SourcesCard s={scene.sources} c={c} /> : null}
       <div style={{
         position: "absolute", top: L.pill.top, right: 48, height: L.pill.height, boxSizing: "border-box", padding: "8px 22px", borderRadius: 999, fontFamily: SANS, fontWeight: 600,
@@ -309,6 +314,26 @@ const PullBackScene = (p: { s: Scene; prev: Scene; from: number; props: ReelProp
         frozenAt={p.prev.end - 0.04} />
     </PullBack>
   );
+};
+
+// v5: the call to action is voiced over the pull-back (the last scene shrinking into the studio screen, the CTA as a
+// caption); from the sign-off on, the sources card holds under the voice, no silent end card
+const CtaScene = (p: { s: Scene; prev: Scene; from: number; props: ReelProps }) => {
+  const frame = useCurrentFrame();
+  const t = (frame + p.from) / FPS;
+  const at = p.s.sources_at as number;
+  if (t < at) {
+    return (
+      <AbsoluteFill>
+        <PullBack image={p.s.pullback as string} t={t} start={p.s.start} end={at}>
+          <SceneView scene={p.prev} from={Math.round(p.prev.start * FPS)} wipe={false} zoomIn={false} props={p.props}
+            frozenAt={p.prev.end - 0.04} />
+        </PullBack>
+        {p.s.lines[0] ? <Captions line={p.s.lines[0]} t={t} accent={p.props.palette.blush} emph={emphasisFlags(p.s.lines[0])} /> : null}
+      </AbsoluteFill>
+    );
+  }
+  return <SceneView scene={{ ...p.s, lines: [] }} from={p.from} wipe={false} zoomIn={false} props={p.props} />;
 };
 
 export const Reel = (props: ReelProps) => {
@@ -339,7 +364,9 @@ export const Reel = (props: ReelProps) => {
         const prev = props.scenes[i - 1];
         return (
           <Sequence key={i} from={from} durationInFrames={Math.max(1, dur)}>
-            {s.kind === "pullback" && s.pullback && prev ? (
+            {s.kind === "cta" && s.pullback && s.sources_at !== null && prev ? (
+              <CtaScene s={s} prev={prev} from={from} props={props} />
+            ) : s.kind === "pullback" && s.pullback && prev ? (
               // the previous scene's last frame shrinks into the real studio screen
               <PullBackScene s={s} prev={prev} from={from} props={props} />
             ) : (

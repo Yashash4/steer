@@ -3,7 +3,7 @@
 import { AbsoluteFill, Img, OffthreadVideo, Sequence, staticFile } from "remotion";
 import L from "../layout.json";
 import { SANS, SERIF, SERIF_VARS, fit } from "./fit";
-import type { Broll, Checklist, Evidence, Line, Zoom } from "./types";
+import type { Broll, Card, Checklist, Evidence, Line, Zoom } from "./types";
 
 const FPS = 30;
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
@@ -89,8 +89,9 @@ export const PhoneEvidence = (p: { e: Evidence; t: number; ink: string; accent: 
 };
 
 /** The checklist: fixed status lines, each in props only because the trace proves it; ticked one by one. */
-export const ChecklistView = (p: { c: Checklist; t: number; ink: string; accent: string }) => (
-  <div style={{ position: "absolute", left: 120, width: 840, top: L.checklist.top, height: L.checklist.height, display: "flex",
+export const ChecklistView = (p: { c: Checklist; t: number; ink: string; accent: string; low?: boolean }) => (
+  <div style={{ position: "absolute", left: 120, width: 840, top: p.low ? L.checklist_presenter.top : L.checklist.top,
+    height: p.low ? L.checklist_presenter.height : L.checklist.height, display: "flex",
     flexDirection: "column", justifyContent: "center", gap: 46 }}>
     {p.c.items.map((it, i) => {
       const k = easeOut((p.t - it.at) / 0.3);
@@ -101,7 +102,7 @@ export const ChecklistView = (p: { c: Checklist; t: number; ink: string; accent:
             <div style={{ width: 26, height: 14, borderLeft: "5px solid #F5EBDF", borderBottom: "5px solid #F5EBDF",
               transform: `rotate(-45deg) scale(${k})`, marginTop: -6 }} />
           </div>
-          <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 46, lineHeight: 1.2, color: p.ink }}>{it.text}</div>
+          <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: p.low ? 38 : 46, lineHeight: 1.2, color: p.ink }}>{it.text}</div>
         </div>
       );
     })}
@@ -121,5 +122,35 @@ export const PullBack = (p: { image: string; t: number; start: number; end: numb
         {p.children}
       </AbsoluteFill>
     </AbsoluteFill>
+  );
+};
+
+/** v5: the numbers line as stacked glass cards over the presenter; each card appears when its number is spoken and
+ * stays to the line's hold end; hero parts large, text parts small (the population is card 1's small text). */
+export const StackCards = (p: { line: Line; cards: Card[]; t: number; accent: string }) => {
+  const { line, cards, t } = p;
+  if (t < line.start || t >= line.hold_end) return null;
+  return (
+    <div style={{ position: "absolute", left: 60, width: 960, top: L.hero_cards.top, height: L.hero_cards.height, display: "flex",
+      flexDirection: "column", justifyContent: "flex-end", gap: 22 }}>
+      {cards.map((c, i) => {
+        if (t < c.start) return null;
+        const k = easeOut((t - c.start) / 0.25);
+        return (
+          <div key={i} style={{ borderRadius: 32, padding: "22px 30px", background: "rgba(245, 235, 223, 0.18)",
+            backdropFilter: "blur(16px)", border: "1px solid rgba(245, 235, 223, 0.4)", opacity: k,
+            transform: `translateY(${(1 - k) * 40}px) scale(${0.94 + 0.06 * k})`, display: "flex", flexWrap: "wrap",
+            alignItems: "baseline", columnGap: 14, color: "#FFFFFF", textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
+            {c.parts.map((q, j) => q.role === "hero" ? (
+              <span key={j} style={{ fontFamily: SERIF, fontVariationSettings: SERIF_VARS, fontWeight: 700,
+                fontSize: fit(q.show, SERIF, 700, 1, 900, 120, 72).fontSize, lineHeight: 1.0, color: p.accent }}>{q.show}</span>
+            ) : (
+              <span key={j} style={{ fontFamily: SANS, fontWeight: 600, fontSize: fit(q.show, SANS, 600, 4, 900, 38, 30).fontSize,
+                lineHeight: 1.25 }}>{q.show}</span>
+            ))}
+          </div>
+        );
+      })}
+    </div>
   );
 };

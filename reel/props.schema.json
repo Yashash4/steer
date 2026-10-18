@@ -145,7 +145,8 @@
         "captions",
         "zoom",
         "checklist",
-        "pullback"
+        "pullback",
+        "sources_at"
       ],
       "properties": {
         "kind": {
@@ -154,6 +155,7 @@
             "point",
             "brand",
             "cta",
+            "status",
             "checklist",
             "pullback",
             "sources"
@@ -335,6 +337,17 @@
             }
           ],
           "description": "the studio screenshot file"
+        },
+        "sources_at": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/seconds"
+            }
+          ],
+          "description": "v5: the cta scene shows the pull-back, then the sources card from this time (under the voice)"
         }
       }
     },
@@ -352,7 +365,8 @@
         "key",
         "source_label",
         "cards",
-        "evidence"
+        "evidence",
+        "cards_style"
       ],
       "properties": {
         "kind": {
@@ -361,7 +375,8 @@
             "framing",
             "brand",
             "cta",
-            "signoff"
+            "signoff",
+            "status"
           ]
         },
         "text": {
@@ -577,6 +592,12 @@
                 }
               }
             }
+          ]
+        },
+        "cards_style": {
+          "enum": [
+            "split",
+            "stack"
           ]
         }
       }

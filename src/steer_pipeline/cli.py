@@ -64,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--engine", default="remotion", choices=["remotion", "playwright"],
                    help="remotion: kinetic type (code/reel); playwright: the fallback renderer")
     v.add_argument("--v4", action="store_true", help="the v4 edit (b-roll, captions, evidence phone, checklist, pull-back)")
+    v.add_argument("--v5", action="store_true", help="the presenter-led v5 edit (implies --v4): no silent beats, spoken status line")
     v.add_argument("--broll", nargs="*", default=[], metavar="NAME=CLIP", help="v4 b-roll clips, e.g. lane=lane.mp4 thali=thali.mp4")
     v.add_argument("--pullback-claim", help="v4: the claim (PMCID/claim_id) whose studio page (public copy) the pull-back shows")
     v.add_argument("--presenter", nargs="*", default=[], metavar="SCENE=CLIP",
@@ -128,8 +129,8 @@ def main(argv: list[str] | None = None) -> int:
             t = posts.reel_post(args.folder, store.connect(args.db), settings, engine=args.engine,
                                presenter={int(k): v for k, v in (x.split("=", 1) for x in args.presenter)} or None,
                                v4={"broll": dict(x.split("=", 1) for x in args.broll), "pullback_claim": args.pullback_claim,
-                                   "db": args.db}
-                               if args.v4 else None)
+                                   "db": args.db, "v5": args.v5}
+                               if args.v4 or args.v5 else None)
         except posts.ReelRefused as e:
             print(f"refused: {json.dumps(e.reasons, ensure_ascii=False)[:2000]}", file=sys.stderr)
             return 2

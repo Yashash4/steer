@@ -147,13 +147,20 @@ key_number + key_label whose label says who the number is about (for example "ri
 under 25"); a static with only a fact card is blocked. Every artwork ends with the sign-off: on the carousel's
 CTA slide, and among the static's supporting lines.
 Leave them out when nothing deserves it.
-The reel script is spoken in 30-40 seconds: 50-70 words in all its lines together, in this order: ONE opening framing
-line (one sentence, no full stop inside, at most 7 words, so it is spoken in under 4 seconds), the health line(s), at
-most ONE more framing line, the brand line, the call to action and the sign-off. Each reel line has at most 22 words (32
-for a health line that states two claims together); a whole line is on screen at once. In the reel, one health line may state
-two claims together when they share the same population and qualifiers (list both claim_ids; each number exactly as
-its own claim gives it), for example "Aged 45+ in Chennai, Delhi and Karachi, with BMI under 25 kg/m2: diabetes risk was
-5.27 times higher in South Asian women and 2.99 times in men than in US whites."
+The reel script is spoken in about 30-40 seconds (50-75 words in all), ONE scene per beat, in this order:
+1. hook: ONE framing line, one sentence with no full stop inside, at most 7 words.
+2. the numbers: ONE health line with the main finding(s), as short as you can (at most 22 words; 32 if it states two
+   claims together). It carries everything the editorial requirements say must sit beside these claims (who was
+   studied: ages, places, group) in the same line. When two claims share the same population and qualifiers, state
+   both in this ONE line (list both claim_ids; each number exactly as its own claim gives it, each with its own
+   comparison wording from its own quote).
+3. why (only if a claim offering a reason or mechanism is given): ONE health line from that claim that keeps the
+   claim's own construction and hedge ("the authors suggest ... may not be the main drivers ... may be ..."); never
+   state it as a fact, never add "more than" or any comparison the claim does not make.
+4. what it means: ONE framing line, no number, no new health assertion.
+5. the brand line.
+6. the call to action and the sign-off.
+Never write a line about checking, review, doctors reviewing or sources: code adds that status line itself.
 State the message (the one thing the audience should take away) and the reasoning (why this post, for whom,
 which doubt it answers). Both are published with the post and checked like health lines: the message may only
 combine what the claims used say, and may end with one call-to-action line copied exactly; no other mention
@@ -168,6 +175,21 @@ def write_prompt(brief: dict, claims: list[dict], brand: dict, boundaries: dict)
         ctx = {k: c.get(k) for k in ("population", "comparison_group", "outcome", "time_point") if c.get(k)}
         lines.append(f"- {c['claim_id']} ({c.get('claim_type') or 'claim'}): {c['claim_text']}\n  quote: {c['quote']}\n"
                      f"  context: {ctx or 'none'}")
+    reel = brief.get("reel") or {}   # editorial direction for the reel beats (brief config, never text to copy blindly)
+    if reel:
+        lines += ["", "Reel instructions for this post:"]
+        if reel.get("hook"):
+            lines.append(f"- the hook: {reel['hook']}")
+        if reel.get("order"):
+            lines.append(f"- in the numbers line: {reel['order']}")
+        if reel.get("why_claim"):
+            lines.append(f"- the why beat is REQUIRED: use claim {reel['why_claim']}, keeping its hedge and construction")
+        if reel.get("why"):
+            lines.append(f"- the why line: {reel['why']}")
+        if reel.get("meaning"):
+            lines.append(f"- the meaning line: {reel['meaning']}")
+        if reel.get("brand_line"):
+            lines.append(f"- the brand line must be exactly: {reel['brand_line']}")
     lines += ["", "Brand lines (copy exactly): " + " | ".join(brand["whitelist"]),
               "Call-to-action lines (copy exactly): " + " | ".join(brand["cta"]),
               "Sign-off: " + brand["signoff"][0], "", "Editorial requirements for this paper:"]
