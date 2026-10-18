@@ -1,0 +1,147 @@
+import json
+import re
+from pathlib import Path
+
+import pymupdf
+import pytest
+
+from conftest import check_map
+from steer_pipeline import cli
+from steer_pipeline.pdf import OcrRequired, ingest_pdf
+
+FIX = Path(__file__).parent / "fixtures"
+SINGLE = FIX / "qi2026-peerj-single-column.pdf"
+TWO = FIX / "gayathri2023-frontiers-two-column.pdf"
+
+
+@pytest.fixture(scope="module")
+def single():
+    return ingest_pdf(SINGLE, "evidence")
+
+
+@pytest.fixture(scope="module")
+def two():
+    return ingest_pdf(TWO, "evidence")
+
+
+def test_contract_valid_and_traceable(single, two, validate):
+    for doc in (single, two):
+        validate(doc)
+        check_map(doc)
+        sids = [s["sid"] for s in doc["sentences"]]
+        assert len(sids) == len(set(sids)), "sentence IDs must be unique within an extraction version"
+        line_ids = {ln["line_id"] for p in doc["pages"] for ln in p["lines"]}
+        for s in doc["sentences"]:
+            assert set(s["line_ids"]) <= line_ids
+            assert s["sid"].startswith(s["line_ids"][0][:5])  # sid page = page of its first line
+            assert doc["text"][slice(*s["text_span"])] == s["text"]
+        assert doc["extraction_version"] == "pdf-1"
+        assert doc["extractor"]["name"] == "pymupdf"
+
+
+def test_two_column_reading_order(two):
+    p2 = two["pages"][1]
+    assert p2["layout"] == "mixed"
+    assert {two["pages"][i]["layout"] for i in (2, 3, 7, 8, 9, 10)} == {"two_column"}
+    t = two["text"]
+    # the left column's last line continues into the right column's first line
+    assert "Thus, it is reasonable to hypothesize that providing healthier foods could improve the cardio-metabolic" in t
+    # the offset single-column abstract comes before the two-column introduction
+    assert t.index("A total of 352 participants completed the study.") < t.index("Obesity has become a global epidemic")
+    # the left column is read top to bottom before the right column
+    assert t.index("Obesity has become a global epidemic") < t.index("Insulin resistance and pancreatic")
+    s = next(s for s in two["sentences"] if s["text"].startswith("Thus, it is reasonable to hypothesize"))
+    cols = {ln["line_id"]: ln["column"] for ln in p2["lines"]}
+    assert [cols[i] for i in s["line_ids"]][:2] == ["left", "right"]
+
+
+def test_single_column_layout(single):
+    assert {p["layout"] for p in single["pages"][1:5]} == {"single"}
+    assert "Databases searched: PubMed, Embase, Cochrane Library and Scopus." in single["text"]
+
+
+def test_furniture_removed_but_kept_on_page(single, two):
+    assert "3/19" not in single["text"]
+    assert "Qi et al. (2026), PeerJ, DOI" not in single["text"]
+    footer = [ln["raw"] for ln in two["pages"][1]["lines"] if ln["furniture"]]
+    assert any(f.startswith("Frontiers in Nutrition") for f in footer)
+    assert not any(f in two["text"] for f in footer)
+    furn = [ln["raw"] for ln in single["pages"][2]["lines"] if ln["furniture"]]
+    assert "3/19" in furn
+
+
+def test_hyphen_joins_keep_mapping(single, two):
+    # "GLP-" at a line end before "1RA" keeps its hyphen
+    assert "GLP-\n1RA" in single["raw_text"]
+    i = single["raw_text"].index("GLP-\n1RA")
+    seg = next(s for s in single["map"] if s[4] == "keep_hyphen" and s[2] == i + 4)
+    assert single["text"][seg[0] - 4:seg[0] + 3] == "GLP-1RA"
+    # a lowercase-lowercase break is de-hyphenated, and the raw "-\n" is recorded in the map
+    j = two["raw_text"].index("follow-\nup")
+    seg = next(s for s in two["map"] if s[4] == "dehyphenate" and s[2] == j + 6)
+    assert two["raw_text"][seg[2]:seg[3]] == "-\n"
+    assert two["text"][seg[0] - 6:seg[0] + 2] == "followup"  # documented limit; the gate ignores it
+
+
+def test_sentence_crosses_page(two):
+    s = next(s for s in two["sentences"] if s["text"].startswith("Hence, the present study was conducted"))
+    assert s["sid"].startswith("p0002-")
+    assert {i[:5] for i in s["line_ids"]} == {"p0002", "p0003"}
+
+
+def test_rotated_table_page_kept_and_flagged(two):
+    assert two["pages"][4]["layout"] != "empty"
+    assert "Body weight (kg)" in two["text"]
+    codes = {(w["code"], w["page"]) for w in two["warnings"]}
+    assert ("TABLE_OR_FIGURE_TEXT", 5) in codes
+
+
+def test_doi_from_first_page(single, two):
+    assert single["citation"]["doi"] == "10.7717/peerj.21713"
+    assert two["citation"]["doi"] == "10.3389/fnut.2022.1055923"
+    assert any(w["code"] == "NO_CITATION_METADATA" for w in single["warnings"])
+
+
+def test_deterministic(single):
+    again = ingest_pdf(SINGLE, "evidence")
+    assert again["sentences"] == single["sentences"]
+    assert again["source"]["source_id"] == single["source"]["source_id"]
+
+
+def _image_page(doc):
+    page = doc.new_page()
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 200, 200), False)
+    pix.clear_with(200)
+    page.insert_image(pymupdf.Rect(50, 50, 400, 400), pixmap=pix)
+
+
+def test_scanned_pdf_fails_clearly(tmp_path):
+    doc = pymupdf.open()
+    _image_page(doc)
+    _image_page(doc)
+    path = tmp_path / "scan.pdf"
+    doc.save(path)
+    with pytest.raises(OcrRequired, match="OCR required: no extractable text on any page"):
+        ingest_pdf(path, "evidence")
+    assert cli.main(["ingest", str(path), "--role", "evidence", "-o", str(tmp_path / "x.json")]) == 2
+
+
+def test_partly_scanned_pdf_warns(tmp_path, validate):
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "A real sentence on page one.")
+    _image_page(doc)
+    path = tmp_path / "part.pdf"
+    doc.save(path)
+    out = ingest_pdf(path, "evidence")
+    validate(out)
+    assert {"code": "OCR_REQUIRED_PAGE", "page": 2, "detail": "page has images but no extractable text"} in out["warnings"]
+    assert out["sentences"][0]["text"] == "A real sentence on page one."
+
+
+def test_cli_ingest_pdf(tmp_path, validate):
+    out = tmp_path / "doc.json"
+    assert cli.main(["ingest", str(TWO), "--role", "evidence", "-o", str(out)]) == 0
+    doc = json.loads(out.read_text())
+    validate(doc)
+    assert re.fullmatch(r"src-[0-9a-f]{16}", doc["source"]["source_id"])

@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "steer-pipeline/document-1.json",
+  "title": "Normalised source document, schema version 1",
+  "type": "object",
+  "required": ["schema_version", "extraction_version", "extractor", "source", "citation", "pages", "raw_text", "text",
+               "map", "line_starts", "line_order", "sentences", "warnings"],
+  "additionalProperties": false,
+  "$defs": {
+    "nstr": {"type": ["string", "null"]},
+    "span": {"type": "array", "items": {"type": "integer", "minimum": 0}, "minItems": 2, "maxItems": 2},
+    "line_id": {"type": "string", "pattern": "^p\\d{4}-l\\d{4}$"}
+  },
+  "properties": {
+    "schema_version": {"const": "1"},
+    "extraction_version": {"type": "string", "minLength": 1},
+    "extractor": {
+      "type": "object", "required": ["name", "version"],
+      "properties": {"name": {"type": "string"}, "version": {"type": "string"}}
+    },
+    "source": {
+      "type": "object",
+      "required": ["source_id", "source_type", "role", "access", "content_sha256", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {"type": "string", "pattern": "^src-[0-9a-f]{16}$"},
+        "source_type": {"enum": ["pdf", "doi", "pmid", "pmc", "url", "text"]},
+        "role": {"enum": ["evidence", "contextual", "editorial"]},
+        "access": {"enum": ["full_text", "abstract_only"]},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "provenance": {
+          "type": "object",
+          "required": ["input", "resolved_url", "file_path", "fetched_via", "accessed_at"],
+          "additionalProperties": false,
+          "properties": {
+            "input": {"$ref": "#/$defs/nstr"},
+            "resolved_url": {"$ref": "#/$defs/nstr"},
+            "file_path": {"$ref": "#/$defs/nstr"},
+            "fetched_via": {"enum": ["file", "pmc-oa-s3", "europepmc-abstract", "direct-pdf", null]},
+            "accessed_at": {"type": "string", "format": "date-time"}
+          }
+        }
+      }
+    },
+    "citation": {
+      "type": "object",
+      "required": ["title", "authors", "journal", "year", "doi", "pmid", "pmcid", "license", "retracted"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"$ref": "#/$defs/nstr"},
+        "authors": {"type": "array", "items": {"type": "string"}},
+        "journal": {"$ref": "#/$defs/nstr"},
+        "year": {"type": ["integer", "null"]},
+        "doi": {"$ref": "#/$defs/nstr"},
+        "pmid": {"$ref": "#/$defs/nstr"},
+        "pmcid": {"$ref": "#/$defs/nstr"},
+        "license": {"$ref": "#/$defs/nstr"},
+        "retracted": {"type": ["boolean", "null"]}
+      }
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["page", "width", "height", "layout", "lines"],
+        "properties": {
+          "page": {"type": "integer", "minimum": 1},
+          "width": {"type": ["number", "null"]},
+          "height": {"type": ["number", "null"]},
+          "layout": {"enum": ["single", "two_column", "mixed", "empty"]},
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["line_id", "block", "column", "bbox", "raw", "furniture"],
+              "additionalProperties": false,
+              "properties": {
+                "line_id": {"$ref": "#/$defs/line_id"},
+                "block": {"type": "integer", "minimum": 0},
+                "column": {"enum": ["full", "left", "right"]},
+                "bbox": {"type": ["array", "null"], "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+                "raw": {"type": "string"},
+                "furniture": {"type": "boolean"},
+                "table_like": {"type": "boolean"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "raw_text": {"type": "string"},
+    "text": {"type": "string"},
+    "map": {
+      "type": "array",
+      "items": {
+        "type": "array", "minItems": 5, "maxItems": 5,
+        "prefixItems": [
+          {"type": "integer"}, {"type": "integer"}, {"type": "integer"}, {"type": "integer"},
+          {"enum": ["copy", "join_space", "dehyphenate", "keep_hyphen", "paragraph"]}
+        ]
+      }
+    },
+    "line_starts": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+    "line_order": {"type": "array", "items": {"$ref": "#/$defs/line_id"}},
+    "sentences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sid", "page", "text", "text_span", "raw_span", "line_ids"],
+        "additionalProperties": false,
+        "properties": {
+          "sid": {"type": "string", "pattern": "^p\\d{4}-s\\d{4}$"},
+          "page": {"type": "integer", "minimum": 1},
+          "text": {"type": "string", "minLength": 1},
+          "text_span": {"$ref": "#/$defs/span"},
+          "raw_span": {"$ref": "#/$defs/span"},
+          "line_ids": {"type": "array", "items": {"$ref": "#/$defs/line_id"}, "minItems": 1}
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "page", "detail"],
+        "additionalProperties": false,
+        "properties": {
+          "code": {"enum": ["ABSTRACT_ONLY", "OCR_REQUIRED_PAGE", "EMPTY_PAGE", "UNCERTAIN_COLUMN_ORDER",
+                            "NO_CITATION_METADATA", "RETRACTED", "TABLE_OR_FIGURE_TEXT"]},
+          "page": {"type": ["integer", "null"]},
+          "detail": {"type": "string"}
+        }
+      }
+    }
+  }
+}
