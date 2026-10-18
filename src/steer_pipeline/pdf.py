@@ -66,20 +66,28 @@ def _rows(page) -> tuple[list[dict], bool]:
             main_span = max(ln["spans"], key=lambda sp: len(sp["text"].strip()))
             frags.append({"page_bbox": list(ln["bbox"]), "bbox": _upright(ln["bbox"], direction),
                           "raw": text, "block": bi, "dir": direction, "size": main_span["size"]})
-        frags.sort(key=lambda f: (f["dir"], (f["bbox"][1] + f["bbox"][3]) / 2, f["bbox"][0]))
+        # group fragments of one baseline (same direction), then join each group left to right
+        frags.sort(key=lambda f: (f["dir"], (f["bbox"][1] + f["bbox"][3]) / 2))
+        groups: list[list[dict]] = []
         for f in frags:
-            prev = rows[-1] if rows else None
-            if (prev and prev["block"] == bi and prev["dir"] == f["dir"]
-                    and abs((prev["bbox"][1] + prev["bbox"][3]) / 2 - (f["bbox"][1] + f["bbox"][3]) / 2) < SAME_ROW
-                    and f["bbox"][0] >= prev["bbox"][2] - 1):
-                if len(f["raw"].strip()) > len(prev["raw"].strip()):
-                    prev["size"] = f["size"]
-                prev["raw"] = prev["raw"].rstrip() + " " + f["raw"].lstrip()
-                prev["bbox"] = [prev["bbox"][0], min(prev["bbox"][1], f["bbox"][1]), f["bbox"][2], max(prev["bbox"][3], f["bbox"][3])]
-                pb, fb = prev["page_bbox"], f["page_bbox"]
-                prev["page_bbox"] = [min(pb[0], fb[0]), min(pb[1], fb[1]), max(pb[2], fb[2]), max(pb[3], fb[3])]
+            g = groups[-1] if groups else None
+            centre = (f["bbox"][1] + f["bbox"][3]) / 2
+            if g and g[0]["dir"] == f["dir"] and centre - (g[0]["bbox"][1] + g[0]["bbox"][3]) / 2 < SAME_ROW:
+                g.append(f)
             else:
-                rows.append(f)
+                groups.append([f])
+        for g in groups:
+            g.sort(key=lambda f: f["bbox"][0])
+            row = dict(g[0])
+            for f in g[1:]:
+                if len(f["raw"].strip()) > len(row["raw"].strip()):
+                    row["size"] = f["size"]
+                row["raw"] = row["raw"].rstrip() + " " + f["raw"].lstrip()
+                row["bbox"] = [row["bbox"][0], min(row["bbox"][1], f["bbox"][1]), max(row["bbox"][2], f["bbox"][2]),
+                               max(row["bbox"][3], f["bbox"][3])]
+                pb, fb = row["page_bbox"], f["page_bbox"]
+                row["page_bbox"] = [min(pb[0], fb[0]), min(pb[1], fb[1]), max(pb[2], fb[2]), max(pb[3], fb[3])]
+            rows.append(row)
     return rows, has_image
 
 
@@ -135,9 +143,29 @@ def find_gutter(rows: list[dict]) -> tuple[float | None, int]:
     return max(candidates)[1], len(distinct)
 
 
+def by_lines(rows: list[dict]) -> list[dict]:
+    """Top to bottom by visual line, left to right within a line.
+
+    Rows whose vertical centres are within half a line height of the line's first row share the
+    line, so table cells on one baseline read in x order even when PyMuPDF puts them in
+    different blocks with slightly different y.
+    """
+    rows = sorted(rows, key=lambda r: (r["bbox"][1] + r["bbox"][3]) / 2)
+    out, line, top = [], [], None
+    for r in rows:
+        centre = (r["bbox"][1] + r["bbox"][3]) / 2
+        if line and centre - top > 0.5 * (line[0]["bbox"][3] - line[0]["bbox"][1]):
+            out += sorted(line, key=lambda x: x["bbox"][0])
+            line = []
+        if not line:
+            top = centre
+        line.append(r)
+    return out + sorted(line, key=lambda x: x["bbox"][0])
+
+
 def order_rows(rows: list[dict], gx: float | None) -> list[dict]:
     """Reading order: bands top to bottom; inside a two-column band, left column then right column."""
-    rows = sorted(rows, key=lambda r: (r["bbox"][1], r["bbox"][0]))
+    rows = by_lines(rows)
     if gx is None:
         for r in rows:
             r["column"] = "full"
@@ -148,7 +176,7 @@ def order_rows(rows: list[dict], gx: float | None) -> list[dict]:
     out, band = [], []
     for r in rows + [None]:
         if r is None or r["column"] == "full":
-            out += [x for x in band if x["column"] == "left"] + [x for x in band if x["column"] == "right"]
+            out += by_lines([x for x in band if x["column"] == "left"]) + by_lines([x for x in band if x["column"] == "right"])
             band = []
             if r is not None:
                 out.append(r)

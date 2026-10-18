@@ -23,7 +23,10 @@ uv run pytest            # offline tests
 uv run steer ingest paper.pdf --role evidence -o paper.json
 uv run steer ingest protocol.md --role contextual -o protocol.json
 uv run steer ingest brief.txt --role editorial -o brief.json
+uv run steer verify claims.json --doc paper.json -o report.json   # exit code 1 if any claim is rejected
 ```
+
+`claims.json` is a list of `{"claim_id", "text", "document_id", "quote"}`.
 
 `--role` says what the source may be used for. Only `evidence` (a research paper) can back a claim.
 `contextual` is for material like a clinical protocol, and `editorial` is for a theme brief.
@@ -77,6 +80,40 @@ The JSON Schema is in `src/steer_pipeline/schema/document-1.json`.
   - A change of more than 1 pt in the main font size between lines (a heading) starts a new paragraph.
 - A PDF with no extractable text fails with "OCR required". Text-free pages inside an otherwise readable
   PDF are listed as warnings.
+
+## The verification gate
+
+A claim passes only when **both** checks hold. A failing claim is rejected with every reason and is never
+repaired. No AI is involved.
+
+**1. The quote is in the evidence.** The document's role must be `evidence`. The quote, after the canonical
+form below, must occur in the document text after the same canonical form. The quote must be contiguous
+(an ellipsis is rejected). It needs at least 5 words (`--min-words`), unless it contains a number that the
+claim also states. Every match is reported with its sentence IDs and lines, and `from_table_text: true`
+when it comes only from table or rotated text.
+
+The canonical form, applied in this order:
+1. Unicode NFKC (ligatures, superscript digits such as "²", full-width forms).
+2. Curly and prime quotes become straight quotes.
+3. Every dash (U+2010–U+2015) and the minus sign (U+2212) becomes "-"; soft hyphens are removed.
+4. A hyphen between two letters is removed ("follow-up" = "followup").
+5. Whitespace, including line breaks, becomes single spaces.
+6. Case is folded.
+
+**2. Every number in the claim is in the quote, exactly.** A number is read as a whole token:
+- comparator (`<`, `>`, `≤`, `≥`, and "less than", "more than", "at least", "up to", "under", "over", "below",
+  "above");
+- sign (`-` or `−`; `+` means the same as no sign; `±` is kept as a marker);
+- value (thousands separators removed, including 1,35,000; `0.7` equals `0.70`);
+- range (`55%–65%`, `14 to 17 years`);
+- unit.
+
+Units ignore case (mg/dL = mg/dl, kg/m² = kg/m2 = kg/m^2). "Percentage points" (`pp`) is not "%". "95% CI" is
+a confidence label. A claim token must equal a quote token in comparator, sign, value(s) and unit. There is
+no rounding: "about 1 in 5" never matches "21%".
+
+Numbers glued to letters are identifiers, not values (GLP-1, T2D, HbA1c). The words one to ten count as
+numbers. Words like "approximately" are ignored.
 
 ## Licence
 

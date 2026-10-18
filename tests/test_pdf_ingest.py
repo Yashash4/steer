@@ -67,7 +67,7 @@ def test_furniture_removed_but_kept_on_page(single, two):
     assert any(f.startswith("Frontiers in Nutrition") for f in footer)
     assert not any(f in two["text"] for f in footer)
     furn = [ln["raw"] for ln in single["pages"][2]["lines"] if ln["furniture"]]
-    assert "3/19" in furn
+    assert furn == ["Qi et al. (2026), PeerJ, DOI 10.7717/peerj.21713 3/19"]
 
 
 def test_hyphen_joins_keep_mapping(single, two):

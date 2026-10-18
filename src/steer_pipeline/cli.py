@@ -1,10 +1,12 @@
-"""Command line: `steer ingest <input> --role evidence -o doc.json`."""
+"""Command line: `steer ingest <input> --role evidence -o doc.json` and `steer verify claims.json --doc doc.json -o report.json`."""
 
 import argparse
 import sys
 from pathlib import Path
 
-from . import contract
+import json
+
+from . import contract, verify
 from .pdf import OcrRequired, ingest_pdf
 from .text import ingest_text
 
@@ -25,7 +27,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("source")
     p.add_argument("--role", required=True, choices=contract.ROLES)
     p.add_argument("-o", "--out", required=True)
+    v = sub.add_parser("verify", help="check claims against contract documents")
+    v.add_argument("claims", help="JSON list of {claim_id, text, document_id, quote}")
+    v.add_argument("--doc", action="append", required=True, help="a contract document (repeatable)")
+    v.add_argument("--min-words", type=int, default=verify.MIN_WORDS)
+    v.add_argument("-o", "--out", required=True)
     args = ap.parse_args(argv)
+
+    if args.cmd == "verify":
+        claims = json.loads(Path(args.claims).read_text(encoding="utf-8"))
+        report = verify.verify(claims, [contract.load(d) for d in args.doc], args.min_words)
+        Path(args.out).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+        s = report["summary"]
+        print(f"{s['claims']} claims: {s['passed']} passed, {s['rejected']} rejected -> {args.out}", file=sys.stderr)
+        return 0 if s["rejected"] == 0 else 1
 
     try:
         doc = ingest(args.source, args.role)
