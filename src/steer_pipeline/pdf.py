@@ -17,6 +17,7 @@ EXTRACTION_VERSION = "pdf-1"
 FURNITURE_BAND = 0.07      # top/bottom share of the page height checked for headers/footers
 SAME_ROW = 2.0             # pt: line fragments whose vertical centres differ less than this are one row
 FONT_STEP = 1.0           # pt: a larger change of the main font size between rows starts a paragraph
+MIN_TEXT_RUN = 4          # consecutive justified baselines that prove a text column under a figure or table
 ROW_GAP = 0.25            # share of the text width: a wider gap between fragments on one baseline splits the row
 NUMERIC_PAGE_SHARE = 0.40 # a page this number-dense may hide columns the text-only column test cannot see
 INDENT = 20.0             # pt: rows starting this far right of a column edge (bullets, indents) still belong to it
@@ -47,11 +48,11 @@ def _upright(bbox: list[float], direction: tuple[float, float]) -> list[float]:
     return list(bbox)
 
 
-def _fragment_gutter(frags: list[dict], indent: float) -> float | None:
-    gx, _ = find_gutter(frags, indent)
-    if gx is None and sum(not _numeric(f["raw"]) for f in frags) < 6 <= len(frags):
-        gx, _ = find_gutter(frags, indent, drop_numeric=False)  # number-dense page: same fallback as page_gutter
-    return gx
+def _fragment_candidates(frags: list[dict], indent: float) -> list[float]:
+    cands = gutter_candidates(frags, indent)
+    if not cands and sum(not _numeric(f["raw"]) for f in frags) < 6 <= len(frags):
+        cands = gutter_candidates(frags, indent, drop_numeric=False)  # number-dense page: same fallback as page_gutter
+    return [gx for _, gx in cands]
 
 
 def text_gutters(frags: list[dict], indent: float = 0.0, depth: int = 0) -> list[float]:
@@ -60,10 +61,12 @@ def text_gutters(frags: list[dict], indent: float = 0.0, depth: int = 0) -> list
     Each side of any column split is searched again, even when that split itself is not a
     justified text gutter (a ragged sidebar beside two justified columns).
     """
-    gx = _fragment_gutter(frags, indent)
-    if gx is None:
+    cands = _fragment_candidates(frags, indent)
+    if not cands:
         return []
-    own = [gx] if text_gutter(frags, indent) == gx else []
+    good = text_gutter(frags, indent)
+    gx = good if good is not None else cands[0]
+    own = [gx] if good is not None else []
     if depth >= 2:
         return own
     left = [f for f in frags if f["bbox"][2] <= gx]
@@ -75,27 +78,43 @@ def text_gutter(frags: list[dict], indent: float = 0.0) -> float | None:
     """A column gutter among a page's unmerged fragments, accepted only for justified text columns.
 
     find_gutter() also fires on tables (label column vs value columns). Text columns are told
-    apart by shape: on most baselines the text left of the gutter ends at one x (justified) and has
-    no hole wider than 1.5 line heights inside it; table rows have holes between cells.
+    apart by shape: on most baselines (or on a run of MIN_TEXT_RUN consecutive ones) the text left of
+    the gutter ends at one x (justified) and has no hole wider than 1.5 line heights inside it;
+    table rows have holes between cells.
     """
-    gx = _fragment_gutter(frags, indent)
-    if gx is None:
-        return None
+    for gx in _fragment_candidates(frags, indent):  # strongest first; the first justified one wins
+        if _justified(frags, gx):
+            return gx
+    return None
+
+
+def _justified(frags: list[dict], gx: float) -> bool:
     left: dict[int, list[dict]] = {}
+    right_bases = set()  # baselines that also hold text starting right of the gutter
     for f in frags:
+        base = round((f["bbox"][1] + f["bbox"][3]) / 2 / SAME_ROW)
         if f["bbox"][2] <= gx:
-            left.setdefault(round((f["bbox"][1] + f["bbox"][3]) / 2 / SAME_ROW), []).append(f)
+            left.setdefault(base, []).append(f)
+        elif f["bbox"][0] >= gx:
+            right_bases.add(base)
     if len(left) < 6:
-        return None
+        return False
     edge = max(f["bbox"][2] for fs in left.values() for f in fs)
-    text_like = 0
-    for fs in left.values():
+    flags = []
+    for base, fs in sorted(left.items()):
         fs.sort(key=lambda f: f["bbox"][0])
         height = max(f["bbox"][3] - f["bbox"][1] for f in fs)
         gaps = [b["bbox"][0] - a["bbox"][2] for a, b in zip(fs, fs[1:])]
         # a text line: ends at the column edge and has no table-like hole inside
-        text_like += edge - fs[-1]["bbox"][2] <= EDGE and all(g <= 1.5 * height for g in gaps)
-    return gx if text_like >= 0.6 * len(left) else None
+        line_ok = edge - fs[-1]["bbox"][2] <= EDGE and all(g <= 1.5 * height for g in gaps)
+        flags.append((line_ok, line_ok and base in right_bases))
+    run = best = 0
+    for _, paired in flags:  # a run only counts where the gutter really separates two columns of text
+        run = run + 1 if paired else 0
+        best = max(best, run)
+    # most baselines are justified text, or a block of at least MIN_TEXT_RUN consecutive ones is (text
+    # columns under a figure or table that fills the rest of the page)
+    return sum(ok for ok, _ in flags) >= 0.6 * len(flags) or best >= MIN_TEXT_RUN
 
 
 def join_fragments(frags: list[dict], text_width: float, gutters: list[float] = ()) -> list[dict]:
@@ -198,11 +217,29 @@ def find_gutter(rows: list[dict], indent: float = 0.0, drop_numeric: bool = True
     max(3, 10%) of the rows start there (or up to `indent` pt to its right: bullets and indents, used
     for nested columns), and at least 90% of the rows that start at the dominant left edge end before it.
     """
-    all_rows = rows
+    candidates = gutter_candidates(rows, indent, drop_numeric)
+    if not candidates:
+        return None, 0
+    # several start clusters can describe the same gutter (e.g. first-line indents); count distinct gutters
+    distinct: list[float] = []
+    for gx in sorted(gx for _, gx in candidates):
+        if not distinct or gx - distinct[-1] > 20:
+            distinct.append(gx)
+    if not guard:
+        return candidates[0][1], len(distinct)
+    # the strongest split whose left side reads like a text column (never a table's label column)
+    for _, gx in candidates:
+        if column_like(rows, gx, numeric_ok=not drop_numeric):
+            return gx, len(distinct)
+    return None, -1  # candidates existed, all rejected as table-like: the caller must flag it
+
+
+def gutter_candidates(rows: list[dict], indent: float = 0.0, drop_numeric: bool = True) -> list[tuple[int, float]]:
+    """Every qualifying (support, gutter x), strongest first (see find_gutter for the test)."""
     if drop_numeric:
         rows = [r for r in rows if not _numeric(r["raw"])]  # table cells must not look like a column of text
     if len(rows) < 6:
-        return None, 0
+        return []
     x_min = min(r["bbox"][0] for r in rows)
     x_max = max(r["bbox"][2] for r in rows)
     width = x_max - x_min
@@ -228,23 +265,10 @@ def find_gutter(rows: list[dict], indent: float = 0.0, drop_numeric: bool = True
             left_end = max(r["bbox"][2] for r in before if r["bbox"][2] <= c2 - 2)
             gx = (left_end + c2 - EDGE) / 2
             candidates.append((n, gx))
-    if not candidates:
-        return None, 0
-    # several start clusters can describe the same gutter (e.g. first-line indents); count distinct gutters
-    distinct: list[float] = []
-    for gx in sorted(gx for _, gx in candidates):
-        if not distinct or gx - distinct[-1] > 20:
-            distinct.append(gx)
-    if not guard:
-        return max(candidates)[1], len(distinct)
-    # the strongest split whose left side reads like a text column (never a table's label column)
-    for _, gx in sorted(candidates, reverse=True):
-        if column_like(all_rows, gx, numeric_ok=not drop_numeric):
-            return gx, len(distinct)
-    return None, -1  # candidates existed, all rejected as table-like: the caller must flag it
+    return sorted(candidates, reverse=True)
 
 
-def column_like(rows: list[dict], gx: float, numeric_ok: bool = False) -> bool:
+def column_like(rows: list[dict], gx: float, numeric_ok: bool = False, min_baselines: int = 4) -> bool:
     """True when the rows left of gx read like a text column (ragged or justified), not table cells.
 
     Text: on most baselines one row, and rows fill most of the space up to the gutter (median >= 60%).
@@ -254,7 +278,7 @@ def column_like(rows: list[dict], gx: float, numeric_ok: bool = False) -> bool:
     by_base: dict[int, list[dict]] = {}
     for r in left:
         by_base.setdefault(round((r["bbox"][1] + r["bbox"][3]) / 2 / SAME_ROW), []).append(r)
-    if len(by_base) < 4:
+    if len(by_base) < min_baselines:
         return False
     single = sum(len(v) == 1 for v in by_base.values())
     col_w = gx - min(r["bbox"][0] for r in left)  # the space up to the gutter, not the rows' own extent
@@ -263,7 +287,10 @@ def column_like(rows: list[dict], gx: float, numeric_ok: bool = False) -> bool:
 
 
 def page_gutter(rows: list[dict]) -> tuple[float | None, int, str | None]:
-    """find_gutter for a whole page, with the number-heavy fallback; the note says why the page is uncertain."""
+    """find_gutter for a whole page, with the number-heavy fallback; the note says why the page is uncertain.
+
+    The note "band_guard" means: no split passed for the whole page, so order_rows checks each band.
+    """
     text_rows = [r for r in rows if not _numeric(r["raw"])]
     if len(text_rows) < 6 <= len(rows):
         gx, n = find_gutter(rows, drop_numeric=False, guard=True)
@@ -274,7 +301,9 @@ def page_gutter(rows: list[dict]) -> tuple[float | None, int, str | None]:
     if gx is None and len(rows) >= 6 and len(rows) - len(text_rows) >= NUMERIC_PAGE_SHARE * len(rows):
         return None, 0, "number-dense page: single-column reading not confirmed"
     if gx is None and n == -1:
-        return None, 0, "column split candidates rejected as table-like; read as one column"
+        # every split failed as a whole page (a figure or table above two text columns): keep the strongest
+        # candidate and let each band between full-width lines decide for itself (order_rows band_guard)
+        return None, 0, "band_guard"
     return gx, max(n, 0), None
 
 
@@ -298,13 +327,16 @@ def by_lines(rows: list[dict]) -> list[dict]:
     return out + sorted(line, key=lambda x: x["bbox"][0])
 
 
-def order_rows(rows: list[dict], gx: float | None, depth: int = 0, regions: list | None = None) -> list[dict]:
+def order_rows(rows: list[dict], gx: float | None, depth: int = 0, regions: list | None = None,
+               band_guard: bool = False) -> list[dict]:
     """Reading order: bands top to bottom; inside a two-column band, left column then right column.
 
     Each side of a band is ordered again the same way, so a third column (a sidebar beside two
     columns) is found too, but only when its left side reads like a text column (column_like). Every such inner
     split, and every inner candidate rejected as table-like, is appended to `regions` as
-    (side, rows, what) so the page carries a warning for it.
+    (side, rows, what) so the page carries a warning for it. With band_guard, each band between
+    full-width rows is split only when it reads like text columns itself (a figure or table band is
+    read line by line and recorded as a region).
     Column labels come from the outermost split.
     """
     rows = by_lines(rows)
@@ -318,6 +350,14 @@ def order_rows(rows: list[dict], gx: float | None, depth: int = 0, regions: list
     out, band = [], []
     for r in rows + [None]:
         if r is None or r["column"] == "full":
+            if band_guard and band and not column_like(band, gx, min_baselines=2):
+                part = by_lines(band)
+                for x in part:
+                    x["column"] = "full"
+                out += part
+                if regions is not None:
+                    regions.append(("band", part, "two-column reading rejected as table-like"))
+                band = []
             for side in ("left", "right"):
                 part = [x for x in band if x["column"] == side]
                 # an inner split must look like text columns (ragged or justified), never like table cells
@@ -416,9 +456,22 @@ def ingest_pdf_bytes(content: bytes, role: str, *, source_type: str, provenance:
             part = [r for r in body if r["dir"] == direction]
             gx, n_gutters, note = page_gutter(part)
             regions: list = []
-            part = order_rows(part, gx, regions=regions)
-            if note:
-                notes.append(note)
+            if note == "band_guard":
+                # try each candidate, strongest first; keep the first under which some band reads as columns
+                for _, cand in gutter_candidates(part):
+                    regions = []
+                    ordered_part = order_rows(part, cand, regions=regions, band_guard=True)
+                    if any(r["column"] != "full" for r in ordered_part):
+                        gx, part, n_gutters = cand, ordered_part, 1
+                        break
+                else:
+                    gx, regions, n_gutters = None, [], 0
+                    part = order_rows(part, None)
+                    notes.append("column split candidates rejected as table-like; read as one column")
+            else:
+                part = order_rows(part, gx, regions=regions)
+                if note:
+                    notes.append(note)
             inner_regions += regions
             mark_paragraphs(part)
             if ordered:
@@ -469,7 +522,8 @@ def ingest_pdf_bytes(content: bytes, role: str, *, source_type: str, provenance:
         for side, region, what in inner_regions:
             ys = [r["page_bbox"][1] for r in region] + [r["page_bbox"][3] for r in region]
             warnings.append({"code": "UNCERTAIN_COLUMN_ORDER", "page": pno,
-                             "detail": f"{what} in the {side} column, y {min(ys):.0f}-{max(ys):.0f}",
+                             "detail": (f"{what} in the {side} column" if side != "band" else f"{what} in this band")
+                                       + f", y {min(ys):.0f}-{max(ys):.0f}",
                              "lines": [line_of[id(region[0])], line_of[id(region[-1])]]})
         pages.append({"page": pno, "width": width, "height": height, "layout": layout, "lines": lines})
 

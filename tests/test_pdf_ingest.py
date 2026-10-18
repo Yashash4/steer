@@ -320,3 +320,29 @@ def test_number_dense_two_column_page_uses_the_fallback(tmp_path):
             "detail": "number-dense page: columns detected on all rows (fallback)"} in out["warnings"]
     flat = out["text"].replace("\n", " ")
     assert flat.index(left[-1]) < flat.index(right[0])  # the left column is read before the right one
+
+
+def test_figure_above_two_columns_keeps_the_columns(tmp_path):
+    # like Laverde p3: a flow chart (short box labels on both sides), a full-width caption, then two
+    # justified text columns at the bottom; the whole-page guard fails, but each band decides itself
+    doc = pymupdf.open()
+    page = doc.new_page()
+    tw = pymupdf.TextWriter(page.rect)
+    for i in range(10):
+        tw.append((150, 80 + i * 30), f"Box {i} (n = {i})", fontsize=10)
+        tw.append((380, 80 + i * 30), f"Excluded {i}", fontsize=10)
+    tw.append((50, 400), _fill("Fig. 1 Flow chart of the study selection", 490) + ".", fontsize=10)
+    left = [_fill(f"Left{i}", 238) + "." for i in range(1, 6)]
+    right = [_fill(f"Right{i}", 238) + "." for i in range(1, 6)]
+    for i, (lt, rt) in enumerate(zip(left, right)):
+        tw.append((50, 440 + i * 14), lt, fontsize=10)
+        tw.append((310, 440 + i * 14), rt, fontsize=10)
+    tw.write_text(page)
+    path = tmp_path / "figure.pdf"
+    doc.save(path)
+    out = ingest_pdf(path, "evidence")
+    flat = out["text"].replace("\n", " ")
+    assert flat.index(left[-1]) < flat.index(right[0])  # the left column is read before the right one
+    assert " ".join(left) in flat and " ".join(right) in flat
+    assert any(w["detail"].startswith("two-column reading rejected as table-like in this band") and "lines" in w
+               for w in out["warnings"])
