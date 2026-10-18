@@ -182,7 +182,7 @@ def test_props_carry_only_checked_text_and_the_pool_check_catches_anything_else(
     # the presenter slot (D-026): a muted clip per scene, always with the fixed label; the sources card holds >= 5 s
     withp = reel.build_props(scenes, record, BRAND, "come back", keys, {0: "clip.mp4"})
     assert withp["scenes"][0]["presenter"] == {"video": "presenter-0.mp4", "start": withp["scenes"][0]["start"],
-                                               "end": withp["scenes"][0]["end"], "label": "AI presenter · placeholder"}
+                                               "end": withp["scenes"][0]["end"], "label": "AI-generated presenter · not a Steer clinician"}
     assert withp["scenes"][1]["presenter"] is None and reel.pool_check(withp, script, record, "come back", keys) == []
     bad = cp.deepcopy(withp)
     bad["scenes"][0]["presenter"]["label"] = "Dr Steer"
@@ -227,6 +227,10 @@ def test_elevenlabs_alignment_becomes_word_boundaries_and_the_cache_saves_credit
     assert [w for w, _, _ in words] == ["Lean,", "and", "still", "wondering?"] and audio[:4] == b"RIFF"
     assert calls[0][0].startswith("https://api.elevenlabs.io/v1/text-to-speech/v1/with-timestamps")
     assert calls[0][2] == "sk-TESTSECRET" and calls[0][1]["model_id"] == "eleven_multilingual_v2"
+    empty = reel.ElevenLabs(request=lambda url, body, k: {"detail": "ok"})          # a 200 without audio or timings
+    with pytest.raises(reel.VoiceError, match="without audio"):
+        empty("Something else", voice)
+    assert len(list((tmp_path / "cache").glob("*.json"))) == 1                         # ...is never cached
     tts("Lean, and still wondering?", voice)                     # the same line again: from the cache, no call
     assert len(calls) == 1 and [c["cache_hit"] for c in tts.log] == [False, True]
     assert tts.log[0]["cache_key"] == tts.log[1]["cache_key"] and tts.log[0]["characters"] == 26

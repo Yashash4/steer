@@ -242,6 +242,11 @@ class ElevenLabs:
             d = self.request(f"https://api.elevenlabs.io/v1/text-to-speech/{voice['voice_id']}/with-timestamps"
                              f"?output_format=mp3_44100_128", {"text": text, "model_id": model, "voice_settings": vs},
                              eleven_key())
+            al = d.get("alignment") if isinstance(d, dict) else None
+            if not (isinstance(d, dict) and d.get("audio_base64") and isinstance(al, dict) and al.get("characters")
+                    and len(al["characters"]) == len(al.get("character_start_times_seconds") or [])
+                    == len(al.get("character_end_times_seconds") or [])):
+                raise VoiceError("ElevenLabs reply without audio or timings")   # never cached
             TTS_CACHE.mkdir(parents=True, exist_ok=True)
             f.write_text(json.dumps(d))
         self.log.append({"characters": len(text), "cache_key": key[:16], "cache_hit": hit})
@@ -544,7 +549,7 @@ REEL_DIR = rd.CODE / "reel"
 REMOTION_DURATION = (20.0, 45.0)
 HOOK_MAX = 4.0   # the hook line is spoken within 4 s of the reel's start
 REMOTION_END_CARD, HEALTH_HOLD = 5.0, 0.8   # the sources card holds >= 5 s (its text >= 40 px)
-PRESENTER_LABEL = "AI presenter · placeholder"   # D-026: on every frame a presenter clip is on screen
+PRESENTER_LABEL = "AI-generated presenter · not a Steer clinician"   # D-026: on every frame a presenter clip is on screen
 LABEL_BOX = (60, 72, 220, 34)   # x, y, w, h inside the label pill (top left; Reel.tsx LABEL_BG / LABEL_INK)
 GROUNDS = {"hook": "cream", "brand": "maroon", "cta": "cream", "sources": "cream"}
 

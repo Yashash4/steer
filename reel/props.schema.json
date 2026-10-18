@@ -202,7 +202,7 @@
                   "$ref": "#/$defs/seconds"
                 },
                 "label": {
-                  "const": "AI presenter · placeholder",
+                  "const": "AI-generated presenter · not a Steer clinician",
                   "description": "drawn whenever the presenter is on screen (D-026)"
                 }
               }
