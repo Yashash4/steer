@@ -46,3 +46,13 @@ def test_a_changed_number_a_dropped_qualifier_or_an_unsupported_verdict_fails(tm
     setup(tmp_path, monkeypatch, verdict="unsupported")
     ok = [EN[0] | {"text": "On average, weight 0.4 kg a month wapas aaya, not a prediction for you."}, EN[1]]
     assert posts.hinglish_caption(tmp_path, None, {"rules": {}}, FakeRouter(ok))["status"] == "failed"
+
+
+def test_capitalise_and_the_native_return_wording_passes_west_boundaries():
+    from steer_pipeline import checks
+    assert posts.capitalise("on average, 0.4 kg") == "On average, 0.4 kg" and posts.capitalise("") == ""
+    west = checks.load_boundaries("PMC12776922")
+    rule = next(r for r in west["require_qualifier"] if r.get("hinglish"))
+    line = "28 randomised controlled trials mein, treatment groups ka weight control groups ke level par wapas aa gaya."
+    assert any(checks._has(line, p) for p in rule["any_of"])                       # the native wording satisfies the rule
+    assert not any(checks._has("28 trials mein treatment aur control groups ka weight barabar tha.", p) for p in rule["any_of"])

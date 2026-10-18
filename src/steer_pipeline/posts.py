@@ -182,11 +182,18 @@ HI_SYSTEM = """You translate the checked English Instagram caption of a health p
 mixed, in Roman script, as Indians write on Instagram). Translate only; add no fact, advice, promise or number. Keep every
 number, unit, confidence interval, population and comparison group exactly as written. Keep each line's "keep" phrases in
 English, word for word, once each. Keep every number with its English unit and range words exactly as written ("0.4 kg",
-"1.4 years", "0.3 to 0.5", "95% confidence interval"). Return the same lines in the same order, each with its kind and
+"1.4 years", "0.3 to 0.5", "95% confidence interval"). Where a line has "use one of", write one of those Hinglish phrases
+there instead. Always say what was stopped ("dawai band karne ke baad" or "medicines band karne ke baad"), never only
+"rukne ke baad". Return the same lines in the same order, each with its kind and
 claim_ids."""
 
 
 TRANSLATED = ("health", "framing")
+
+
+def capitalise(text: str) -> str:
+    """Display only: the first letter of a caption line upper-case ("on average, ..." -> "On average, ...")."""
+    return text[:1].upper() + text[1:]
 
 
 def _hi_schema(n: int) -> dict:
@@ -209,12 +216,16 @@ def hinglish_caption(folder: str | Path, con, settings: dict, router: Router | N
     boundaries = load_boundaries(doc["citation"].get("pmcid") or "")
     en = record["post"]["caption"]["lines"]
     # per line: the first phrase of each qualifier rule that the English line carries stays in English
-    keeps = [[next(p for p in r.get("any_of", []) if _has(ln["text"], p)) for r in boundaries.get("require_qualifier", [])
+    rules = [r for r in boundaries.get("require_qualifier", []) if not r.get("hinglish")]
+    native = [r for r in boundaries.get("require_qualifier", []) if r.get("hinglish")]   # a native wording exists: use it
+    keeps = [[next(p for p in r.get("any_of", []) if _has(ln["text"], p)) for r in rules
               if any(_has(ln["text"], p) for p in r.get("any_of", []))] for ln in en]
+    uses = [[r["hinglish"] for r in native if any(_has(ln["text"], p) for p in r.get("any_of", []))] for ln in en]
     keep = sorted({p for k in keeps for p in k})
     todo = [i for i, ln in enumerate(en) if ln["kind"] in TRANSLATED]   # cta / brand / sign-off: fixed lines, kept as they are
     prompt = "English caption lines:\n" + json.dumps(
-        [{k: en[i][k] for k in ("kind", "text", "claim_ids")} | {"keep": keeps[i]} for i in todo], ensure_ascii=False, indent=1)
+        [{k: en[i][k] for k in ("kind", "text", "claim_ids")} | {"keep": keeps[i]} | ({"use one of": uses[i][0]} if uses[i] else {})
+         for i in todo], ensure_ascii=False, indent=1)
     r = router.call("write", HI_SYSTEM, prompt, _hi_schema(len(todo)))
     hi = [dict(ln) for ln in en]
     for i, ln in zip(todo, r["output"]["lines"]):
@@ -224,6 +235,7 @@ def hinglish_caption(folder: str | Path, con, settings: dict, router: Router | N
     fails += [f"line {i}: numbers {number_values(b['text'])} != {number_values(a['text'])}" for i, (a, b) in enumerate(zip(en, hi))
               if number_values(a["text"]) != number_values(b["text"])]
     fails += [f"line {i}: qualifier {p!r} not kept" for i, k in enumerate(keeps) for p in k if not _has(hi[i]["text"], p)]
+    fails += [f"line {i}: none of {u} used" for i, us in enumerate(uses) for u in us if not any(_has(hi[i]["text"], p) for p in u)]
     post = record["post"] | {"caption": record["post"]["caption"] | {"lines": hi}}
     result = check_post(post, claims, load_brand(), settings["rules"], boundaries, router, r["endpoint"],
                         record.get("study_context") or study_context(boundaries, doc))
@@ -239,6 +251,6 @@ def hinglish_caption(folder: str | Path, con, settings: dict, router: Router | N
     if fails:
         return {"status": "failed", "failures": fails}
     en_txt = (folder / "caption.txt").read_text(encoding="utf-8").split("\n\nSources: ", 1)
-    (folder / "caption-hinglish.txt").write_text("\n".join(ln["text"] for ln in hi) + "\n\nSources: " + en_txt[1],
+    (folder / "caption-hinglish.txt").write_text("\n".join(capitalise(ln["text"]) for ln in hi) + "\n\nSources: " + en_txt[1],
                                                  encoding="utf-8")
     return {"status": "passed", "lines": len(hi), "keep_verbatim": keep}
