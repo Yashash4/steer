@@ -490,6 +490,8 @@ def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | N
     for sc in scenes:
         if sc["kind"] == "sources":
             ground = GROUNDS["sources"]
+        elif any(ln["kind"] == "brand" for ln in sc["lines"]):   # the brand line is the bold maroon beat
+            ground = "maroon"
         elif sc["kind"] == "point":
             ground = ("rust", "cream")[point % 2]
             point += 1

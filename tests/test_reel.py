@@ -132,7 +132,8 @@ def kinetic_scenes():
          "year": 2026, "doi": "10.1/w", "location": "section text, no page layout"}]}
     script = {"scenes": [{"lines": [{"kind": "framing", "text": "Will the weight come back?", "claim_ids": []}]},
                          {"lines": [{"kind": "health", "text": "On average weight came back at 0.4 kg a month.", "claim_ids": ["c1"]}]},
-                         {"lines": [{"kind": "cta", "text": "Talk to a Steer doctor", "claim_ids": []}]}]}
+                         {"lines": [{"kind": "brand", "text": "Stop Googling. Ask a doctor.", "claim_ids": []},
+                                    {"kind": "cta", "text": "Talk to a Steer doctor", "claim_ids": []}]}]}
     scenes, pcm, _ = reel.build_timeline(script, {"name": "x"}, fake_tts, reel.HEALTH_HOLD, reel.REMOTION_END_CARD)
     keys = [{"number": "0.4 kg a month", "label": "weight came back", "claim_ids": {"c1"}}]
     return record, script, scenes, keys
@@ -150,6 +151,7 @@ def test_props_carry_only_checked_text_and_the_pool_check_catches_anything_else(
     end = props["scenes"][-1]
     assert end["kind"] == "sources" and end["sources"]["entries"][0]["journal"] == "BMJ"
     assert [s["transition_in"] for s in props["scenes"]] == ["none", "wipe", "wipe", "wipe"]
+    assert [s["ground"] for s in props["scenes"]] == ["cream", "rust", "maroon", "cream"]   # brand + cta scene: maroon
     import copy as cp
     for path, value in [(("lines", 0, "text"), "On average weight came back at 0.8 kg a month."),   # a changed number
                         (("lines", 0, "source_label"), "Smith et al. 2020, page 1"),
