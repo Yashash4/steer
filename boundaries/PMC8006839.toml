@@ -1,10 +1,19 @@
 # Content boundaries for Narayan KMV et al., BMJ Open Diabetes Res Care 2021 (DOI 10.1136/bmjdrc-2020-001927).
 # Editorial input (written from the project's paper decisions), versioned. Claims are matched by text in their
 # QUOTE (canonical form), never by run-specific claim ids.
-version = 2
+version = 3
 pmcid = "PMC8006839"
 doi = "10.1136/bmjdrc-2020-001927"
 licence_note = "CC BY-NC: facts with attribution only; no reuse of the paper's figures or substantial text."
+
+# Sentences from the paper that establish who was studied. Checked by the S1 gate against the document when a post is
+# written (an error if not found); the line cross-check may accept these population facts on top of a line's quote.
+# (The abstract sentence is cut before "two low-income and middle- income countries": its line-break hyphen does not
+# match the gate's canonical text; the second sentence carries the US comparison.)
+context_quotes = [
+  "We compared diabetes incidence in South Asians aged ≥45 years in urban India (Chennai and Delhi) and Pakistan (Karachi)",
+  "We compared diabetes incidence among South Asians (aged ≥45 years) (n=3136) from CARRS with blacks (n=3059) and whites (n=9924) aged 45–64 years in the USA using data from the Atherosclerosis Risk in Communities (ARIC) study.",
+]
 
 # Who was studied sits next to the incidence numbers (same slide), and somewhere in every Narayan post.
 [[require_qualifier]]

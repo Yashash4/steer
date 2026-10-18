@@ -11,7 +11,7 @@ import uuid
 from pathlib import Path
 
 from . import store
-from .checks import check_post, load_boundaries, required_claims, writable
+from .checks import check_post, load_boundaries, required_claims, study_context, writable
 from .router import Router
 from .write import pick_brief, write_post
 
@@ -58,19 +58,20 @@ def sources(claim_ids: list[str], claims: dict, doc: dict) -> list[dict]:
 
 
 def write_and_check(con, run_id: str, fmt: str, settings: dict, router: Router | None = None,
-                    brief: dict | None = None, out_dir: str | Path = "out") -> dict:
+                    brief: dict | None = None, out_dir: str | Path = "out", render: bool = True) -> dict:
     router = router or Router(settings)
     claims, doc = claims_from_store(con, run_id)
     usable = [c for c in claims.values() if writable(c)]
     brief = brief or pick_brief(usable, fmt, settings["writer"].get("brief_claims", 4))
     brand = load_brand()
     boundaries = load_boundaries(doc["citation"].get("pmcid") or "")
+    context = study_context(boundaries, doc)  # paper sentences behind the qualifiers: an error before any write call
     extra = required_claims(brief["claim_ids"], {c["claim_id"]: c for c in usable}, boundaries)
     if extra:  # a claim the paper's require_with rules make compulsory with the brief's claims
         brief = brief | {"claim_ids": brief["claim_ids"] + extra, "why": f"{brief['why']}; added {extra} for require_with"}
     hashtags = settings["writer"]["hashtags"]
     written = write_post(brief, usable, brand, boundaries, hashtags, router)
-    result = check_post(written["post"], claims, brand, settings["rules"], boundaries, router, written["endpoint"])
+    result = check_post(written["post"], claims, brand, settings["rules"], boundaries, router, written["endpoint"], context)
     post_id = f"post-{uuid.uuid4().hex[:8]}"
     used = sorted({i for ln in result["lines"] for i in ln["claim_ids"]})
     srcs = sources(used, claims, doc)
@@ -81,7 +82,8 @@ def write_and_check(con, run_id: str, fmt: str, settings: dict, router: Router |
               "message": post["message"], "reasoning": post["reasoning"], "format": post["format"],
               "writer": {"endpoint": written["endpoint"], "model": written["model"], "usage": written["usage"]},
               "post": post, "sources": srcs, "flags": result["flags"], "needs_layout_check": result["needs_layout_check"],
-              "post_failures": result["post_failures"], "boundaries_version": boundaries.get("version")}
+              "post_failures": result["post_failures"], "boundaries_version": boundaries.get("version"),
+              "study_context": context}
     trace = {"post_id": post_id, "lines": [
         {"path": ln["path"], "kind": ln["kind"], "text": ln["text"], "claim_ids": ln["claim_ids"],
          "claims": [{"claim_id": i, "quote": claims[i]["quote"], "sids": claims[i]["sids"],
@@ -95,4 +97,19 @@ def write_and_check(con, run_id: str, fmt: str, settings: dict, router: Router |
         f"{s['authors']} ({s['year']}) {s['journal']}, doi:{s['doi']}" for s in {s["doi"]: s for s in srcs}.values()) \
         + "\n\n" + " ".join(post["caption"]["hashtags"])
     (folder / "caption.txt").write_text(caption, encoding="utf-8")
+    if render and record["status"] == "draft_pending_review":  # a blocked post gets no artwork
+        record["render"] = render_post(folder, brand)
     return record | {"folder": str(folder), "lines_checked": len(result["lines"])}
+
+
+def render_post(folder: str | Path, brand: dict | None = None) -> dict:
+    """Render a written post's PNGs into its folder and record the render QA in post.json."""
+    from .render import render as draw
+
+    folder = Path(folder)
+    record = json.loads((folder / "post.json").read_text())
+    qa = draw(record, brand or load_brand(), folder)
+    record["render"] = {"status": qa["status"], "missing_sources": qa["missing_sources"],
+                        "pngs": [r["png"] for r in qa["pages"]]}
+    (folder / "post.json").write_text(json.dumps(record, ensure_ascii=False, indent=1), encoding="utf-8")
+    return record["render"]

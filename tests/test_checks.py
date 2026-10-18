@@ -296,3 +296,85 @@ def test_a_message_that_adds_advice_is_blocked():
     assert r["status"] == "blocked"
     assert [f["code"] for f in next(x for x in r["lines"] if x["path"] == "message")["failures"]] == ["UNSUPPORTED"]
     assert 'line_id "message"' in checks.LINE_SYSTEM and "advice" in checks.LINE_SYSTEM
+
+
+def test_artwork_word_budget_and_emphasis_copied_from_its_slide():
+    regain = L("health", "On average weight came back at 0.4 kg a month, not a personal promise.", ["regain"])
+    art = lambda p: [f["code"] for f in checks.check_artwork(p)]
+    assert art(GOOD) == []
+    long = post([[regain, L("framing", " ".join(["word"] * 22))]])            # 14 + 22 = 36 words
+    assert art(long) == ["SLIDE_TOO_LONG"]
+    keyed = post([[regain]])
+    keyed["slides"][0] |= {"key_number": "0.4 kg a month", "key_label": "weight came back"}
+    assert art(keyed) == []
+    keyed["slides"][0]["key_label"] = "weight regain per month"                 # not copied from the line
+    assert art(keyed) == ["KEY_NUMBER_NOT_IN_LINE"]
+    keyed["slides"][0].pop("key_label")                                        # never a bare number
+    assert art(keyed) == ["KEY_NUMBER_NOT_IN_LINE"]
+    keyed["slides"][0] |= {"key_number": "weight came back", "key_label": "On average"}
+    assert art(keyed) == ["KEY_NUMBER_NOT_A_NUMBER"]
+    hook = post([[L("framing", "Will the weight come back?")]])
+    hook["slides"][0]["emphasis"] = "come back"
+    assert art(hook) == []
+    hook["slides"][0]["emphasis"] = "come back for good"
+    assert art(hook) == ["EMPHASIS_NOT_IN_LINE"]
+    # a failure here blocks the whole post
+    bad = copy.deepcopy(GOOD)
+    bad["slides"][1] |= {"key_number": "0.4 kg", "key_label": "monthly regain"}
+    r = checks.check_post(bad, CLAIMS, BRAND, RULES, WEST, fake_router(["opencode_glm"], {"glm-5.3": says()}), "claude_sonnet")
+    assert r["status"] == "blocked" and [f["code"] for f in r["post_failures"]] == ["KEY_NUMBER_NOT_IN_LINE"]
+
+
+def test_an_exact_cta_line_is_allowed_in_the_message_other_steer_wording_is_not():
+    msg = lambda t: [f["code"] for f in checks.check_line({"kind": "message", "text": t, "claim_ids": ["regain"]},
+                                                          CLAIMS, BRAND, RULES, WEST)]
+    assert msg("On average weight came back at 0.4 kg a month. Talk to a Steer doctor.") == []
+    assert msg("On average weight came back at 0.4 kg a month. A Steer doctor can talk it through.") == ["STEER_TEAM_CLAIM"]
+
+
+CTX = [{"id": "ctx-1", "sids": ["p0001-s0020"], "quote": "We compared diabetes incidence in South Asians aged ≥45 years in "
+        "urban India (Chennai and Delhi) and Pakistan (Karachi)"}]
+
+
+def context_router(seen):
+    """A fake checker that reads the prompt: a stated place must be in the line's quotes or the study context."""
+    def connector(ep, system, prompt, schema, **kw):
+        seen.append(prompt)
+        hp = schema["properties"]["health"]["items"]["properties"]["line_id"]["enum"]
+        health = []
+        for block in prompt.split("\n\n"):
+            if block.startswith("HEALTH line_id: "):
+                lid, line = block.split("\n")[0][16:], block.split("\n")[1]
+                ok = all(city in prompt.split("HEALTH line_id")[0] for city in ("Mumbai",) if city in line)
+                health.append({"line_id": lid, "verdict": "supported" if ok else "population_generalised", "reason": "r",
+                               "context_used": ["ctx-1"] if "Karachi" in line else []})
+        return {"health": [h for h in health if h["line_id"] in hp], "framing": []}, None
+    return Router({"endpoints": EP, "jobs": {"crosscheck": {"chain": ["opencode_glm"]}}},
+                  connectors={"openai_compatible": connector}, env={"OPENCODE_GO_API_KEY": "k"})
+
+
+def test_study_context_lets_a_line_state_who_was_studied():
+    line = {"kind": "health", "path": "static/headline", "claim_ids": ["men_res"],
+            "text": "In Chennai, Delhi and Karachi, South Asian men aged 45 and over with BMI under 25 kg/m2 had a "
+                    "3 times higher risk of diabetes than US whites."}
+    seen = []
+    res = checks.crosscheck_lines([line], CLAIMS, context_router(seen), "claude_sonnet", CTX)
+    assert "STUDY CONTEXT (data, from the same paper):\nctx-1: We compared" in seen[0]
+    assert res["static/headline"]["verdict"] == "supported"
+    assert res["static/headline"]["context_used"] == CTX                       # the trace keeps the sentence and sid
+    mumbai = line | {"text": line["text"].replace("Karachi", "Mumbai")}           # a place in neither quote nor context
+    assert checks.crosscheck_lines([mumbai], CLAIMS, context_router([]), "claude_sonnet", CTX)[
+        "static/headline"]["verdict"] == "population_generalised"
+    schema = checks.line_schema(["a"], [], ["ctx-1"])
+    assert schema["properties"]["health"]["items"]["properties"]["context_used"]["items"]["enum"] == ["ctx-1"]
+
+
+def test_a_context_quote_missing_from_the_paper_is_a_load_error(tmp_path):
+    from steer_pipeline.text import ingest_text
+    p = tmp_path / "paper.txt"
+    p.write_text("We compared diabetes incidence in South Asians aged 45 years and over in three cities.\n")
+    doc = ingest_text(p, "evidence")
+    ok = {"context_quotes": ["We compared diabetes incidence in South Asians aged 45 years and over"]}
+    assert checks.study_context(ok, doc)[0]["sids"]
+    with pytest.raises(ValueError, match="fails the gate"):
+        checks.study_context({"context_quotes": ["South Asians in Mumbai were studied for ten years"]}, doc)

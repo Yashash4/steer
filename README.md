@@ -14,7 +14,8 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 ```bash
 cd code
 uv sync
-uv run pytest            # offline tests
+PLAYWRIGHT_BROWSERS_PATH=.browsers uv run playwright install chromium-headless-shell  # renderer, kept in code/.browsers
+uv run pytest            # offline tests (the render tests need the browser above)
 uv run pytest -m network # also hit the live public APIs
 ```
 
@@ -275,7 +276,9 @@ extraction chunk (job `crosscheck`).
 
 ## Writer contract
 
-`write.py` defines the JSON a model-written post must satisfy. The writer itself, its checks and rendering come next.
+`write.py` defines the JSON a model-written post must satisfy; `checks.py` checks every line; `render.py` draws the
+PNGs. `steer write --db steer.db --run <run_id> [--format static] [--brief brief.json]` writes, checks and (for a
+draft) renders one post into `out/<run_id>/<post_id>/`; `steer render <folder>` renders it again.
 - `message` and `reasoning`, and `format`: `carousel` (4–7 model slides; the sources slide is added by code) or
   `static` (a headline and at most 2 supporting lines).
 - A caption with 5–10 hashtags from the vocabulary in `steer.toml`.
@@ -283,6 +286,19 @@ extraction chunk (job `crosscheck`).
 - Every line has a `kind`. `health` lines must name claim ids from the brief; `framing`, `brand`, `cta` and `signoff`
   lines name none. There is no model-written `source` kind.
 - The automatic brief picks the theme × doubt cell with the most verified claims and records why.
+- At most 35 words per slide (checked before render: `SLIDE_TOO_LONG`). Optional emphasis repeats the slide's own text:
+  `key_number` + `key_label` copied from one health line (never a number without its label), `emphasis` copied from
+  the hook's framing line.
+
+## Rendering
+
+1080 × 1350 PNGs from plain HTML templates in headless Chromium (Playwright; the browser lives in `code/.browsers`).
+Fonts: Fraunces and Inter (OFL, in `fonts/`). Cream base on every slide, rust for emphasis, maroon full-bleed only for
+the brand slide. The sources slide is built by code from the citation (page numbers, or "section text, no page
+layout"), at most 3 sources per slide. Every PNG carries "draft · pending doctor review". Text fitting steps the whole
+slide down a type ladder until nothing overflows; render QA fails on overflow, body under 28 px, sources under 24 px,
+more than 35 body words, a used claim missing from the sources, or a PNG that is not exactly 1080 × 1350
+(`render_qa.json` in the post folder). A blocked post gets no PNGs.
 
 ## Labels and rules
 

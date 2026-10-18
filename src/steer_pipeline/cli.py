@@ -56,16 +56,30 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--brief", help="a brief JSON file (default: pick the fullest theme x doubt cell)")
     w.add_argument("--settings")
     w.add_argument("--out", default="out")
+    w.add_argument("--no-render", action="store_true", help="skip the PNGs")
+    d = sub.add_parser("render", help="render (again) the PNGs of a written post folder")
+    d.add_argument("folder", help="out/<run_id>/<post_id>")
     args = ap.parse_args(argv)
+
+    if args.cmd == "render":
+        from .render import qa_line
+        r = posts.render_post(args.folder)
+        for line in json.loads((Path(args.folder) / "render_qa.json").read_text())["pages"]:
+            print(qa_line(line), file=sys.stderr)
+        print(f"render {r['status']}" + (f"; sources missing for {r['missing_sources']}" if r["missing_sources"] else ""),
+              file=sys.stderr)
+        return 0 if r["status"] == "passed" else 1
 
     if args.cmd == "write":
         settings = load_settings(args.settings)
         brief = json.loads(Path(args.brief).read_text()) if args.brief else None
-        rec = posts.write_and_check(store.connect(args.db), args.run, args.format, settings, brief=brief, out_dir=args.out)
+        rec = posts.write_and_check(store.connect(args.db), args.run, args.format, settings, brief=brief, out_dir=args.out,
+                                    render=not args.no_render)
+        drawn = rec.get("render")
         print(f"{rec['post_id']}: {rec['status']} ({rec['lines_checked']} lines; writer {rec['writer']['model']}; "
-              f"flags {len(rec['flags'])}; layout checks pending {rec['needs_layout_check']}) -> {rec['folder']}",
-              file=sys.stderr)
-        return 0 if rec["status"] == "draft_pending_review" else 1
+              f"flags {len(rec['flags'])}; layout checks pending {rec['needs_layout_check']}; "
+              f"render {drawn['status'] if drawn else 'skipped'}) -> {rec['folder']}", file=sys.stderr)
+        return 0 if rec["status"] == "draft_pending_review" and (not drawn or drawn["status"] == "passed") else 1
 
     if args.cmd == "run":
         settings = load_settings(args.settings)

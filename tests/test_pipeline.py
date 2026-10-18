@@ -171,7 +171,9 @@ def test_write_and_check_from_a_stored_run(tmp_path):
     out = posts.write_and_check(con, rec["run_id"], "carousel", settings, router=router, brief=brief, out_dir=tmp_path / "out")
     assert out["status"] == "draft_pending_review", out["post_failures"]
     folder = Path(out["folder"])
-    assert {p.name for p in folder.iterdir()} == {"post.json", "trace.json", "caption.txt", "reel_script.json"}
+    files = {p.name for p in folder.iterdir()}
+    assert {"post.json", "trace.json", "caption.txt", "reel_script.json", "render_qa.json"} <= files
+    assert out["render"]["status"] == "passed" and set(out["render"]["pngs"]) <= files  # drafts get their PNGs
     trace = json.loads((folder / "trace.json").read_text())
     health = [ln for ln in trace["lines"] if ln["kind"] == "health"]
     assert health and all(ln["claims"][0]["sids"] == ["p0002-s0002"] for ln in health)

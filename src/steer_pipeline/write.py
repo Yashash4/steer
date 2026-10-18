@@ -34,12 +34,14 @@ def post_schema(brief: dict, hashtags: list[str]) -> dict:
     lines = {"type": "array", "items": line, "minItems": 1}
     # the brief fixes the format, so only that artwork block exists (no top-level allOf: the API refuses it)
     artwork = "slides" if brief["format"] == "carousel" else "static"
+    # optional emphasis, each an exact substring of a line of its own slide (checked in code)
+    marks = {k: {"type": "string", "minLength": 1, "maxLength": 80} for k in ("key_number", "key_label", "emphasis")}
     blocks = {
         "slides": {"type": "array", "minItems": 4, "maxItems": 7, "items": {
             "type": "object", "required": ["role", "lines"], "additionalProperties": False,
-            "properties": {"role": {"enum": SLIDE_ROLES}, "lines": lines}}},
+            "properties": {"role": {"enum": SLIDE_ROLES}, "lines": lines} | marks}},
         "static": {"type": "object", "required": ["headline", "supporting"], "additionalProperties": False,
-                   "properties": {"headline": line, "supporting": {"type": "array", "items": line, "maxItems": 2}}},
+                   "properties": {"headline": line, "supporting": {"type": "array", "items": line, "maxItems": 2}} | marks},
     }
     return {
         "type": "object",
@@ -107,11 +109,20 @@ Every line has a kind:
 - cta: copy one of the call-to-action lines given, exactly.
 - signoff: copy the sign-off given, exactly.
 Never write sources: the sources slide is added by code.
+Artwork budget: at most 35 words per slide (all its lines together) and on the static artwork. Confidence
+intervals, p values and other detail go in the caption, where length is fine; a health line may use only some
+of its quote's numbers.
+Optional emphasis per slide (or on the static): key_number with key_label, shown large together, both copied
+exactly from ONE health line of that slide (key_number holds the number, key_label says what it measures, for
+example "2.99 times higher" with "risk in South Asian men with BMI under 25"); never a number without its label.
+emphasis: a few words copied exactly from the hook's framing line (or the static headline), set in italic.
+Leave them out when nothing deserves it.
 State the message (the one thing the audience should take away) and the reasoning (why this post, for whom,
 which doubt it answers). Both are published with the post and checked like health lines: the message may only
-combine what the claims used say, plus at most one call to talk to a doctor; no advice or recommendation of
-your own (not "so do X", not "X is no reason to skip Y"). Neither may hold a number that is not in those claims: no claim ids, no
-slide numbers, no counts, no number words such as "one study" or "three cities". Follow every editorial requirement given for the paper."""
+combine what the claims used say, and may end with one call-to-action line copied exactly; no other mention
+of Steer or its doctors, and no advice or recommendation of your own (not "so do X", not "X is no reason to skip
+Y"). The message may only use numbers exactly as the claims give them, with their units. The reasoning holds no
+numbers at all: no claim ids, slide numbers, counts or number words (avoid "one" even as a pronoun). Follow every editorial requirement given for the paper."""
 
 
 def write_prompt(brief: dict, claims: list[dict], brand: dict, boundaries: dict) -> str:

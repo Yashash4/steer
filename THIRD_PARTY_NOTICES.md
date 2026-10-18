@@ -21,8 +21,23 @@ are installed from PyPI and are not copied into this repository.
 | referencing | 0.37.0 | MIT | https://github.com/python-jsonschema/referencing |
 | rpds-py | 2026.9.1 | MIT | https://github.com/crate-py/rpds |
 | attrs | 26.1.0 | MIT | https://github.com/python-attrs/attrs |
+| playwright | 1.64.0 | Apache-2.0 | https://github.com/microsoft/playwright-python |
+| greenlet | 3.5.6 | MIT AND PSF-2.0 | https://github.com/python-greenlet/greenlet |
+| pyee | 14.0.0 | MIT | https://github.com/jfhbrook/pyee |
 
 PyMuPDF is used under the GNU AGPL-3.0. That is why this project is licensed AGPL-3.0-only.
+
+Rendering uses Chromium's headless shell, downloaded by Playwright into `code/.browsers/` (not committed;
+Chromium is under BSD-3-Clause and the licences listed in its own bundle).
+
+## Fonts (bundled in `fonts/`)
+
+| Font | Licence | Project | Licence file |
+|---|---|---|---|
+| Fraunces (variable, upright and italic) | SIL Open Font License 1.1 | https://github.com/undercasetype/Fraunces | `fonts/OFL-Fraunces.txt` |
+| Inter (variable) | SIL Open Font License 1.1 | https://github.com/rsms/inter | `fonts/OFL-Inter.txt` |
+
+Both were taken unmodified from the google/fonts repository (`ofl/fraunces`, `ofl/inter`) and renamed only.
 
 ## Development and test dependencies (not needed to run the pipeline)
 
