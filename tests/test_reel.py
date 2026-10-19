@@ -582,3 +582,40 @@ def test_health_scenes_cycle_the_neutral_clips():
     scenes = [sc(0, "Lean mass changed by -1.74 kg."), sc(1, "Lean mass as a share of total weight rose 1.81%.")]
     plan = reel.edit_plan(scenes, {"broll": {"lane": "l.mp4", "balcony": "b.mp4", "thali": "t.mp4"}}, v5=True)
     assert [p["broll"] for p in plan] == ["lane", "balcony"]
+
+
+LONG_Q = ("Background sentence about the setting of the trial. Weight came back at 0.4 kg a month (95% CI 0.3 to 0.5) in adults "
+          "with overweight or obesity. Another long sentence about methods and funding that the line does not use at all. "
+          "A final sentence on limitations.")
+
+
+def test_a_long_quote_is_cut_only_at_sentence_boundaries_and_only_when_the_line_keeps_its_numbers_and_population():
+    line = "Weight came back at 0.4 kg a month, in adults with overweight or obesity."
+    t = reel.truncate_quote(line, LONG_Q)
+    assert t["truncate_ok"] and t["quote_short"].startswith("Weight came back") and t["quote_short"].endswith("obesity.")
+    assert t["quote_short"] in LONG_Q and t["cut_start"] and t["cut_end"]
+    # a line whose numbers or population words sit in two sentences keeps both; one whose number is nowhere in the quote is refused
+    two = "Weight came back at 0.4 kg a month, in adults with overweight or obesity; the authors list limitations."
+    assert "A final sentence on limitations." in reel.truncate_quote(two, LONG_Q)["quote_short"]
+    assert reel.truncate_quote("Weight came back 9.9 kg.", LONG_Q) is None
+    assert not reel.covers("Weight came back at 0.4 kg a month (95% CI 0.3 to 0.5).", line, LONG_Q)   # drops 'adults ... obesity'
+    assert reel.truncate_quote(line, "Weight came back at 0.4 kg a month in adults with obesity.") is None   # nothing to cut
+
+
+def test_the_truncated_phone_text_must_be_an_exact_run_of_the_quote_that_keeps_the_line():
+    import copy as cp
+    record, script, scenes, keys = kinetic_scenes()
+    q = {"c1": LONG_Q}
+    text = "Weight came back at 0.4 kg a month, in adults with overweight or obesity."
+    s2 = {"scenes": [{"lines": [{"kind": "health", "text": text, "claim_ids": ["c1"]}]}]}
+    sc2, _, _ = reel.build_timeline(s2, {"name": "x"}, fake_tts, reel.HEALTH_HOLD + reel.EVIDENCE_HOLD, reel.REMOTION_END_CARD)
+    p = reel.build_props(sc2, record, BRAND, None, [], None, reel.edit_plan(sc2, {}), q)
+    e = p["scenes"][0]["lines"][0]["evidence"]
+    assert e["truncate_ok"] and e["quote"] == LONG_Q and e["full_label"].startswith("West et al.")
+    assert reel.pool_check(p, s2, record, None, [], q) == []
+    for change in ({"quote_short": "Weight came back at 0.4 kg a month."},            # drops the population
+                   {"quote_short": "Weight came back at 0.5 kg a month in adults."},   # not a run of the quote
+                   {"truncate_ok": False}):
+        bad = cp.deepcopy(p)
+        bad["scenes"][0]["lines"][0]["evidence"] |= change
+        assert [f["code"] for f in reel.pool_check(bad, s2, record, None, [], q)] == ["TEXT_NOT_FROM_SCRIPT"], change

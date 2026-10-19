@@ -938,6 +938,59 @@ def source_entry_parts(e: dict) -> dict:
             "after": f", {e.get('year', '')}. doi:{e.get('doi', '')}. {loc}."}
 
 
+# --- the evidence phone for a long quote: truncation at a sentence boundary, guarded ---
+
+ABBREV = ("et al.", "e.g.", "i.e.", "vs.", "Fig.", "Figs.", "approx.", "No.", "Dr.")
+STOP = set("the and for with that this were was are has have had not but from into than then also their its they them which when "
+           "who whom what how all any may can will would could should been being per among between over under after before".split())
+
+
+def sentence_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) of each sentence in text: a boundary is . ! ? plus white space plus a capital, digit or bracket,
+    never after an abbreviation such as 'et al.'."""
+    cuts, masked = [], text
+    for a in ABBREV:
+        masked = masked.replace(a, "#" * len(a))
+    for m in re.finditer(r"[.!?]+[\"')\]]*(\s+)(?=[A-Z0-9(\[])", masked):
+        cuts.append(m.end())
+    bounds = [0] + cuts + [len(text)]
+    return [(a, b) for a, b in zip(bounds, bounds[1:]) if text[a:b].strip()]
+
+
+def line_requirements(line_text: str, quote: str) -> tuple[set, set]:
+    """What a truncated quote must still hold: every number of the line, and every content word of the line that is also in
+    the quote (the population, comparison and outcome words)."""
+    words = lambda t: {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z'-]{2,}", t)} - STOP
+    return set(number_values(line_text)), words(line_text) & words(quote)
+
+
+def covers(kept: str, line_text: str, quote: str) -> bool:
+    nums, words = line_requirements(line_text, quote)
+    have = {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z'-]{2,}", kept)}
+    return nums <= set(number_values(kept)) and words <= have
+
+
+def truncate_quote(line_text: str, quote: str) -> dict | None:
+    """The shortest run of whole sentences of the quote that holds every number of the line and its population and
+    comparator words (line_requirements), or None when no shorter run does (then the phone fails closed). The kept text
+    is an exact substring of the quote."""
+    sp = sentence_spans(quote)
+    best = None
+    for i in range(len(sp)):
+        for j in range(i, len(sp)):
+            kept = quote[sp[i][0]:sp[j][1]].strip()
+            if covers(kept, line_text, quote):
+                if best is None or len(kept) < len(best[0]):
+                    best = (kept, i, j)
+                break
+    if best is None or len(best[0]) >= len(quote.strip()):
+        return None
+    kept = best[0]
+    at = quote.index(kept)
+    return {"quote_short": kept, "truncate_ok": True, "cut_start": at > 0, "cut_end": at + len(kept) < len(quote.rstrip())}
+
+
+
 def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | None, keys: list[dict],
                 presenter: dict | None = None, plan: list[dict] | None = None, quotes: dict | None = None,
                 checked: bool = False, pullback: str | None = None, v5: bool = False, pages: dict | None = None) -> dict:
@@ -991,6 +1044,10 @@ def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | N
                             "start": round(((cards[-1]["start"] + 0.8) if cards else (ln["start"] + 0.3)) if v5
                                            else (ln["end"] + 0.6), 3),
                             "end": round(ln["hold_end"] - 0.1, 3)}
+                if not pg:   # a long quote may not fit the phone: the guarded short form, drawn only if the full quote does not fit
+                    short = truncate_quote(ln["text"], evidence["quote"])
+                    if short:
+                        evidence |= short | {"full_label": "; ".join(labels)}
                 # The phone shows SOURCE text (the claims' exact quotes, which may hold numbers the voice does not say
                 # in this line): like the sources card it is exempt from "shown = heard" (the number round trip
                 # compares each spoken line with its own text only), and it is pool-checked against the quotes verbatim.
@@ -1236,6 +1293,10 @@ def pool_check(props: dict, script: dict, record: dict, emphasis: str | None, ke
             want_q = "\n\n".join((quotes or {}).get(i, "") for i in ids if i in (quotes or {}))
             if e["quote"] != want_q or e["header"] != evidence_header(rd.source_entries([by[i] for i in ids if i in by])):
                 bad("evidence", {k: e[k] for k in ("header", "quote")})
+            if e.get("quote_short") is not None and not (
+                    e["quote_short"] in e["quote"] and e.get("truncate_ok") is True and not e["image"]
+                    and covers(e["quote_short"], ln["text"], e["quote"]) and len(e["quote_short"]) < len(e["quote"].strip())):
+                bad("evidence_truncated", {k: e.get(k) for k in ("quote_short", "truncate_ok")})
         pr = sc["presenter"]
         if pr is not None and (pr["label"] != PRESENTER_LABEL or pr["video"] != f"presenter-{props['scenes'].index(sc)}.mp4"):
             bad("presenter", pr)

@@ -64,11 +64,22 @@ export const PhoneEvidence = (p: { e: Evidence; t: number; ink: string; accent: 
   // the boxes as drawn: screen = PW - 2 x 18; header padding 40 each side; quote margin 40 + padding 24 each side + 6 border
   const h = fit(e.header, SANS, 600, 3, PW - 36 - 80, L.evidence.px, L.evidence.px);
   let q: ReturnType<typeof fit> | null = null;
-  if (!e.image) {   // the largest size >= the floor (34 px: the reviewer could not read it) whose lines fit the screen's height
-    const room = PH - 36 - 54 - 18 - h.lines.length * h.fontSize * 1.3 - 20 - 40 - 24;
-    for (let size = L.evidence.px + 12; size >= L.evidence.px && !q; size--) {
+  let shown = e.quote, cut = false;
+  const base = PH - 36 - 54 - 18 - h.lines.length * h.fontSize * 1.3 - 20 - 40 - 24;
+  // the largest size >= the floor (34 px: the reviewer could not read it) whose lines fit the screen's height
+  const tryFit = (text: string, room: number) => {
+    for (let size = L.evidence.px + 12; size >= L.evidence.px; size--) {
       const lines = Math.floor(room / (size * 1.35));
-      try { if (lines > 0) q = fit(e.quote, SERIF, 500, lines, PW - 36 - 80 - 48 - 6, size, size); } catch { q = null; }
+      try { if (lines > 0) return fit(text, SERIF, 500, lines, PW - 36 - 80 - 48 - 6, size, size); } catch { /* next size */ }
+    }
+    return null;
+  };
+  if (!e.image) {
+    q = tryFit(e.quote, base);
+    if (!q && e.truncate_ok && e.quote_short) {   // guard (computed in Python): whole sentences that keep the line's numbers and population words
+      shown = (e.cut_start ? "\u2026 " : "") + e.quote_short + (e.cut_end ? " \u2026" : "");
+      q = tryFit(shown, base - L.evidence.px * 1.3 - 14);   // room for the "full sentence" line under it
+      cut = q !== null;
     }
     if (!q) throw new Error("evidence quote does not fit the phone at " + L.evidence.px + "px");
   }
@@ -95,7 +106,9 @@ export const PhoneEvidence = (p: { e: Evidence; t: number; ink: string; accent: 
         ) : (
           <div style={{ margin: "10px 40px", padding: "20px 24px", borderLeft: `6px solid ${p.accent}`, background: "rgba(192, 78, 42, 0.10)",
             fontFamily: SERIF, fontVariationSettings: SERIF_VARS, fontWeight: 500, fontSize: q?.fontSize, lineHeight: 1.35,
-            color: p.ink }}>{e.quote}</div>
+            color: p.ink }}>{shown}{cut ? (
+              <div style={{ marginTop: 14, fontFamily: SANS, fontWeight: 600, fontSize: L.evidence.px, lineHeight: 1.3, color: "#7A5A50" }}>the full sentence: {e.full_label}</div>
+            ) : null}</div>
         )}
       </div>
     </div>

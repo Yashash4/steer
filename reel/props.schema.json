@@ -655,6 +655,22 @@
                 },
                 "height": {
                   "type": "integer"
+                },
+                "quote_short": {
+                  "type": "string",
+                  "description": "a run of whole sentences of the quote that holds every number and the population/comparator words of the line; drawn only when the full quote does not fit at the floor size"
+                },
+                "truncate_ok": {
+                  "type": "boolean"
+                },
+                "cut_start": {
+                  "type": "boolean"
+                },
+                "cut_end": {
+                  "type": "boolean"
+                },
+                "full_label": {
+                  "type": "string"
                 }
               }
             }
