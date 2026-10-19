@@ -34,7 +34,7 @@ W, H = 1080, 1350
 WORD_BUDGET = 35
 FLOORS = {"body": 28, "sources": 24}
 LADDERS = {  # px, largest first; the last step is the floor
-    "hook": [96, 88, 80, 72, 64, 56], "serif": [64, 58, 52, 46, 40], "body": [44, 40, 36, 32, 28],
+    "hook": [150, 136, 124, 112, 100, 88, 80, 72, 64, 56], "serif": [64, 58, 52, 46, 40], "body": [44, 40, 36, 32, 28],
     "key": [132, 116, 100, 88, 72], "sources": [28, 26, 24], "small": [34, 32, 30, 28],
 }
 SOURCES_PER_SLIDE = 3
@@ -96,6 +96,14 @@ body.bold .mark {{ color: {p['blush']}; border-color: {p['clay']}; }}
         align-items: baseline; font-size: 24px; color: {p['clay']}; }}
 .wordmark {{ font-family: Fraunces; font-variation-settings: 'WONK' 0, 'SOFT' 50; font-size: 44px; color: {p['rust']}; }}
 body.bold .wordmark {{ color: {p['cream']}; }}
+body.rust {{ background: {p['rust']}; color: {p['cream']}; }}
+body.rust .serif em, body.rust .wordmark, body.rust .foot, body.rust .cta, body.rust .signoff, body.rust .srcline {{ color: {p['cream']}; }}
+body.rust .srcline {{ border-top-color: {p['blush']}; }}
+body.rust .mark {{ color: {p['cream']}; border-color: {p['blush']}; }}
+body.rust .rule {{ background: {p['cream']}; }}
+body.rust .card {{ color: {p['ink']}; }}
+body.rust.cover .content {{ justify-content: flex-start; top: 200px; }}
+.tag {{ position: absolute; top: 50px; left: 96px; font-size: 24px; letter-spacing: 0.14em; font-weight: 600; }}
 .rule {{ width: 120px; height: 4px; background: {p['blush']}; }}
 .body {{ line-height: 1.32; }}
 .card {{ background: {p['paper']}; border-left: 6px solid {p['rust']}; padding: 32px 36px; border-radius: 6px; }}
@@ -223,10 +231,14 @@ def _lines_html(lines: list[dict], unit: dict, by_claim: dict, hook: bool) -> st
     return "".join(out)
 
 
-def _page(p: dict, content: str, n: int, total: int, bold: bool = False, extra_cls: str = "") -> str:
+def _page(p: dict, content: str, n: int, total: int, bold: bool = False, extra_cls: str = "", ground: str = "") -> str:
     number = f"{n}/{total}" if total > 1 else ""
+    cover = ground == "rust cover"
+    if cover:   # layout v2: the cover's fixed chrome
+        number = "swipe for what the study found →"
     return (f'<!doctype html><html><head><meta charset="utf-8"><style>{_css(p)}</style></head>'
-            f'<body class="{"bold" if bold else ""}"><div class="mark">{DRAFT}</div>'
+            f'<body class="{"bold" if bold else ground}">' + ('<div class="tag">STEER — INDIA</div>' if cover else "")
+            + f'<div class="mark">{DRAFT}</div>'
             f'<div class="content {extra_cls}">{content}</div>'
             f'<div class="foot"><span class="wordmark">steer</span><span>{number}</span></div></body></html>')
 
@@ -263,9 +275,10 @@ def build_pages(record: dict, brand: dict, draft: bool = True) -> list[dict]:
             pages.append({"name": f"slide-{i + 1:02}.png", "kind": "slide",
                           "words": sum(len(ln["text"].split()) for ln in sl["lines"]),
                           "claim_ids": sorted({c for ln in sl["lines"] for c in ln["claim_ids"]}),
-                          "art": _art(sl["lines"], sl, sl["role"] == "brand"),
+                          "art": _art(sl["lines"], sl, sl["role"] in ("brand", "hook")),
                           "html": _page(p, _lines_html(sl["lines"], sl, by_claim, sl["role"] == "hook"), i + 1, total,
-                                        bold=sl["role"] == "brand")})
+                                        bold=sl["role"] == "brand",
+                                        ground="rust cover" if sl["role"] == "hook" else "")})
         for j, chunk in enumerate(chunks):
             n = len(post["slides"]) + j + 1
             content = ('<h2>Sources</h2>' + "".join(_entry_html(e) for e in chunk)
@@ -282,7 +295,7 @@ def build_pages(record: dict, brand: dict, draft: bool = True) -> list[dict]:
                    + _fit("sources", "srcline", "Source: " + src))
         pages.append({"name": "static.png", "kind": "static", "words": sum(len(ln["text"].split()) for ln in lines),
                       "claim_ids": sorted({c for e in entries for c in e["claim_ids"]}), "art": _art(lines, st, False),
-                      "html": _page(p, content, 1, 1)})
+                      "html": _page(p, content, 1, 1, ground="rust")})
     if not draft:   # the publishable re-render: no draft mark, the reviewed footnote
         for pg in pages:
             pg["html"] = pg["html"].replace(f'<div class="mark">{DRAFT}</div>', "").replace(
