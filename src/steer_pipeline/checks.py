@@ -155,6 +155,20 @@ def _avoid_applies(rule: dict, line: dict, claims: list[dict]) -> bool:
     return not scope or any(_has(c["quote"], s) for c in claims for s in scope)
 
 
+DECREASE = re.compile(r"\b(?:fell|decreased|dropped|declined|lost|fall|decrease|drop|decline|loss|reduction)(?:\s+(?:by|of))?\s*$", re.I)
+
+
+def _after_decrease(text: str, token: str) -> bool:
+    """The number comes right after a decrease word ("fell 1.74 kg", "a loss of 5 kg"): its sign is in the word."""
+    i = text.find(token)
+    return i > 0 and bool(DECREASE.search(text[:i]))
+
+
+def _negated(n) -> set[tuple]:
+    """The keys of the same number with the opposite sign ("fell 1.74 kg" = the quote's "-1.74 kg")."""
+    return {(c, pm, -low, -high if high is not None else None, unit) for c, pm, low, high, unit in n.keys()}
+
+
 def check_line(line: dict, claims: dict[str, dict], brand: dict, rules: dict, boundaries: dict) -> list[dict]:
     """Code checks 1-3 for one line: a list of failures {check, code, detail} (empty = passed)."""
     fails = []
@@ -189,7 +203,7 @@ def check_line(line: dict, claims: dict[str, dict], brand: dict, rules: dict, bo
         if kind != "health":  # a claim id named in the message or reasoning is a reference, not a number
             bare = re.sub("|".join(map(re.escape, line["claim_ids"])) or r"(?!)", " ", bare)
         for n in find_numbers(bare):
-            if not n.keys() & have:
+            if not n.keys() & have and not (_after_decrease(bare, n.text) and _negated(n) & have):
                 fails.append({"check": "numbers", "code": "NUMBER_NOT_IN_CLAIM", "detail": n.text})
 
     # 3. wording

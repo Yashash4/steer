@@ -56,3 +56,15 @@ def test_capitalise_and_the_native_return_wording_passes_west_boundaries():
     line = "28 randomised controlled trials mein, treatment groups ka weight control groups ke level par wapas aa gaya."
     assert any(checks._has(line, p) for p in rule["any_of"])                       # the native wording satisfies the rule
     assert not any(checks._has("28 trials mein treatment aur control groups ka weight barabar tha.", p) for p in rule["any_of"])
+
+
+def test_a_paired_number_label_is_kept_in_english(tmp_path, monkeypatch):
+    setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(posts, "load_boundaries", lambda pmcid: {"require_with": [{"claims": [
+        {"quote_contains": "1.81%", "label_any_of": ["lean mass as a share"]}]}]})
+    en = [{"kind": "health", "text": "Lean mass as a share of total weight rose 1.81%.", "claim_ids": ["c1"]}]
+    (tmp_path / "post.json").write_text(json.dumps({"post_id": "p1", "run_id": "r1", "post": {"caption": {"lines": en, "hashtags": []}}}))
+    bad = posts.hinglish_caption(tmp_path, None, {"rules": {}}, FakeRouter([en[0] | {"text": "Total weight mein lean mass ka share 1.81% badha."}]))
+    assert bad["status"] == "failed" and any("lean mass as a share" in f for f in bad["failures"])
+    good = posts.hinglish_caption(tmp_path, None, {"rules": {}}, FakeRouter([en[0] | {"text": "Lean mass as a share of total weight 1.81% badha."}]))
+    assert good["status"] == "passed"

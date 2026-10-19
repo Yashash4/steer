@@ -542,3 +542,11 @@ def test_one_as_a_pronoun_is_not_a_number():
     from steer_pipeline.numbers import _words_to_digits as w
     assert w("not a prediction for any one person; no one at home; one of three") == "not a prediction for any one person; no one at home; 1 of 3"
     assert w("one in two adults, ten times") == "1 in 2 adults, 10 times"
+
+
+def test_a_decrease_word_carries_the_sign_of_the_number():
+    num = lambda t: [c for c in codes(L("health", t, ["lean_abs"]), LAVERDE) if c == "NUMBER_NOT_IN_CLAIM"]
+    assert num("Absolute lean mass fell 1.74 kg on average; results varied a lot between studies.") == []
+    assert num("Absolute lean mass changed by -1.74 kg on average; results varied a lot between studies.") == []
+    assert num("Absolute lean mass rose 1.74 kg on average; results varied a lot between studies.") == ["NUMBER_NOT_IN_CLAIM"]
+    assert num("Absolute lean mass fell 2.74 kg on average; results varied a lot between studies.") == ["NUMBER_NOT_IN_CLAIM"]

@@ -220,6 +220,9 @@ def hinglish_caption(folder: str | Path, con, settings: dict, router: Router | N
     # per line: the first phrase of each qualifier rule that the English line carries stays in English
     rules = [r for r in boundaries.get("require_qualifier", []) if not r.get("hinglish")]
     native = [r for r in boundaries.get("require_qualifier", []) if r.get("hinglish")]   # a native wording exists: use it
+    # the paired-number labels of require_with rules (label_any_of) stay in English too, like the qualifiers
+    rules = rules + [{"any_of": c["label_any_of"]} for r in boundaries.get("require_with", []) for c in r.get("claims", [])
+                     if c.get("label_any_of")]
     keeps = [[next(p for p in r.get("any_of", []) if _has(ln["text"], p)) for r in rules
               if any(_has(ln["text"], p) for p in r.get("any_of", []))] for ln in en]
     uses = [[r["hinglish"] for r in native if any(_has(ln["text"], p) for p in r.get("any_of", []))] for ln in en]
