@@ -745,6 +745,8 @@ def edit_plan(scenes: list[dict], assets: dict, v5: bool = False) -> list[dict]:
             clip = "thali"
         elif not pres and sc["kind"] == "hook" and "lane" in broll:   # a hook naming an outcome: the neutral clip
             clip = "lane"
+        elif v5 and not pres and sc["kind"] == "brand" and "lane" in broll:   # v5 voice-over: no static brand card
+            clip = "lane"
         if clip in FOOD_BROLL and ("health" in kinds or numbers or outcome):   # the rule, enforced here and tested
             raise ValueError(f"food b-roll {clip!r} planned behind a health, outcome or number line (scene {sc['index']})")
         bg = "presenter" if pres else clip or "graphics"
@@ -907,7 +909,7 @@ def source_entry_parts(e: dict) -> dict:
 
 def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | None, keys: list[dict],
                 presenter: dict | None = None, plan: list[dict] | None = None, quotes: dict | None = None,
-                checked: bool = False, pullback: str | None = None, v5: bool = False) -> dict:
+                checked: bool = False, pullback: str | None = None, v5: bool = False, pages: dict | None = None) -> dict:
     """presenter: {scene index: clip path}; the clip fills that scene, muted, and carries the label (D-026).
     plan (v4, edit_plan): per scene its b-roll, captions, punch-ins and transition; quotes {claim_id: quote} feed the
     evidence phone; checked = reel_post's checks passed (the checklist); pullback = the studio screenshot file name."""
@@ -947,7 +949,9 @@ def build_props(scenes: list[dict], record: dict, brand: dict, emphasis: str | N
             evidence = None
             if ln["kind"] == "health" and shots.get(sc["index"], {}).get("evidence") and quotes:
                 src = rd.source_entries([by_claim[i] for i in ln["claim_ids"] if i in by_claim])
-                evidence = {"kind": "quote", "header": evidence_header(src), "image": None, "boxes": [],
+                pg = next((pages[i] for i in ln["claim_ids"] if i in (pages or {})), None)   # the real CC BY page, else the quote
+                evidence = {"kind": "page" if pg else "quote", "header": evidence_header(src),
+                            "image": pg["name"] if pg else None, "boxes": pg["boxes"] if pg else [],
                             "quote": "\n\n".join(quotes[i] for i in ln["claim_ids"] if i in quotes),
                             # v4: in the line's hold; v5: under the line's own voice (no silent beat)
                             "start": round(((cards[-1]["start"] + 0.8) if cards else (ln["start"] + 0.3)) if v5
@@ -1146,7 +1150,10 @@ def pool_check(props: dict, script: dict, record: dict, emphasis: str | None, ke
                 fails.append({"code": "TEXT_NOT_FROM_SCRIPT", "detail": f"status line: {ln['text']!r}"})
     keys_ok = {(display(k["number"]), display(k["label"])) for k in keys}
     entries = rd.source_entries(record["sources"])
-    labels_ok = {rd.short_source(e) for e in entries}
+    by_claim = {s["claim_id"]: s for s in record["sources"]}   # per script line, as build_props makes each line's label
+    labels_ok = {rd.short_source(e) for e in entries} | {
+        rd.short_source(e) for sc in script["scenes"] for ln in sc["lines"]
+        for e in rd.source_entries([by_claim[i] for i in ln.get("claim_ids", []) if i in by_claim])}
     bad = lambda what, value: fails.append({"code": "TEXT_NOT_FROM_SCRIPT", "detail": f"{what}: {value!r}"})
     if props["chrome"] != {"draft_mark": rd.DRAFT, "wordmark": "steer"}:
         bad("chrome", props["chrome"])
@@ -1360,13 +1367,17 @@ def make_reel(record: dict, script: dict, brand: dict, out_dir: Path, voice: dic
         plan = edit_plan(scenes, {"presenter": presenter, "broll": (v4 or {}).get("broll")}, v5) if v4 else None
         props = build_props(scenes, record, brand, post_emphasis, keys or [], presenter, plan,
                             (v4 or {}).get("quotes"), bool((v4 or {}).get("checked")),
-                            "pullback.png" if (v4 or {}).get("pullback") else None, v5)
+                            "pullback.png" if (v4 or {}).get("pullback") else None, v5, (v4 or {}).get("pages"))
         fails = pool_check(props, script, record, post_emphasis, keys or [], (v4 or {}).get("quotes")) + timing_problems(props) \
             + pullback_problems((v4 or {}).get("pullback_meta")) + small_text_problems() \
             + (voice_problems(props) + static_problems(props) if v5 else [])
         extra = {f"broll-{n}.mp4": c for n, c in ((v4 or {}).get("broll") or {}).items()}
         if (v4 or {}).get("pullback"):
             extra["pullback.png"] = v4["pullback"]
+        for sc in props["scenes"]:   # the evidence page crops the props name
+            for ln in sc["lines"]:
+                if (ln.get("evidence") or {}).get("image"):
+                    extra[ln["evidence"]["image"]] = next(p["image"] for p in v4["pages"].values() if p["name"] == ln["evidence"]["image"])
         if plan:
             import hashlib
             v4_trace = {"edit_plan": plan, "pullback": (v4 or {}).get("pullback_meta"), "assets_sha256": {n: hashlib.sha256(Path(c).read_bytes()).hexdigest()

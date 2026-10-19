@@ -540,3 +540,21 @@ def test_the_evidence_phone_goes_under_the_why_line_when_the_numbers_line_has_on
         s_["kind"] = "point"
     plan = reel.edit_plan(scenes, {"presenter": {0: "a", 1: "b"}, "broll": {"lane": "l.mp4"}}, v5=True)
     assert [p["evidence"] for p in plan] == [False, False, True]
+
+
+def test_a_line_label_from_its_own_claims_passes_the_pool_when_the_paper_spans_pages():
+    from steer_pipeline import render as rd
+    record = {"sources": [{"claim_id": "a", "authors": "Laverde LP et al.", "year": 2026, "location": "page 1", "doi": "10.1/x",
+                           "title": "T", "journal": "J"},
+                          {"claim_id": "b", "authors": "Laverde LP et al.", "year": 2026, "location": "page 8", "doi": "10.1/x",
+                           "title": "T", "journal": "J"}]}
+    line_label = rd.short_source(rd.source_entries([record["sources"][0]])[0])
+    merged = rd.short_source(rd.source_entries(record["sources"])[0])
+    assert line_label != merged                                    # "page 1" vs "pages 1 and 8": the case that failed
+
+
+def test_a_v5_voice_over_brand_scene_gets_the_neutral_clip():
+    scenes = [{"index": 0, "kind": "brand", "start": 0, "end": 5,
+               "lines": [{"kind": "brand", "text": "Before you start, hear it from a doctor, not a reel.", "start": 0}]}]
+    assert reel.edit_plan(scenes, {"broll": {"lane": "l.mp4"}}, v5=True)[0]["broll"] == "lane"
+    assert reel.edit_plan(scenes, {"broll": {"lane": "l.mp4"}}, v5=False)[0]["broll"] is None
