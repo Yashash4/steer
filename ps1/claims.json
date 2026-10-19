@@ -1,6 +1,6 @@
 {
  "version": "1.1",
- "built_at": "2026-10-19T07:59:48+00:00",
+ "built_at": "2026-10-19T09:11:16+00:00",
  "brand": {
   "palette": {
    "cream": "#F5EBDF",
@@ -18,7 +18,7 @@
   },
   "wordmark": "steer",
   "signoff": "steerclub.com",
-  "footer": "Educational hackathon prototype · content pending review by a Steer doctor · not a medical assessment"
+  "footer": "Educational prototype · content pending review by a Steer doctor · not a medical assessment"
  },
  "ui": {
   "you_guessed": "You guessed",
