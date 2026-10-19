@@ -131,3 +131,22 @@ table.lines .chip{white-space:nowrap}
 .review-status .chip{white-space:nowrap}
 .cleared-note{margin:4px 0;overflow-wrap:anywhere;white-space:normal}
 .revoked{opacity:.85}.revoked strong{text-decoration:line-through}.revoke-box{margin:0 0 10px}
+
+/* review history: fixed short columns that never break mid-token, the reason takes the rest and is never clipped */
+table.hist{width:100%;min-width:0;table-layout:auto}
+table.hist th,table.hist td{padding:14px;line-height:1.5;overflow-wrap:normal;word-break:normal}
+table.hist th:nth-child(1),table.hist td:nth-child(1){width:3ch;white-space:nowrap}
+table.hist th:nth-child(2),table.hist td:nth-child(2){width:11ch}
+table.hist th:nth-child(3),table.hist td:nth-child(3){width:16ch}
+table.hist th:nth-child(4),table.hist td:nth-child(4){width:18ch}
+table.hist td:nth-child(5),table.hist th:nth-child(5){white-space:nowrap}
+table.hist td.reason{min-width:20ch;white-space:normal;overflow-wrap:anywhere}
+@media(max-width:700px){
+ table.hist thead{position:absolute;left:-999px}
+ table.hist,table.hist tbody,table.hist caption{display:block}
+ table.hist tr{display:block;border:1px solid var(--blush);border-radius:10px;margin:0 0 10px;padding:8px 12px;background:var(--cream)}
+ table.hist td{display:inline-block;width:auto !important;min-width:0;border:0;padding:3px 10px 3px 0;vertical-align:top}
+ table.hist td::before{content:attr(data-l);display:block;color:var(--clay-text);font-size:13px}
+ table.hist td:nth-child(1){display:none}
+ table.hist td.reason{display:block;padding:8px 0 3px}
+}
