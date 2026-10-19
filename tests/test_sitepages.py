@@ -13,7 +13,8 @@ def test_learned_page_renders_only_records_and_no_internal_references(tmp_path):
     cards = json.loads((FIX / "lessons.json").read_text())
     framing = next(c for c in cards if c["id"] == "framing-attribute")
     assert framing["failed"]["text"] in page.replace("&#x27;", "'") and "FRAMING_ADDS_ATTRIBUTE" in page
-    assert sitepages.DISCLAIMER in page and "re-checked with today" in page
+    assert sitepages.DISCLAIMER in page and "re-checked with today" in page and sitepages.LEARNED_INTRO in page
+    assert 'url("ps1/fonts/Fraunces.woff2")' in page and "https://" not in page   # the site's own fonts, no network
     assert (tmp_path / "learned" / "pending-tick-before.jpg").exists()
     assert "trials/" not in page and "/home/" not in page
 

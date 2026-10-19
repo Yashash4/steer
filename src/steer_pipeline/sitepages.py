@@ -9,21 +9,27 @@ from pathlib import Path
 
 DISCLAIMER = ("Checked by code against the paper and by an independent model. Not clinical approval: every post is pending "
               "review by a Steer doctor.")
-CSS = """body{overflow-wrap:anywhere;font:17px/1.5 system-ui,sans-serif;max-width:1000px;margin:32px auto;padding:0 16px;background:#F5EBDF;color:#351D1D}
-a{color:#C04E2A}h1{font-family:Georgia,serif}.note{background:#F8F2EB;border-left:4px solid #C04E2A;padding:10px 14px}
+FONTS = """@font-face{font-family:Fraunces;src:url("{base}Fraunces.woff2") format("woff2")}
+@font-face{font-family:Inter;src:url("{base}Inter.woff2") format("woff2")}
+h1,h2{font-family:Fraunces,Georgia,serif;font-weight:500}"""   # the site's own font files (ps1/fonts), no network
+CSS = """body{overflow-wrap:anywhere;font:17px/1.5 Inter,system-ui,sans-serif;max-width:1000px;margin:32px auto;padding:0 16px;background:#F5EBDF;color:#351D1D}
+a{color:#C04E2A}.note{background:#F8F2EB;border-left:4px solid #C04E2A;padding:10px 14px}
 .card{background:#F8F2EB;border-radius:10px;padding:16px 18px;margin:18px 0}.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .fail{border-left:4px solid #9b2c2c;padding-left:10px}.pass{border-left:4px solid #2f6b3a;padding-left:10px}
 .code{overflow-wrap:anywhere;font-family:ui-monospace,monospace;font-size:14px;background:#efe3d6;padding:1px 6px;border-radius:4px}
 .small{color:#7A5A50;font-size:14px}img{max-width:100%;border-radius:8px}table{border-collapse:collapse}td,th{padding:4px 10px;text-align:left}
 @media (max-width:700px){.pair{grid-template-columns:1fr}}"""
+LEARNED_INTRO = "Each card is a real failure from a stored run, the rule it led to, and the line that passed afterwards."
 _E = html.escape
 _LEAK = re.compile(r"trials/|/home/|/tmp/|\b[0-9a-f]{12,40}\b")
 
 
-def _page(title: str, body: str) -> str:
+def _page(title: str, body: str, intro: str = "", font_base: str = "ps1/fonts/", back: str = "index.html") -> str:
+    style = FONTS.replace("{base}", font_base) + CSS
+    lead = f"<p>{_E(intro)}</p>" if intro else ""
     out = (f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-           f"<title>{_E(title)}</title><style>{CSS}</style><h1>{_E(title)}</h1><p class=\"note\">{_E(DISCLAIMER)}</p>{body}"
-           f'<p><a href="index.html">Back</a></p>')
+           f"<title>{_E(title)}</title><style>{style}</style><h1>{_E(title)}</h1>{lead}<p class=\"note\">{_E(DISCLAIMER)}</p>"
+           f'{body}<p><a href="{back}">Back</a></p>')
     leak = _LEAK.search(out)
     if leak:   # an internal path or a full hash in the public HTML fails the build
         raise ValueError(f"internal reference in the generated page: {leak.group(0)!r}")
@@ -81,5 +87,5 @@ def learned_page(records: Path, out: Path) -> Path:
                 shutil.copy(records / c[side]["image"], out / "learned" / c[side]["image"])
     body = "".join(_card(c, "learned") for c in cards)
     page = out / "learned.html"
-    page.write_text(_page("What the pipeline learned", body), encoding="utf-8")
+    page.write_text(_page("What the pipeline learned", body, LEARNED_INTRO), encoding="utf-8")
     return page
