@@ -194,7 +194,7 @@ function run(i) {
   }));
   S.total = steps.length + 1;
   const go = (k) => {
-    if (k >= steps.length) return readout();
+    if (k >= steps.length) return wrapped();
     const st = steps[k];
     if (st.round) playRound(st.round, () => go(k + 1), k + 2);
     else gapCard(st.card, () => go(k + 1), k + 2);
@@ -217,6 +217,70 @@ function questions() {
   const qs = [];
   S.picked.map((d) => d.id).concat("is_it_for_me").forEach((id) => (C.doctor_questions[id] || []).forEach((q) => qs.push(q)));
   return qs.slice(0, 3);
+}
+
+// the recap: full-width cards drawn only from claims.json strings and the player's own guesses, on screen only (the share
+// image never takes any of it). One card at a time: tap Next/Back, swipe, or the arrow keys. No motion at all.
+const KEY_BACK = 37;   // keyCode of the left and right arrows
+const KEY_NEXT = 39;
+function furthest() {
+  let worst = null;
+  let wd = 0;
+  S.guesses.forEach((g) => {
+    const d = isNum(g.round) ? Math.abs(g.idx - binOf(g.round)) : (grade(g) === "closest" ? 0 : 1);
+    if (g.round.reveals && d > wd) { worst = g; wd = d; }   // strictly further: ties keep the earliest round
+  });
+  return worst;
+}
+function wrapped() {
+  const m = S.guesses.length;
+  const n = S.guesses.filter((g) => grade(g) === "closest").length;
+  const cards = [];
+  const mk = (...kids) => { const c = h("div", "wcard"); c.append(...kids); cards.push(c); };
+  mk(h("p", "wmark", C.brand.wordmark), h("h1", "q", C.ui.wrapped_title));
+  mk(h("p", "wbig", String(n)), h("h2", null, fill(C.ui.wrapped_score, n, m)), h("p", "small", C.ui.score_label + SEP + String(S.points)));
+  const far = furthest();
+  if (far) {
+    const rv = far.round.reveals[0];
+    const row = h("p", "wnum");
+    if (rv.number) row.append(h("b", null, rv.number), " ");
+    row.append(rv.label);
+    const cmp = h("p", "wcmp", C.ui.you_guessed + SEP + far.round.stops[far.idx].label + DOTSEP + C.ui.study_range + SEP + far.round.stops[binOf(far.round)].label);
+    const src = h("p", "small", far.round.source.short + DOTSEP + far.round.source.location);
+    mk(h("h2", null, C.ui.wrapped_surprise_title), row, cmp, qualList(far.round, "wquals"), src);
+  }
+  const ql = h("ul", "wq");
+  questions().forEach((q) => ql.append(h("li", null, q)));
+  mk(h("h2", null, C.ui.wrapped_questions), ql);
+  let at = 0;
+  const sec = h("section", "wrapped");
+  sec.tabIndex = 0;
+  const holder = h("div", "wstage");
+  const count = h("p", ["small", "wcount"]);
+  const back = button(C.ui.wrapped_back, () => go(at - 1), "alt");
+  const nxt = button(C.ui.next, () => go(at + 1));
+  const go = (i) => {
+    if (i >= cards.length) return readout();
+    if (i < 0) return;
+    at = i;
+    cards.forEach((c, j) => { c.hidden = j !== at; });
+    count.textContent = fill(C.ui.wrapped_progress, at + 1, cards.length);
+    back.hidden = at === 0;
+  };
+  holder.append(...cards);
+  sec.append(count, holder, h("div", "wnav"));
+  sec.lastChild.append(back, nxt);
+  sec.addEventListener("keydown", (e) => { if (e.keyCode === KEY_NEXT) go(at + 1); else if (e.keyCode === KEY_BACK) go(at - 1); });
+  let x0 = null;
+  sec.addEventListener("pointerdown", (e) => { x0 = e.clientX; });
+  sec.addEventListener("pointerup", (e) => {
+    if (x0 !== null && Math.abs(e.clientX - x0) > 50) go(e.clientX < x0 ? at + 1 : at - 1);
+    x0 = null;
+  });
+  main.replaceChildren(sec);
+  window.scrollTo(0, 0);
+  go(0);
+  sec.focus({ preventScroll: true });
 }
 
 function readout() {
