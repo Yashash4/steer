@@ -26,7 +26,7 @@ PS1 = Path(__file__).resolve().parents[2] / "ps1"
 FONTS = Path(__file__).resolve().parents[2] / "fonts"
 # fixed, code-defined strings: the only lines allowed the "disclaimer" kind (exempt from STEER_TEAM_CLAIM only) and the
 # only qualifiers exempt from a paper's avoid phrases; rounds.toml must use them verbatim, anything else is checked as usual
-DISCLAIMERS = {"Educational hackathon prototype · content pending review by a Steer doctor · not a medical assessment",
+DISCLAIMERS = {"Educational prototype · content pending review by a Steer doctor · not a medical assessment",
                "Prototype only. Nothing is sent or stored. Use test details, not real contact information."}
 FIXED_QUALIFIERS = {"An average across studies, not a prediction for you.", "All weight-management medicines, not only GLP-1.",
                     "Results varied a lot between studies.", "A comparison between groups in one study, not a prediction for you.",

@@ -396,3 +396,12 @@ def test_copy_my_questions_flashes_copied_for_2s_only_after_a_successful_write(s
     assert "[{ opacity: 1 }, { opacity: 1 }], 2000" in js and "onfinish" in js and "setTimeout" not in js
     assert "copyText(text(), copied)" in js and "copyText(text());" in js   # the share fallback copies without the note
     assert "tick.checked = true" not in js and ".value = " not in js.replace("ta.value = text", "")   # the form starts blank
+
+
+def test_no_ps1_source_or_built_text_says_hackathon(stored, tmp_path):
+    out = tmp_path / "site"
+    ps1.build(stored, out, SETTINGS, rounds_file(tmp_path), playable=True, fonts=True)
+    files = [ps1.PS1 / "rounds.toml", ps1.PS1 / "app.js", ps1.PS1 / "index.html", out / "claims.json", out / "playable.html"]
+    for f in files:
+        assert "hackathon" not in f.read_text(encoding="utf-8").lower(), f.name
+    assert ROUNDS["footer"] == "Educational prototype · content pending review by a Steer doctor · not a medical assessment"

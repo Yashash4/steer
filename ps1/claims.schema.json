@@ -73,7 +73,7 @@
         },
         "footer": {
           "type": "string",
-          "description": "'Educational hackathon prototype · content pending review by a Steer doctor · not a medical assessment'"
+          "description": "'Educational prototype · content pending review by a Steer doctor · not a medical assessment'"
         }
       }
     },
