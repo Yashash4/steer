@@ -1,6 +1,6 @@
 {
  "version": "1.1",
- "built_at": "2026-10-18T14:08:15+00:00",
+ "built_at": "2026-10-19T07:59:48+00:00",
  "brand": {
   "palette": {
    "cream": "#F5EBDF",
@@ -44,7 +44,8 @@
   "unscored": "Not scored",
   "share_make": "Make a share card",
   "share_line": "I matched the study range in {n} of {m} guesses. Try it.",
-  "share_note": "Your score reflects quiz guesses, not your health."
+  "share_note": "Your score reflects quiz guesses, not your health.",
+  "copied": "Copied"
  },
  "hook": {
   "id": "hook",
