@@ -113,3 +113,10 @@ name = "en-IN-NeerjaExpressiveNeural"
 rate = "+8%"
 voice_id = "EXAVITQu4vr4xnSDxMaL"   # ElevenLabs premade "Sarah - Mature, Reassuring, Confident"
 model = "eleven_multilingual_v2"
+
+# `steer batch` (S8): the posting time of week.ics (Asia/Kolkata), the S6 loop's files that order the week (relative to the
+# repository root), and the two neutral b-roll clips the reel slots alternate between (the thali/food clip is never used here).
+[batch]
+post_time = "19:00"
+learn_dir = "trials/s6-1"
+broll = ["trials/broll-1/clips/lane-s19.mp4", "trials/broll-2/clips/balcony-s19.mp4"]

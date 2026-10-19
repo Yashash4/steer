@@ -122,9 +122,30 @@ def main(argv: list[str] | None = None) -> int:
     po_p.add_argument("--note", action="append", default=[], help="POST_ID=text added to that post's title (repeatable)")
     po_p.add_argument("--blocked", help="a blocked post folder, shown as the example of a refusal")
     po_p.add_argument("--reviewers", default=str(Path(__file__).resolve().parents[2] / "reviewers.toml"))
+    ba = sub.add_parser("batch", help="a checked week of draft posts from stored runs (planner, write, render, Hinglish, reels)")
+    ba.add_argument("--papers", required=True, help="a file with one source per line (PMCID, DOI or PDF)")
+    ba.add_argument("--week", required=True, help="first day of the week, YYYY-MM-DD")
+    ba.add_argument("--days", type=int, default=7)
+    ba.add_argument("--from-store", help="use the STORED runs (no extraction, no new clearances); a working copy of the store")
+    ba.add_argument("--out", required=True)
+    ba.add_argument("--settings")
     d = sub.add_parser("render", help="render (again) the PNGs of a written post folder")
     d.add_argument("folder", help="out/<run_id>/<post_id>")
     args = ap.parse_args(argv)
+
+    if args.cmd == "batch":
+        if not args.from_store:
+            print("steer batch: running new sources is not supported in this build; use --from-store <db>", file=sys.stderr)
+            return 2
+        from . import batch
+        try:
+            r = batch.batch(args.papers, args.week, args.from_store, args.out, load_settings(args.settings), args.days)
+        except KeyError as e:
+            print(f"error: {e.args[0]}", file=sys.stderr)
+            return 2
+        filled = sum(1 for s in r["slots"] if s["status"] == "filled")
+        print(f"batch: {filled} of {len(r['slots'])} slots filled; conflicts {r['conflicts']} -> {r['week_dir']}", file=sys.stderr)
+        return 0 if r["slots"] and not r["conflicts"] else 1
 
     if args.cmd == "studio":
         from . import studio
