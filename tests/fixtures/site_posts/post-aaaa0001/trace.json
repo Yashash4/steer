@@ -1,0 +1,79 @@
+{
+ "post_id": "post-aaaa0001",
+ "lines": [
+  {
+   "path": "slides/0/lines/0",
+   "kind": "framing",
+   "text": "Normal BMI?",
+   "claim_ids": [],
+   "claims": [],
+   "failures": [],
+   "flags": [],
+   "crosscheck": {
+    "endpoint": "opencode_glm",
+    "model": "glm-5.3",
+    "provider": "opencode.ai",
+    "independence": "different_provider",
+    "verdict": "supported",
+    "reason": "Matches the numbers in the quote."
+   }
+  },
+  {
+   "path": "slides/1/lines/0",
+   "kind": "health",
+   "text": "Risk was 5.27 times higher in women with BMI under 25.",
+   "claim_ids": [
+    "c004-01"
+   ],
+   "claims": [
+    {
+     "claim_id": "c004-01",
+     "quote": "in women, the risk of diabetes in those with BMI <25 kg/m2 was 5.3 times higher (IRR 5.27)",
+     "sids": [
+      "p0005-s0004"
+     ],
+     "line_ids": []
+    }
+   ],
+   "failures": [],
+   "flags": [],
+   "crosscheck": {
+    "endpoint": "opencode_glm",
+    "model": "glm-5.3",
+    "provider": "opencode.ai",
+    "independence": "different_provider",
+    "verdict": "supported",
+    "reason": "Matches the numbers in the quote."
+   }
+  },
+  {
+   "path": "caption/lines/0",
+   "kind": "health",
+   "text": "Risk was 5.27 times higher in women with BMI under 25.",
+   "claim_ids": [
+    "c004-01"
+   ],
+   "claims": [
+    {
+     "claim_id": "c004-01",
+     "quote": "in women, the risk of diabetes in those with BMI <25 kg/m2 was 5.3 times higher (IRR 5.27)",
+     "sids": [
+      "p0005-s0004"
+     ],
+     "line_ids": []
+    }
+   ],
+   "failures": [],
+   "flags": [],
+   "crosscheck": {
+    "endpoint": "opencode_glm",
+    "model": "glm-5.3",
+    "provider": "opencode.ai",
+    "independence": "different_provider",
+    "verdict": "supported",
+    "reason": "Matches the numbers in the quote."
+   }
+  }
+ ],
+ "post_failures": []
+}

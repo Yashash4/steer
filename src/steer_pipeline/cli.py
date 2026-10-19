@@ -114,6 +114,14 @@ def main(argv: list[str] | None = None) -> int:
     le_p = spp.add_parser("learned", help="'What the pipeline learned' from a records folder (lessons.json + images)")
     le_p.add_argument("--records", required=True)
     le_p.add_argument("--out", required=True, help="the site folder (code/site)")
+    po_p = spp.add_parser("posts", help="the finished-posts page: each health line with its stored quote, gate result and cross-check")
+    po_p.add_argument("--db", required=True)
+    po_p.add_argument("--posts", nargs="*", default=[], help="folders holding the written posts to show")
+    po_p.add_argument("--out", required=True, help="folder to write index.html into (code/site/posts)")
+    po_p.add_argument("--order", default="", help="comma-separated post ids, in display order")
+    po_p.add_argument("--note", action="append", default=[], help="POST_ID=text added to that post's title (repeatable)")
+    po_p.add_argument("--blocked", help="a blocked post folder, shown as the example of a refusal")
+    po_p.add_argument("--reviewers", default=str(Path(__file__).resolve().parents[2] / "reviewers.toml"))
     d = sub.add_parser("render", help="render (again) the PNGs of a written post folder")
     d.add_argument("folder", help="out/<run_id>/<post_id>")
     args = ap.parse_args(argv)
@@ -194,6 +202,13 @@ def main(argv: list[str] | None = None) -> int:
         from . import sitepages
         if args.page == "learned":
             print(f"wrote {sitepages.learned_page(Path(args.records), Path(args.out))}", file=sys.stderr)
+        else:
+            out = Path(args.out)
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "index.html").write_text(sitepages.posts_page(
+                args.db, [Path(d) for d in args.posts], args.reviewers, [i for i in args.order.split(",") if i],
+                dict(n.split("=", 1) for n in args.note), Path(args.blocked) if args.blocked else None), encoding="utf-8")
+            print(f"posts page in {out / 'index.html'}", file=sys.stderr)
         return 0
 
     if args.cmd == "render":

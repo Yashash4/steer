@@ -89,3 +89,95 @@ def learned_page(records: Path, out: Path) -> Path:
     page = out / "learned.html"
     page.write_text(_page("What the pipeline learned", body, LEARNED_INTRO), encoding="utf-8")
     return page
+
+
+# === posts_page: the finished posts, each health line with the records behind it (steer site-pages posts) ============
+
+POSTS_CSS = """<style>.imgs{display:flex;gap:8px;overflow-x:auto}.imgs img{height:220px;max-width:none}
+details{background:#fff;border:1px solid #E6D2C6;border-radius:8px;padding:8px 14px;margin:8px 0}summary{cursor:pointer}
+details dl{display:grid;grid-template-columns:11em 1fr;gap:4px 14px;margin:10px 0}details dt{color:#7A5A50;font-size:14px}details dd{margin:0}
+blockquote{margin:0;padding-left:12px;border-left:3px solid #D9B8A8}.blocked{border-left:4px solid #9b2c2c;padding-left:10px}
+@media(max-width:700px){details dl{grid-template-columns:1fr}details dt{margin-top:6px}.imgs img{height:160px}}</style>"""
+
+
+def _where(path: str) -> str:
+    p = path.split("/")
+    if p[0] == "slides":
+        return f"slide {int(p[1]) + 1}"
+    return {"static": "static image", "caption": "caption", "reel_script": "reel"}.get(p[0], p[0])
+
+
+def _health(folder: Path) -> list[dict]:
+    """The distinct health lines of a post's trace, each with where it appears, its claims and its cross-check(s)."""
+    out: dict[str, dict] = {}
+    for ln in json.loads((folder / "trace.json").read_text())["lines"]:
+        if ln["kind"] != "health":
+            continue
+        h = out.setdefault(ln["text"], {"text": ln["text"], "where": [], "claims": ln.get("claims") or [], "checks": []})
+        if _where(ln["path"]) not in h["where"]:
+            h["where"].append(_where(ln["path"]))
+        cc = ln.get("crosscheck") or {}
+        key = (cc.get("verdict"), cc.get("model"), cc.get("independence"))
+        if key not in [(c.get("verdict"), c.get("model"), c.get("independence")) for c in h["checks"]]:
+            h["checks"].append(cc)
+    return list(out.values())
+
+
+def _line_block(h: dict, paper: str, status_of: dict, loc_of: dict) -> str:
+    rows = [f"<dt>Used in</dt><dd>{_E(', '.join(h['where']))}</dd>"]
+    for c in h["claims"]:
+        cid = c["claim_id"]
+        rows.append(f'<dt>Claim</dt><dd><a href="../studio/ledger.html#claim-{_E(paper)}-{_E(cid)}">{_E(paper)}/{_E(cid)}</a></dd>')
+        rows.append(f"<dt>Exact quote</dt><dd><blockquote>{_E(c['quote'])}</blockquote></dd>")
+        rows.append(f"<dt>Where in the paper</dt><dd>{_E(loc_of.get(cid, 'not stated'))}</dd>")
+        rows.append(f"<dt>Gate result</dt><dd>{_E(status_of.get(f'{paper}/{cid}', 'not in the store'))}</dd>")
+    for cc in h["checks"]:
+        rows.append("<dt>Independent cross-check</dt><dd>" + _E(f"{cc.get('verdict', 'not run')}; model {cc.get('model', 'n/a')}; "
+                    f"{(cc.get('independence') or 'n/a').replace('_', ' ')}") + (f". {_E(cc['reason'])}" if cc.get("reason") else "") + "</dd>")
+    rows.append("<dt>Review</dt><dd>pending doctor review</dd>")
+    return f"<details><summary>{_E(h['text'])}</summary><dl>{''.join(rows)}</dl></details>"
+
+
+def _blocked(folder: Path) -> str:
+    rec, tr = json.loads((folder / "post.json").read_text()), json.loads((folder / "trace.json").read_text())
+    bad = [ln for ln in tr["lines"] if ln.get("failures")]
+    items = "".join(f"<details open><summary>{_E(ln['kind'])}: {_E(ln['text'])}</summary><dl><dt>Failed checks</dt><dd>"
+                    + _E("; ".join(f"{f['code']} ({f.get('detail', '')})" for f in ln["failures"])) + "</dd><dt>Claims</dt><dd>"
+                    + _E(", ".join(ln.get("claim_ids") or []) or "none") + "</dd></dl></details>" for ln in bad)
+    return (f'<section id="{_E(rec["post_id"])}-blocked"><h2>A post the checks blocked</h2><p class="small">{_E(rec["post_id"])} · '
+            f"status {_E(rec['status'])}. This is what a refusal looks like: the lines below failed, so the post was "
+            f"<strong>never rendered and never published</strong>.</p><div class=\"blocked\">{items}</div></section>")
+
+
+def posts_page(db, post_dirs: list[Path], reviewers_path, order: list[str] = (), notes: dict[str, str] | None = None,
+               blocked_dir: Path | None = None) -> str:
+    """posts/index.html: the given posts in `order`, each with its images, reel, captions and, per health line, a <details>
+    block built only from the stored records (post.json, trace.json, the studio's own claim status)."""
+    from . import studio
+
+    snap = studio.public_data(db, post_dirs, reviewers_path)
+    status_of = {c["key"]: c["status"] for c in snap["claims"]}
+    mine = {p["id"]: p for p in snap["posts"] if any(Path(p["folder"]) == pj.parent for d in post_dirs
+                                                      for pj in Path(d).glob("**/post.json"))}
+    ids = [i for i in order if i in mine] + [i for i in mine if i not in order]
+    body = []
+    for pid in ids:
+        p, folder = mine[pid], Path(mine[pid]["folder"])
+        short = snap["papers"][p["paper"]]["short"]
+        kind = ("carousel + reel (v5)" if p["has_reel"] else "carousel") if p["format"] == "carousel" else "static"
+        title = f"{short} — {kind}" + (f", {notes[pid]}" if notes and pid in notes else "")
+        loc_of = {s["claim_id"]: s["location"] for s in json.loads((folder / "post.json").read_text()).get("sources", [])}
+        imgs = "".join(f'<a href="../studio/{_E(u)}"><img src="../studio/{_E(u)}" alt="{_E(Path(u).name)}" loading="lazy"></a>' for u in p["pngs"])
+        claims = sorted({i for ln in p["lines"] if ln["kind"] == "health" for i in ln["claim_ids"]})
+        body.append(
+            f'<section id="{_E(pid)}"><h2>{_E(title)}</h2><p class="small">{_E(pid)} · draft, pending doctor review</p>'
+            f'<div class="imgs">{imgs}</div>'
+            + (f'<p><a href="../studio/files/{_E(pid)}/reel.mp4">Watch the reel (MP4)</a></p>' if p["has_reel"] else "")
+            + f'<p><a href="{_E(pid)}/caption.txt">Caption (English)</a> · <a href="{_E(pid)}/caption-hinglish.txt">Caption (Hinglish)</a>'
+            f' · <a href="../studio/ledger.html">Its claims in the ledger</a>: {_E(", ".join(claims))}</p>'
+            f"<h3>Why this claim? Every health line, with the records behind it</h3>"
+            + "".join(_line_block(h, p["paper"], status_of, loc_of) for h in _health(folder)) + "</section>")
+    if blocked_dir:
+        body.append(_blocked(Path(blocked_dir)))
+    return _page("Finished posts", POSTS_CSS + "".join(body), "The final drafts, with every health line opened up to the quote, the page, the "
+                 "gate result and the independent cross-check behind it.", font_base="../ps1/fonts/", back="../index.html")

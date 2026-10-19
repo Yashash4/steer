@@ -1,0 +1,15 @@
+{
+ "post_id": "post-aaaa0001",
+ "run_id": "run-1",
+ "status": "draft_pending_review",
+ "format": "carousel",
+ "sources": [
+  {
+   "claim_id": "c004-01",
+   "location": "page 5",
+   "sids": [
+    "p0005-s0004"
+   ]
+  }
+ ]
+}

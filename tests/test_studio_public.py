@@ -164,3 +164,10 @@ def test_the_sources_tables_carry_the_studios_own_status_string(bundle):
     assert seen == {c["key"]: c["status"] for c in pub["claims"]}
     assert any(s.startswith("rejected by the gate") or s.startswith("verified") for s in seen.values())
     assert not [s for s in seen.values() if s.endswith("()")]
+
+
+def test_the_ledger_has_a_per_claim_anchor_and_scrolls_to_it(bundle):
+    out, _, _ = bundle
+    js = (out / "public.js").read_text()
+    assert '"claim-" + String(k).replace("/", "-")' in js and 'id="\' + esc(aid(c.key))' in js
+    assert "location.hash" in js and "scrollIntoView" in js and "el.open = true" in js

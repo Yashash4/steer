@@ -786,13 +786,12 @@ def source_rows(snap: dict) -> dict[str, list[dict]]:
     return rows
 
 
-def export_sources(db: str | Path, post_dirs: list[Path], reviewers_path: str | Path, out: Path) -> list[str]:
-    """steer sources: one .md and one .csv per paper, written from a backup copy of the store (the original is only read)."""
-    import csv
+def public_data(db: str | Path, post_dirs: list[Path], reviewers_path: str | Path) -> dict:
+    """The public snapshot data (statuses as the studio shows them), built from a backup copy of the store (the original is
+    only read). One source for the sources tables and the generated site pages."""
     import sqlite3
     import tempfile
 
-    out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="steer-sources-") as tmp:
         src, dst = sqlite3.connect(f"file:{db}?mode=ro", uri=True), sqlite3.connect(Path(tmp) / "copy.db")
         src.backup(dst)
@@ -801,6 +800,15 @@ def export_sources(db: str | Path, post_dirs: list[Path], reviewers_path: str | 
         docs, claims, posts = load(con, post_dirs)
         snap = data(con, docs, claims, posts, load_reviewers(reviewers_path), public=True)
         con.close()
+    return snap
+
+
+def export_sources(db: str | Path, post_dirs: list[Path], reviewers_path: str | Path, out: Path) -> list[str]:
+    """steer sources: one .md and one .csv per paper, written from a backup copy of the store (the original is only read)."""
+    import csv
+
+    out.mkdir(parents=True, exist_ok=True)
+    snap = public_data(db, post_dirs, reviewers_path)
     for pm, rows in source_rows(snap).items():
         cit = snap["papers"][pm]["citation"]
         with open(out / f"{pm}.csv", "w", newline="", encoding="utf-8") as f:

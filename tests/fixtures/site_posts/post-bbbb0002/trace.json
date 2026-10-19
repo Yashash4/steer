@@ -1,0 +1,23 @@
+{
+ "post_id": "post-bbbb0002",
+ "lines": [
+  {
+   "path": "message",
+   "kind": "message",
+   "text": "South Asians were less insulin resistant than US whites.",
+   "claim_ids": [
+    "c002-01"
+   ],
+   "claims": [],
+   "failures": [
+    {
+     "check": "numbers",
+     "code": "NUMBER_NOT_IN_CLAIM",
+     "detail": "under 25"
+    }
+   ],
+   "flags": []
+  }
+ ],
+ "post_failures": []
+}
