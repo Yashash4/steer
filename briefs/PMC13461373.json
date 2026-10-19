@@ -1,0 +1,48 @@
+{
+ "carousel": {
+  "format": "carousel",
+  "theme": "lean_mass_during_weight_loss",
+  "doubt": "will_i_lose_muscle",
+  "rules": [
+   "a context line is a verbatim run of the quote or is dropped",
+   "no key_number or key_label on any slide or on the static (a label short enough would drop who was studied)",
+   "never write number words (one, two, first, ...) anywhere in framing lines, the caption, the reasoning or the message; say 'both measures', not 'two measures'",
+   "1.81% always has 'lean mass as a share of total weight' right beside it, on every slide and line where it appears",
+   "the line about pairing treatment with nutrition and exercise cites claim c007-01 only (never c000-00 or c000-01), and has no number"
+  ],
+  "claim_ids": [
+   "c000-01",
+   "c000-00",
+   "c007-01"
+  ],
+  "why": "Brief targeted by the learning loop (steer learn, trials/s6-1: doubt 'muscle' scored highest, 3 of 11 benchmark posts; rule from CONTEXT_NOT_IN_QUOTE). Laverde 2026 (CC BY): absolute lean mass fell 1.74 kg (results varied a lot between studies, I2 = 98%) while lean mass as a share of total weight rose 1.81%; keep the two separate, each with its own label; the paper's advice to pair treatment with nutrition and exercise. STRICT: every health line, every key label and the message name who was studied with this exact phrase: 'patients with obesity treated with GLP-1 receptor agonists at obesity doses' (never drop 'at obesity doses'); a key_label is copied word for word from its health line and includes that phrase; never write number words (one, two, ...) in framing lines, the reasoning or the message (the checker reads them as numbers). No key_number/key_label on any slide (the slide's hero card shows the number with its line). In the reasoning, never write 'two measures' or any number word: say 'both measures'.",
+  "reel": {
+   "hook": "the viewer's doubt, short: 'Will I lose muscle on these medicines?' is NOT allowed (the paper measured lean mass, not muscle); use lean mass, e.g. 'Losing weight, losing lean mass too?'",
+   "order": "one numbers line from c000-01: 'In patients with obesity treated with GLP-1 receptor agonists at obesity doses, absolute lean mass changed by -1.74 kg on average; results varied a lot between studies' (the number with its sign as in the quote; never 'fell 1.74 kg'; never say muscle)",
+   "why_claim": "c000-00",
+   "why": "SHORT (at most 24 spoken words): 'In patients with obesity treated with GLP-1 receptor agonists at obesity doses, lean mass as a share of total weight rose 1.81%' (c000-00; the label right beside 1.81%); the 'setting' line of this scene is copied exactly from a health line",
+   "brand_line": "Before you start, hear it from a doctor, not a reel.",
+   "message": "every slide, caption line and the message keep the two numbers separate, each with its label right beside it ('absolute lean mass' beside -1.74 kg; 'lean mass as a share of total weight' beside 1.81%), and say, from the paper's own context sentence, that the authors call it essential to pair treatment with nutrition and physical exercise"
+  },
+  "rules_provenance": "rule 1 from the learning loop (trials/s6-1); rules 2-4 editorial for this brief, from the checks' findings on earlier tries"
+ },
+ "static": {
+  "format": "static",
+  "theme": "lean_mass_during_weight_loss",
+  "doubt": "will_i_lose_muscle",
+  "rules": [
+   "a context line is a verbatim run of the quote or is dropped",
+   "no key_number or key_label on any slide or on the static (a label short enough would drop who was studied)",
+   "never write number words (one, two, first, ...) anywhere in framing lines, the caption, the reasoning or the message; say 'both measures', not 'two measures'",
+   "1.81% always has 'lean mass as a share of total weight' right beside it, on every slide and line where it appears",
+   "the static holds both numbers, each with its own label right beside it, and the nutrition and exercise line from the authors",
+   "every health line and the message name who was studied: patients with obesity treated with GLP-1 receptor agonists at obesity doses"
+  ],
+  "claim_ids": [
+   "c000-01",
+   "c000-00"
+  ],
+  "why": "Brief targeted by the learning loop (steer learn, trials/s6-1: doubt 'muscle' scored highest, 3 of 11 benchmark posts; rule from CONTEXT_NOT_IN_QUOTE). Laverde 2026 (CC BY): absolute lean mass fell 1.74 kg (results varied a lot between studies, I2 = 98%) while lean mass as a share of total weight rose 1.81%; keep the two separate, each with its own label; the paper's advice to pair treatment with nutrition and exercise. STRICT: every health line, every key label and the message name who was studied with this exact phrase: 'patients with obesity treated with GLP-1 receptor agonists at obesity doses' (never drop 'at obesity doses'); a key_label is copied word for word from its health line and includes that phrase; never write number words (one, two, ...) in framing lines, the reasoning or the message (the checker reads them as numbers). No key_number/key_label on any slide (the slide's hero card shows the number with its line). In the reasoning, never write 'two measures' or any number word: say 'both measures'.",
+  "rules_provenance": "rule 1 from the learning loop (trials/s6-1); rules 2-4 editorial for this brief, from the checks' findings on earlier tries"
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "carousel": {
+  "format": "carousel",
+  "theme": "weight_regain",
+  "doubt": "will_weight_come_back",
+  "claim_ids": [
+   "c000-01",
+   "c004-01",
+   "c005-04"
+  ],
+  "why": "Reel v5 West (WIN): the presenter-led beat plan, like Narayan v5; the average 0.4 kg a month regain after stopping any weight management medication (cleared in the studio: a population-level average across all such medicines, not a prediction for you, not only GLP-1), then what it means: among 28 randomised trials, weight was no different from control 1.4 years after stopping. Never c002-03.",
+  "reel": {
+   "hook": "the viewer's own question, short: 'Will the weight come back?'",
+   "order": "one numbers line from c000-01: after stopping a weight management medication, weight came back at an average 0.4 kg a month (95% confidence interval 0.3 to 0.5), in adults with overweight or obesity; on the same line keep 'on average', 'not a prediction for you' and the exact phrase 'not only GLP-1' (the only allowed mention of GLP-1; never name another drug)",
+   "why_claim": "c004-01",
+   "brand_line": "Before you start, hear it from a doctor, not a reel.",
+   "why": "SHORT (at most 24 spoken words): what the average means over time, from c004-01 only ('Among 28 randomised trials, weight was no different from the comparison group 1.4 years after stopping.'); the 'setting' line of this scene names who was studied, copied exactly from the numbers line; say plainly it is an average, not a prediction for you",
+   "message": "the message and every caption line say it is an average across all weight management medicines, not only GLP-1 (that exact phrase), and not a prediction for you"
+  }
+ },
+ "static": {
+  "format": "static",
+  "theme": "weight_regain",
+  "doubt": "will_weight_come_back",
+  "claim_ids": [
+   "c000-01",
+   "c004-01",
+   "c005-04"
+  ],
+  "why": "Reel v5 West (WIN): the presenter-led beat plan, like Narayan v5; the average 0.4 kg a month regain after stopping any weight management medication (cleared in the studio: a population-level average across all such medicines, not a prediction for you, not only GLP-1), then what it means: among 28 randomised trials, weight was no different from control 1.4 years after stopping. Never c002-03. Static: one headline with the 0.4 kg average, on the same card \"on average\", \"not a prediction for you\" and \"not only GLP-1\"."
+ }
+}

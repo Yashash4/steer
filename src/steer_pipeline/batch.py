@@ -24,6 +24,7 @@ from .checks import load_boundaries, writable
 from .write import FINDINGS, pick_brief
 
 REPO = Path(__file__).resolve().parents[3]
+BRIEFS = REPO / "code" / "briefs"   # curated briefs (editorial input, like boundaries): <pmcid>.json = {"carousel": brief, "static": brief}
 ROTATION = ["carousel", "static", "reel"]
 REELS, MAX_DOUBT, N_CLAIMS_DEFAULT = 2, 2, 4
 READY = "draft_pending_review"
@@ -52,7 +53,12 @@ def read_papers(path: str | Path) -> list[str]:
     return [ln.strip() for ln in Path(path).read_text().splitlines() if ln.strip() and not ln.strip().startswith("#")]
 
 
-def usable_cells(con, sources: list[str]) -> tuple[list[dict], list[dict]]:
+def load_curated(pmcid: str, folder: Path = BRIEFS) -> dict:
+    f = folder / f"{pmcid}.json"
+    return json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+
+
+def usable_cells(con, sources: list[str], briefs_dir: Path = BRIEFS) -> tuple[list[dict], list[dict]]:
     """(cells, papers). A cell holds the usable claims of one paper x theme x doubt; it can carry a post only with a
     finding/number claim. papers: per paper the run, pmcid, counts."""
     cells, papers = [], []
@@ -64,7 +70,7 @@ def usable_cells(con, sources: list[str]) -> tuple[list[dict], list[dict]]:
         usable = {i: c for i, c in claims.items() if writable(c, b)}
         papers.append({"source": src, "pmcid": pmcid, "run_id": run, "stored": len(claims), "usable": len(usable),
                        "cleared_in_studio": sum(1 for c in usable.values() if c.get("s4_cleared"))})
-        by = {}
+        curated, by = load_curated(pmcid, briefs_dir), {}
         for c in usable.values():
             lab = c["labels"]
             for d in lab["doubts"]:
@@ -74,7 +80,8 @@ def usable_cells(con, sources: list[str]) -> tuple[list[dict], list[dict]]:
         for (theme, d), cs in by.items():
             if any(c["claim_type"] in FINDINGS for c in cs):
                 cells.append({"pmcid": pmcid, "run_id": run, "theme": theme, "doubt": d, "short": learn.LONG[d],
-                              "claims": sorted(cs, key=lambda c: c["claim_id"])})
+                              "claims": sorted(cs, key=lambda c: c["claim_id"]),
+                              "curated": curated, "paper_usable": set(usable)})
     return cells, papers
 
 
@@ -89,10 +96,14 @@ def scores(learn_dir: str | Path) -> tuple[dict, int]:
 
 def brief_for(cell: dict, used: set, fmt: str, n: int = N_CLAIMS_DEFAULT) -> dict | None:
     """pick_brief on the cell's claims not yet used; None when no finding/number is left."""
+    cur = (cell.get("curated") or {}).get(fmt)   # the paper's curated brief for this format, once, when its claims are all usable
+    if cur and (cur["theme"], cur["doubt"]) == (cell["theme"], cell["doubt"]) and not set(cur["claim_ids"]) & used \
+            and set(cur["claim_ids"]) <= cell.get("paper_usable", set()):
+        return cur | {"brief_source": f"curated brief code/briefs/{cell['pmcid']}.json"}
     left = [c for c in cell["claims"] if c["claim_id"] not in used]
     if not any(c["claim_type"] in FINDINGS for c in left):
         return None
-    return pick_brief(left, fmt, n)
+    return pick_brief(left, fmt, n) | {"brief_source": "automatic brief"}
 
 
 def key(cell: dict) -> tuple:
@@ -118,7 +129,9 @@ def plan_week(cells: list[dict], score_rows: dict, start: date, days: int = 7, n
     """{slots, conflicts}. Day by day the best-scoring cell that keeps the constraints (depth-first, so a dead end backs up);
     when no full plan exists or a constraint check fails, slots is empty and the conflict says why."""
     opp = lambda c: score_rows.get(c["short"], {}).get("opp", 0.0)
-    order = sorted(cells, key=lambda c: (-opp(c), c["pmcid"], c["theme"], c["doubt"]))
+    has_curated = lambda c: any((v["theme"], v["doubt"]) == (c["theme"], c["doubt"]) for v in (c.get("curated") or {}).values())
+    # equal scores: a cell with a curated brief first, then paper id
+    order = sorted(cells, key=lambda c: (-opp(c), not has_curated(c), c["pmcid"], c["theme"], c["doubt"]))
     fmts = [ROTATION[i % len(ROTATION)] for i in range(days)]
     deepest = [0]
 
@@ -151,12 +164,12 @@ def plan_week(cells: list[dict], score_rows: dict, start: date, days: int = 7, n
         prev = got[i - 1][0]["theme"] if i else None
         slots.append({"slot": i + 1, "date": d.isoformat(), "weekday": d.strftime("%a"), "format": fmts[i], "pmcid": c["pmcid"],
                       "run_id": c["run_id"], "theme": c["theme"], "doubt": c["doubt"], "short": c["short"], "claims": b["claim_ids"],
-                      "opp": r.get("opp"), "reason": (
+                      "opp": r.get("opp"), "brief_source": b["brief_source"], "reason": (
                           f"best-scoring cell still free: {c['pmcid']} {c['theme']} x {c['doubt']}; opp({c['short']}) = "
                           f"{r.get('opp', 0.0):.4f} (benchmark posts {r.get('k', 0)}/{r.get('n', 0)}, our posts {r.get('c', 0)}/{r.get('m', 0)}, "
                           f"flags+rejections {r.get('flags_rejections', 0)}); theme differs from the day before"
                           f"{' (' + prev + ')' if prev else ' (first day)'}; doubt {c['short']} used {seen[c['short']]} of {MAX_DOUBT}; "
-                          f"claims {b['claim_ids']} ({b['why'].split(';')[0]})")})
+                          f"claims {b['claim_ids']}; {b['brief_source']}")})
     bad = check_plan(slots, days)
     return {"slots": [], "conflicts": bad} if bad else {"slots": slots, "conflicts": []}
 
@@ -246,7 +259,11 @@ def fill_slot(slot: dict, cell: dict, used: set, ctx: dict) -> dict:
             att["codes"] = [type(e).__name__]
             continue
         folder = Path(rec["folder"])
-        att |= {"post_id": rec["post_id"], "folder": str(folder.relative_to(week)), "status": rec["status"]}
+        tp = Path(rec["folder"]) / "trace.json"
+        if tp.exists():   # the trace says which brief the post was written from
+            tr = json.loads(tp.read_text())
+            tp.write_text(json.dumps(tr | {"brief_source": brief["brief_source"]}, ensure_ascii=False, indent=1), encoding="utf-8")
+        att |= {"brief_source": brief["brief_source"], "post_id": rec["post_id"], "folder": str(folder.relative_to(week)), "status": rec["status"]}
         if rec["status"] != READY:
             att["codes"] = blocked_codes(rec, folder)
             continue
@@ -259,7 +276,8 @@ def fill_slot(slot: dict, cell: dict, used: set, ctx: dict) -> dict:
             hi = {"status": "failed", "failures": [type(e).__name__]}
         att["hinglish"] = hi
         if slot["format"] == "reel":
-            main = next((i for i in rec["brief"]["claim_ids"] if i in {s["claim_id"] for s in rec["sources"]}), rec["sources"][0]["claim_id"])
+            tl = json.loads((folder / "trace.json").read_text())["lines"]   # the first claim the post's own lines use
+            main = next((i for ln in tl for i in ln["claim_ids"] if i in {s["claim_id"] for s in rec["sources"]}), rec["sources"][0]["claim_id"])
             try:
                 tr = ctx["reel"](folder, ctx["con"], ctx["settings"], engine="remotion",
                                  v4={"broll": {"lane": str(ctx["broll"][slot["slot"] % len(ctx["broll"])])}, "v5": True,
@@ -278,7 +296,7 @@ def fill_slot(slot: dict, cell: dict, used: set, ctx: dict) -> dict:
                 att["codes"] = [type(e).__name__]
                 continue
         return out | {"status": "filled", "post_id": rec["post_id"], "folder": att["folder"], "claims": rec["brief"]["claim_ids"],
-                      "hinglish": hi["status"] == "passed", "hook": hook_of(rec), "brief_why": rec["brief"]["why"],
+                      "hinglish": hi["status"] == "passed", "brief_source": brief["brief_source"], "hook": hook_of(rec), "brief_why": rec["brief"]["why"],
                       "post_status": rec["status"], "codes": [], "wall_seconds": round(time.time() - t0, 1), **usage(router)}
     return out | {"codes": sorted({c for a in attempts for c in a.get("codes", [])}), "wall_seconds": round(time.time() - t0, 1), **usage(router)}
 
@@ -335,14 +353,14 @@ def contact_sheet(week: Path, slots: list[dict], out: Path) -> None:
 
 
 def week_md(week_id: str, header: str, slots: list[dict], conflicts: list[str]) -> str:
-    rows = ["| Day | Format | Paper | Doubt | Hook | Status | Post | Hinglish |", "|---|---|---|---|---|---|---|---|"]
+    rows = ["| Day | Format | Paper | Doubt | Hook | Status | Post | Brief | Hinglish |", "|---|---|---|---|---|---|---|---|---|"]
     for s in slots:
         ok = s["status"] == "filled"
         rows.append(f"| {s['weekday']} {s['date']} 19:00 IST | {s['format']} | {s['pmcid']} | {s['short']} | "
                     f"{(s.get('hook') or '').replace('|', '/')} | {'pending doctor review' if ok else 'slot unfilled (' + ', '.join(s['codes']) + ')'} | "
-                    f"{s['post_id'] + ' (' + s['folder'] + ')' if ok else '-'} | {'yes' if s.get('hinglish') else 'no'} |")
+                    f"{s['post_id'] + ' (' + s['folder'] + ')' if ok else '-'} | {(s.get('brief_source') or '').replace('code/briefs/', '').replace(' brief ', ' ') or '-'} | {'yes' if s.get('hinglish') else 'no'} |")
     why = [f"- {s['weekday']} {s['date']}: {s['reason']}" for s in slots]
-    return "\n".join([header, "", f"Week of {week_id}. Posts go out at 19:00 IST (week.ics); this is a draft plan, not a publishing schedule.",
+    return "\n".join([header, "", f"The week starts {date.fromisoformat(week_id).strftime('%a %d %b %Y')}. Posts go out at 19:00 IST (week.ics); this is a draft plan, not a publishing schedule.",
                       "", *rows, "", "Why each slot", "", *why, *(["", "Conflicts", "", *[f"- {c}" for c in conflicts]] if conflicts else []), ""])
 
 

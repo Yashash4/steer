@@ -194,3 +194,27 @@ def test_the_ics_is_a_valid_calendar():
         datetime.strptime(props["DTSTAMP"][1], "%Y%m%dT%H%M%SZ")
     d = dict((p, v) for p, _, v in comps[3]["props"])
     assert d["SUMMARY"] == "Will I lose muscle\\, on a GLP-1\\; really?" and "\\n" in d["DESCRIPTION"]
+
+
+def curated_cell():
+    c = cell("PMC1", "t_lean", "will_i_lose_muscle")
+    cur = {"format": "carousel", "theme": "t_lean", "doubt": "will_i_lose_muscle", "claim_ids": ["c000", "c001", "c006"], "why": "hand-made"}
+    return c | {"curated": {"carousel": cur}, "paper_usable": {"c000", "c001", "c006", "c002"}}
+
+
+def test_the_curated_brief_is_chosen_when_present_and_the_automatic_one_otherwise():
+    c = curated_cell()
+    b = batch.brief_for(c, set(), "carousel")
+    assert b["why"] == "hand-made" and b["brief_source"] == "curated brief code/briefs/PMC1.json"
+    assert batch.brief_for(c, set(), "static")["brief_source"] == "automatic brief"       # no curated brief for that format
+    assert batch.brief_for(c, {"c001"}, "carousel")["brief_source"] == "automatic brief"  # its claims already used
+    assert batch.brief_for(c | {"paper_usable": {"c000"}}, set(), "carousel")["brief_source"] == "automatic brief"  # not all usable
+    assert batch.brief_for(CELLS[0], set(), "carousel")["brief_source"] == "automatic brief"
+    p = batch.plan_week([c] + CELLS[1:], SCORES, START)["slots"]
+    assert p[0]["brief_source"].startswith("curated") and p[2]["brief_source"] == "automatic brief"
+
+
+def test_the_shipped_curated_briefs_are_well_formed():
+    for pm in ("PMC8006839", "PMC12776922", "PMC13461373"):
+        for fmt, b in batch.load_curated(pm).items():
+            assert b["format"] == fmt and b["claim_ids"] and b["theme"] and b["doubt"]

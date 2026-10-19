@@ -1,0 +1,31 @@
+{
+ "carousel": {
+  "format": "carousel",
+  "theme": "insulin_resistance",
+  "doubt": "is_it_for_me",
+  "claim_ids": [
+   "c004-01",
+   "c004-00",
+   "c004-05"
+  ],
+  "why": "Reel v5 (WIN): the presenter-led beat plan; women 5.27x then men 2.99x with BMI under 25 in one line, the authors' hedged reason (c004-05), what it means for the viewer",
+  "reel": {
+   "hook": "challenge the belief that a normal BMI means low diabetes risk, in the reel's own terms (e.g. 'Normal BMI, so diabetes is far away?')",
+   "order": "women first (the bigger number leads), then men, with 'and' between them; each comparison wording from its own claim's quote; write the threshold with its unit exactly as the claims give it ('BMI under 25 kg/m2'); never put 'men' or 'women' directly before a number (the voice runs them together): say '2.99 times higher in men'",
+   "why_claim": "c004-05",
+   "brand_line": "Before you start, hear it from a doctor, not a reel.",
+   "why": "SHORT (at most 24 spoken words), keeping the hedge, for example 'The authors suggest weight and insulin resistance may not be the main drivers here, and the body making less insulin may be more important.'; who was studied goes in a separate 'setting' line of this scene, copied exactly from the numbers line; the spoken why line itself names the group ('in South Asians'), since it is judged on its own",
+   "message": "the message and every caption line carry who was studied too (adults aged 45 and over in Chennai, Delhi and Karachi)"
+  }
+ },
+ "static": {
+  "format": "static",
+  "theme": "insulin_resistance",
+  "doubt": "is_it_for_me",
+  "claim_ids": [
+   "c004-01",
+   "c004-00"
+  ],
+  "why": "Static v5 (WIN): the headline (a framing line, shown large) is exactly \"Normal BMI, so diabetes is far away?\" (never a body descriptor such as lean or slim as the hook); the number card is c004-01 with who was studied before a colon (South Asians aged 45 and over in Chennai, Delhi and Karachi, BMI under 25 kg/m2) and the women 5.27 times then men 2.99 times, each with its comparison group; never put men or women directly before a number"
+ }
+}

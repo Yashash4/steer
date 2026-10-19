@@ -155,7 +155,7 @@ uv run steer eval --db steer.db --out eval [--live]                             
 uv run steer learn --urls benchmark-posts.txt --db steer.db --out learn [--offline]  # S6 weekly loop
 ```
 
-`steer batch` (S8) does not exist yet; loop over your papers in a shell.
+`steer batch --papers <file> --week 2026-10-20 --from-store <db> --out <dir>` (S8) plans a 7-day week (it starts Tue 20 Oct 2026) from the stored runs, fills each slot (write and check, render, Hinglish caption, and for two slots a voice-over reel), and writes week.json, week.md, week.ics, a contact sheet and a run report. A paper's curated brief (`code/briefs/<pmcid>.json`) is used when it exists, else the automatic brief. Without `--from-store` it exits 2 ("not supported in this build").
 
 ## Reference
 
