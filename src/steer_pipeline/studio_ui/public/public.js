@@ -87,7 +87,8 @@
     D.posts.forEach(function (p) {
       var st = p.stages;
       out += '<section class="card post" id="' + esc(p.id) + '" style="margin-top:18px"><h2 style="margin-top:0">' + esc(p.id) + ' <span class="small muted">' + esc(p.format || "") + " &middot; " + esc(D.papers[p.paper] ? D.papers[p.paper].short : "") + "</span></h2>" +
-        '<p><span class="chip st-needs">' + esc(p.status) + "</span></p>" +
+        '<p><span class="chip st-needs">' + esc(p.status) + "</span>" +
+        (p.superseded_by ? ' <span class="chip">earlier draft (superseded by <a href="#' + esc(p.superseded_by) + '">' + esc(p.superseded_by) + "</a>)</span>" : "") + "</p>" +
         '<ol class="stages">' + ["code", "layout", "editorial", "clinical"].map(function (k) { return "<li><b>" + ({ code: "Code checks", layout: "Layout check", editorial: "Editorial review", clinical: "Clinical approval" })[k] + "</b>: " + esc(st[k].words) + "</li>"; }).join("") + "</ol>" +
         (p.message ? "<p><strong>Message.</strong> " + esc(p.message) + "</p>" : "") +
         (p.pngs.length ? '<div class="slides" style="margin:12px 0">' + p.pngs.map(function (u, i) { return '<a href="' + esc(u) + '"><img alt="Slide ' + (i + 1) + " of " + esc(p.id) + '" loading="lazy" style="width:100%;height:auto;border:1px solid var(--clay-text)" src="' + esc(u) + '"></a>'; }).join("") + "</div>" : '<p class="muted">No rendered images for this post.</p>') +

@@ -171,3 +171,12 @@ def test_the_ledger_has_a_per_claim_anchor_and_scrolls_to_it(bundle):
     js = (out / "public.js").read_text()
     assert '"claim-" + String(k).replace("/", "-")' in js and 'id="\' + esc(aid(c.key))' in js
     assert "location.hash" in js and "scrollIntoView" in js and "el.open = true" in js
+
+
+def test_an_older_draft_is_labelled_superseded_by_the_newest_of_its_paper_and_format():
+    from steer_pipeline import studio
+    posts = [{"id": "old", "paper": "P", "format": "carousel", "status": "awaiting editorial review", "written_at": "2026-10-18T10:00"},
+             {"id": "new", "paper": "P", "format": "carousel", "status": "awaiting editorial review", "written_at": "2026-10-18T13:00"},
+             {"id": "blk", "paper": "P", "format": "carousel", "status": "blocked (X)", "written_at": "2026-10-18T14:00"},
+             {"id": "st", "paper": "P", "format": "static", "status": "awaiting editorial review", "written_at": "2026-10-18T09:00"}]
+    assert studio.superseded_by(posts) == {"old": "new"}   # a blocked post never supersedes; another format is separate

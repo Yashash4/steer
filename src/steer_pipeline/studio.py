@@ -478,6 +478,7 @@ def data(con, docs: dict, claims: dict, posts: dict, reviewers: dict[str, str], 
                           "reasoning": p.get("reasoning"), "brief": p.get("brief"),
                           "pngs": [f"files/{pid}/{n}" for n in (p.get("render") or {}).get("pngs", [])],
                           "has_reel": (Path(p["folder"]) / "reel.mp4").exists(), "folder": p["folder"],
+                          "written_at": p.get("written_at"),
                           "lines": [{"path": ln["path"], "kind": ln["kind"], "text": ln["text"], "claim_ids": ln["claim_ids"],
                                      "failures": ln.get("failures", []), "crosscheck": ln.get("crosscheck")} for ln in lines],
                           "current_failures": p.get("current_failures") or [], "write_failures": p.get("write_failures") or []})
@@ -697,6 +698,16 @@ def _merge_into(con, other: str | Path) -> None:
     con.execute("DETACH DATABASE o")
 
 
+def superseded_by(posts: list[dict]) -> dict[str, str]:
+    """{post id: the newer post id} derived from the data: per paper and format, the newest post that is not blocked is
+    the current one, and every older non-blocked post is an earlier draft superseded by it."""
+    live = [p for p in posts if not str(p.get("status", "")).startswith("blocked")]
+    newest = {}
+    for p in sorted(live, key=lambda p: p.get("written_at") or ""):
+        newest[(p.get("paper"), p.get("format"))] = p["id"]
+    return {p["id"]: newest[(p.get("paper"), p.get("format"))] for p in live if newest[(p.get("paper"), p.get("format"))] != p["id"]}
+
+
 def public_snapshot(snap: dict, acts: list[dict], reel_of) -> dict:
     """Whitelist what the public copy may carry: no folders, no model endpoints, no reviewer list, no ids that only the
     live studio needs. The review history is the append-only log as recorded."""
@@ -710,6 +721,9 @@ def public_snapshot(snap: dict, acts: list[dict], reel_of) -> dict:
               "lines": [{k: ln[k] for k in ("path", "kind", "text", "claim_ids")} | {"failures": [f["code"] for f in ln["failures"]],
                         "crosscheck": (ln.get("crosscheck") or {}).get("verdict") if isinstance(ln.get("crosscheck"), dict) else None}
                         for ln in p["lines"]]} for p in snap["posts"]]
+    sup = superseded_by(snap["posts"])
+    for p in posts:
+        p["superseded_by"] = sup.get(p["id"])
     history = [{"id": a["id"], "at": a["at"], "reviewer": a["reviewer"], "role": a["role"], "action": a["action"],
                 "target": keyname.get(a["target"], a["target"]), "target_kind": a["target_kind"], "clears": a.get("clears"),
                 "revokes": a.get("revokes"), "reason": a.get("reason"), "after_status": a.get("after_status")} for a in acts]
