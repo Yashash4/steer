@@ -1,8 +1,13 @@
 # Content boundaries for Laverde LP et al., Int J Obes 2026 (DOI 10.1038/s41366-026-02118-y).
 # Editorial input, versioned. Claims are matched by text in their quote (canonical form).
-version = 2
+version = 3
 pmcid = "PMC13461373"
 doi = "10.1038/s41366-026-02118-y"
+# v3: the paper's own advice behind the post-level "nutrition and exercise" qualifier, gate-checked against the paper
+# (not an extracted claim, so without it no line could carry the qualifier truthfully)
+context_quotes = [
+  "However, it is essential to accompany drug treatment with nutritional and physical exercise interventions to preserve or improve muscle mass and optimize clinical outcomes",
+]
 
 # The absolute loss and the share of total weight must appear together, each with its own label next to it.
 [[require_with]]
