@@ -118,3 +118,21 @@ main{padding-top:28px}
 .q{font-size:46px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* the recap cards: Steer colours, full width, one at a time; swaps are instant (no transitions or animation) */
+.wrapped{display:flex;flex-direction:column;gap:14px;outline:none}
+.wcount{margin:0;text-align:center}
+.wcard{min-height:min(70vh,560px);border-radius:24px;padding:36px 28px;display:flex;flex-direction:column;justify-content:center;gap:16px;background:var(--maroon);color:var(--cream)}
+.wcard[hidden]{display:none}
+.wcard:nth-child(2){background:var(--rust)}
+.wcard:nth-child(3){background:var(--ink)}
+.wcard:nth-child(4){background:var(--rust)}
+.wcard h1,.wcard h2,.wcard .q{color:var(--cream);font-size:clamp(34px,7vw,56px)}
+.wcard .small,.wcard .wcmp{color:var(--blush)}
+.wmark{font:italic 600 30px var(--serif);margin:0;color:var(--blush)}
+.wbig{font:italic 600 clamp(120px,30vw,220px)/1 var(--serif);margin:0;color:var(--cream)}
+.wnum{font:500 22px var(--sans);margin:0}.wnum b{font:italic 600 clamp(56px,12vw,96px) var(--serif);display:block;line-height:1}
+.wquals{margin:0;padding-left:18px;color:var(--blush);font-size:15px}
+.wq{margin:0;padding-left:22px;font-size:21px;line-height:1.35;display:flex;flex-direction:column;gap:12px}
+.wnav{display:flex;gap:12px}.wnav .btn{flex:1}
+.wrapped{touch-action:pan-y}
