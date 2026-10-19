@@ -184,7 +184,7 @@ HI_SYSTEM = """You translate the checked English Instagram caption of a health p
 mixed, in Roman script, as Indians write on Instagram). Translate only; add no fact, advice, promise or number. Keep every
 number, unit, confidence interval, population and comparison group exactly as written. Keep each line's "keep" phrases in
 English, word for word, once each. Keep every number with its English unit and range words exactly as written ("0.4 kg",
-"1.4 years", "0.3 to 0.5", "95% confidence interval"). Where a line has "use one of", write one of those Hinglish phrases
+"1.4 years", "0.3 to 0.5", "95% confidence interval"), with any minus sign exactly as written ("-1.74 kg", never "1.74 kg kam"). Where a line has "use one of", write one of those Hinglish phrases
 there instead. Always say what was stopped ("dawai band karne ke baad" or "medicines band karne ke baad"), never only
 "rukne ke baad". Return the same lines in the same order, each with its kind and
 claim_ids."""
@@ -237,8 +237,9 @@ def hinglish_caption(folder: str | Path, con, settings: dict, router: Router | N
         hi[i] = ln
     fails = [f"line {i}: kind or claims changed" for i, (a, b) in enumerate(zip(en, hi))
              if a["kind"] != b["kind"] or a["claim_ids"] != b["claim_ids"]]
+    mags = lambda t: sorted(abs(v) for v in number_values(t))   # the sign is checked against the claim by check_post below
     fails += [f"line {i}: numbers {number_values(b['text'])} != {number_values(a['text'])}" for i, (a, b) in enumerate(zip(en, hi))
-              if number_values(a["text"]) != number_values(b["text"])]
+              if mags(a["text"]) != mags(b["text"])]
     fails += [f"line {i}: qualifier {p!r} not kept" for i, k in enumerate(keeps) for p in k if not _has(hi[i]["text"], p)]
     fails += [f"line {i}: none of {u} used" for i, us in enumerate(uses) for u in us if not any(_has(hi[i]["text"], p) for p in u)]
     post = record["post"] | {"caption": record["post"]["caption"] | {"lines": hi}}

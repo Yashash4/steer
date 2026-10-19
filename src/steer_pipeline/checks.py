@@ -158,10 +158,14 @@ def _avoid_applies(rule: dict, line: dict, claims: list[dict]) -> bool:
 DECREASE = re.compile(r"\b(?:fell|decreased|dropped|declined|lost|fall|decrease|drop|decline|loss|reduction)(?:\s+(?:by|of))?\s*$", re.I)
 
 
+DECREASE_HI = re.compile(r"^\s*(?:gira|giri|ghata|ghati|ghat gaya|ghat gayi|kam hua|kam hui|kam ho gaya|kam ho gayi)\b", re.I)
+
+
 def _after_decrease(text: str, token: str) -> bool:
-    """The number comes right after a decrease word ("fell 1.74 kg", "a loss of 5 kg"): its sign is in the word."""
+    """The number sits next to a decrease word, so its sign is in the word: before it ("fell 1.74 kg", "a loss of 5 kg"),
+    or a Hinglish verb after it ("1.74 kg gira", "1.74 kg kam hua")."""
     i = text.find(token)
-    return i > 0 and bool(DECREASE.search(text[:i]))
+    return i >= 0 and (bool(DECREASE.search(text[:i])) or bool(DECREASE_HI.match(text[i + len(token):])))
 
 
 def _negated(n) -> set[tuple]:

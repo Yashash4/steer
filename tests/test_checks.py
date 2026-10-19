@@ -550,3 +550,5 @@ def test_a_decrease_word_carries_the_sign_of_the_number():
     assert num("Absolute lean mass changed by -1.74 kg on average; results varied a lot between studies.") == []
     assert num("Absolute lean mass rose 1.74 kg on average; results varied a lot between studies.") == ["NUMBER_NOT_IN_CLAIM"]
     assert num("Absolute lean mass fell 2.74 kg on average; results varied a lot between studies.") == ["NUMBER_NOT_IN_CLAIM"]
+    assert num("Absolute lean mass 1.74 kg gira; results varied a lot between studies.") == []          # Hinglish caption
+    assert num("Absolute lean mass 1.74 kg badha; results varied a lot between studies.") == ["NUMBER_NOT_IN_CLAIM"]
