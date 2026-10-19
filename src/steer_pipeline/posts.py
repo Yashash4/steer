@@ -171,7 +171,9 @@ def reel_post(folder: str | Path, con, settings: dict, tts=None, transcribe=None
     if v4 is not None:   # the v4 edit: the claims' exact quotes for the evidence phone; the checks above passed (checklist)
         v4 = v4 | {"quotes": {i: c["quote"] for i, c in claims.items()}, "checked": True}
         if v4.get("db"):   # a CC BY paper with a page layout: the phone shows the real page, cropped around the quote
-            v4 = v4 | {"pages": evidence_pages(doc, claims, folder, Path(v4["db"]).parent / "studio-cache")}
+            used = {i for sc in script["scenes"] for ln in sc["lines"] for i in ln.get("claim_ids", [])}
+            v4 = v4 | {"pages": evidence_pages(doc, {i: c for i, c in claims.items() if i in used}, folder,
+                                               Path(v4["db"]).parent / "studio-cache")}
         if v4.get("pullback_claim"):   # the pull-back screenshot from the studio's public copy (licence rule applies)
             from .reel import studio_pullback_shot
             shot = folder / "studio-pullback.png"
@@ -262,12 +264,12 @@ def hinglish_caption(folder: str | Path, con, settings: dict, router: Router | N
     return {"status": "passed", "lines": len(hi), "keep_verbatim": keep}
 
 
-PHONE_ASPECT = 544 / 604   # the evidence phone's page area, height / width (Fx.tsx PhoneEvidence at 640 x 740 px)
+READABLE_PX = 34   # a quoted page line rendered this many px tall in the phone (text >= ~30 px)
 
 
 def evidence_pages(doc: dict, claims: dict, folder: Path, cache: Path) -> dict:
     """{claim_id: {image, boxes}} for a CC BY paper with a page layout (else {}): the claim's first page, rendered from
-    the ingested PDF (studio.page_image: SHA-256 checked) and cropped to the quote's own width and its S1
+    the ingested PDF (studio.page_image: SHA-256 checked) and cropped to the quoted lines (+1 line each side) at a readable size; its S1
     line boxes; boxes are those lines as fractions of the crop (the highlight is never invented)."""
     import pymupdf
     from .studio import DPI, Refused, cc_by, page_image
@@ -290,13 +292,14 @@ def evidence_pages(doc: dict, claims: dict, folder: Path, cache: Path) -> dict:
         x0, x1 = max(0.0, min(b[0] for b in boxes) - 12), min(pw, max(b[2] for b in boxes) + 12)   # the quote's own width
         w = x1 - x0
         top, bottom = min(b[1] for b in boxes), max(b[3] for b in boxes)
-        y_mid = (top + bottom) / 2
-        h = min(ph, w * PHONE_ASPECT, bottom - top + 140)   # the quote's lines + a few lines of context, not the whole page
-        y0 = min(max(0.0, y_mid - h / 2), ph - h)
+        line_h = (bottom - top) / len(boxes)
+        y0, h = max(0.0, top - line_h), min(ph, bottom + line_h) - max(0.0, top - line_h)   # the quoted lines + 1 line each side
         name = f"evidence-{cid}.jpg"
         pdf = pymupdf.open(cache / f"{doc['citation'].get('pmcid') or doc['document_id']}.pdf")
-        pdf[page - 1].get_pixmap(dpi=DPI * 2, clip=pymupdf.Rect(x0, y0, x1, y0 + h)).save(folder / name, jpg_quality=85)
-        out[cid] = {"image": str(folder / name), "name": name,
+        # rendered so the page's text is about 30 px tall (a line box ~ the font size): readable, so the phone pans along it
+        pix = pdf[page - 1].get_pixmap(dpi=round(72 * READABLE_PX / line_h), clip=pymupdf.Rect(x0, y0, x1, y0 + h))
+        pix.save(folder / name, jpg_quality=85)
+        out[cid] = {"image": str(folder / name), "name": name, "width": pix.width, "height": pix.height,
                     "boxes": [[round((b[0] - x0) / w, 4), round((b[1] - y0) / h, 4), round((b[2] - x0) / w, 4), round((b[3] - y0) / h, 4)]
                               for b in boxes]}
     return out

@@ -81,8 +81,11 @@ export const PhoneEvidence = (p: { e: Evidence; t: number; ink: string; accent: 
           color: "#7A5A50" }}>{e.header}</div>
         {e.image ? (
           <div style={{ position: "absolute", left: 0, right: 0, top: 160, bottom: 0, overflow: "hidden" }}>
-            <div style={{ position: "relative" }}>   {/* the boxes are fractions of the image, so they sit on it */}
-              <Img src={staticFile(e.image)} style={{ width: "100%", display: "block" }} />
+            <div style={e.width ? { position: "absolute", top: 40, left: 0, width: e.width, height: e.height,
+              // the readable strip of the quoted lines (text ~30 px), panned left to right across the evidence window
+              transform: `translateX(${-Math.max(0, e.width - (PW - 36) + 40) * clamp01((t - e.start - 0.6) / Math.max(1, e.end - e.start - 1.6))
+                - 0}px)` } : { position: "relative" }}>   {/* the boxes are fractions of the image, so they sit on it */}
+              <Img src={staticFile(e.image)} style={e.width ? { width: e.width, height: e.height, display: "block" } : { width: "100%", display: "block" }} />
               {e.boxes.map((b, i) => (
                 <div key={i} style={{ position: "absolute", left: `${b[0] * 100}%`, top: `${b[1] * 100}%`, width: `${(b[2] - b[0]) * 100}%`,
                   height: `${(b[3] - b[1]) * 100}%`, background: "rgba(192, 78, 42, 0.28)", borderBottom: `3px solid ${p.accent}` }} />
@@ -108,10 +111,11 @@ export const ChecklistView = (p: { c: Checklist; t: number; ink: string; accent:
       const k = easeOut((p.t - it.at) / 0.3);
       return (
         <div key={i} style={{ display: "flex", alignItems: "center", gap: 30, opacity: 0.25 + 0.75 * k }}>
-          <div style={{ width: 64, height: 64, borderRadius: 32, border: `4px solid ${p.accent}`, background: k > 0.5 ? p.accent : "transparent",
+          <div style={{ width: 64, height: 64, borderRadius: 32, border: `4px solid ${p.accent}`,
+            background: it.done && k > 0.5 ? p.accent : "transparent",   // a pending item is never ticked
             flex: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ width: 26, height: 14, borderLeft: "5px solid #F5EBDF", borderBottom: "5px solid #F5EBDF",
-              transform: `rotate(-45deg) scale(${k})`, marginTop: -6 }} />
+              transform: `rotate(-45deg) scale(${it.done ? k : 0})`, marginTop: -6 }} />
           </div>
           <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: p.low ? 38 : 46, lineHeight: 1.2, color: p.ink }}>{it.text}</div>
         </div>

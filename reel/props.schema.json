@@ -311,7 +311,8 @@
                     "additionalProperties": false,
                     "required": [
                       "text",
-                      "at"
+                      "at",
+                      "done"
                     ],
                     "properties": {
                       "text": {
@@ -319,6 +320,10 @@
                       },
                       "at": {
                         "$ref": "#/$defs/seconds"
+                      },
+                      "done": {
+                        "type": "boolean",
+                        "description": "false for the pending item (doctor review): never drawn ticked"
                       }
                     }
                   }
@@ -543,7 +548,7 @@
             },
             {
               "type": "array",
-              "minItems": 2,
+              "minItems": 1,
               "maxItems": 2,
               "items": {
                 "type": "object",
@@ -644,6 +649,12 @@
                 },
                 "end": {
                   "$ref": "#/$defs/seconds"
+                },
+                "width": {
+                  "type": "integer"
+                },
+                "height": {
+                  "type": "integer"
                 }
               }
             }

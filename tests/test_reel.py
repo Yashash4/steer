@@ -567,3 +567,18 @@ def test_no_line_art_on_the_sources_card_when_the_citation_needs_the_room():
     short, long = {"scenes": [sc(200)]}, {"scenes": [sc(300)]}
     reel.reel_lineart(short, "lean mass", "will_i_lose_muscle"); reel.reel_lineart(long, "lean mass", "will_i_lose_muscle")
     assert "lineart" not in long["scenes"][0]
+
+
+def test_a_one_number_line_gets_one_hero_card():
+    t = "In patients with obesity, absolute lean mass changed by -1.74 kg; results varied a lot between studies."
+    cards = reel.make_hero_cards(reel.display_tokens(t, [i * 0.3 for i in range(len(t.split()))]))
+    assert len(cards) == 1 and [q["show"] for q in cards[0]["parts"] if q["role"] == "hero"] == ["-1.74\u00a0kg;"]
+    assert " ".join(q["text"] for q in cards[0]["parts"]) == reel.display(t)
+
+
+def test_health_scenes_cycle_the_neutral_clips():
+    sc = lambda i, t: {"index": i, "kind": "point", "start": i * 5.0, "end": i * 5.0 + 5,
+                       "lines": [{"kind": "health", "text": t, "start": i * 5.0}]}
+    scenes = [sc(0, "Lean mass changed by -1.74 kg."), sc(1, "Lean mass as a share of total weight rose 1.81%.")]
+    plan = reel.edit_plan(scenes, {"broll": {"lane": "l.mp4", "balcony": "b.mp4", "thali": "t.mp4"}}, v5=True)
+    assert [p["broll"] for p in plan] == ["lane", "balcony"]

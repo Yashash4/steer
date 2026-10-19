@@ -15,8 +15,8 @@ export type Sources = {
 };
 export type Broll = { video: string; start: number; end: number };
 export type Zoom = { at: number; dur: number; scale: number };
-export type Evidence = { kind: "page" | "quote"; header: string; quote: string; image: string | null; boxes: number[][]; start: number; end: number };
-export type Checklist = { items: { text: string; at: number }[] };
+export type Evidence = { kind: "page" | "quote"; header: string; quote: string; image: string | null; boxes: number[][]; start: number; end: number; width?: number; height?: number };
+export type Checklist = { items: { text: string; at: number; done: boolean }[] };
 export type Presenter = { video: string; start: number; end: number; label: string };
 export type Scene = {
   kind: "hook" | "point" | "brand" | "cta" | "status" | "checklist" | "pullback" | "sources"; ground: Ground; start: number; end: number;
