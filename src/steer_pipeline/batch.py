@@ -361,6 +361,8 @@ def week_md(week_id: str, header: str, slots: list[dict], conflicts: list[str]) 
                     f"{s['post_id'] + ' (' + s['folder'] + ')' if ok else '-'} | {(s.get('brief_source') or '').replace('code/briefs/', '').replace(' brief ', ' ') or '-'} | {'yes' if s.get('hinglish') else 'no'} |")
     why = [f"- {s['weekday']} {s['date']}: {s['reason']}" for s in slots]
     return "\n".join([header, "", f"The week starts {date.fromisoformat(week_id).strftime('%a %d %b %Y')}. Posts go out at 19:00 IST (week.ics); this is a draft plan, not a publishing schedule.",
+                      "Method: cells ordered by the S6 score opp(doubt); equal scores: a cell with a curated brief first, then paper id; "
+                      "one slot per day, no theme on consecutive days, each doubt at most 2 times; formats rotate carousel, static, reel.",
                       "", *rows, "", "Why each slot", "", *why, *(["", "Conflicts", "", *[f"- {c}" for c in conflicts]] if conflicts else []), ""])
 
 
