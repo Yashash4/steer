@@ -181,3 +181,50 @@ def posts_page(db, post_dirs: list[Path], reviewers_path, order: list[str] = (),
         body.append(_blocked(Path(blocked_dir)))
     return _page("Finished posts", POSTS_CSS + "".join(body), "The final drafts, with every health line opened up to the quote, the page, the "
                  "gate result and the independent cross-check behind it.", font_base="../ps1/fonts/", back="../index.html")
+
+
+# --- "A week of content": the steer batch run, as a page (week/index.html) ---
+
+WEEK_ASSETS = re.compile(r"^(slide-\d+\.png|static\.png|reel\.mp4|caption\.txt|caption-hinglish\.txt)$")
+
+
+def week_page(run: Path, out: Path) -> Path:
+    """week/index.html from a `steer batch` run folder (week.json, week.md, week.ics, contact-sheet.png): the calendar,
+    each filled slot with its images, reel and captions (copied), each unfilled slot with its codes. Text comes from
+    week.json and week.md's own lines; only the filled posts' assets are copied."""
+    week = json.loads((run / "week.json").read_text())
+    head = [ln for ln in (run / "week.md").read_text().splitlines() if ln.strip()][:3]   # the top line, start, method
+    dst = out / "week"
+    dst.mkdir(parents=True, exist_ok=True)
+    for f in ("week.ics", "contact-sheet.png"):
+        shutil.copy(run / f, dst / f)
+    rows = []
+    for s in week["slots"]:
+        day = f'{_E(s["weekday"])} {_E(s["date"])}'
+        what = f'{_E(s["format"])} · {_E(s["pmcid"])} · {_E(s.get("short") or s.get("doubt") or "")}'
+        if s["status"] != "filled":
+            rows.append(f'<section class="card"><h2>{day}</h2><p class="small">{what}</p>'
+                        f'<p><span class="code">unfilled</span> {_E(", ".join(s.get("codes") or []))}</p>'
+                        f'<p class="small">{_E(s.get("reason", ""))}</p></section>')
+            continue
+        src, pid = run / s["folder"], s["post_id"]
+        (dst / pid).mkdir(exist_ok=True)
+        files = sorted(f.name for f in src.iterdir() if WEEK_ASSETS.match(f.name))
+        for f in files:
+            shutil.copy(src / f, dst / pid / f)
+        imgs = "".join(f'<a href="{pid}/{f}"><img src="{pid}/{f}" alt="{_E(f)}" loading="lazy" style="height:200px;width:auto"></a>'
+                       for f in files if f.endswith(".png"))
+        links = [f'<a href="{pid}/reel.mp4">Watch the reel (MP4)</a>'] if "reel.mp4" in files else []
+        links += [f'<a href="{pid}/caption.txt">Caption (English)</a>'] if "caption.txt" in files else []
+        links += [f'<a href="{pid}/caption-hinglish.txt">Caption (Hinglish)</a>'] if "caption-hinglish.txt" in files else []
+        rows.append(f'<section class="card"><h2>{day}</h2><p class="small">{what} · {_E(pid)} · '
+                    f'{_E(s.get("brief_source", ""))}</p><div style="display:flex;gap:8px;overflow-x:auto">{imgs}</div>'
+                    f'<p>{" · ".join(links)}</p><p class="small">{_E(s.get("reason", ""))}</p></section>')
+    md = lambda t: re.sub(r"`([^`]+)`", r"<code>\1</code>", _E(t))   # week.md's inline code, as code
+    body = ("".join(f"<p>{md(ln.lstrip('# '))}</p>" for ln in head)
+            + '<p><a href="week.ics">Download the calendar (week.ics)</a></p>'
+            + '<p><img src="contact-sheet.png" alt="the week at a glance"></p>' + "".join(rows))
+    page = dst / "index.html"
+    page.write_text(_page("A week of content: steer batch", body, font_base="../ps1/fonts/", back="../index.html"),
+                    encoding="utf-8")
+    return page

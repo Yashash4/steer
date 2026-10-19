@@ -114,6 +114,9 @@ def main(argv: list[str] | None = None) -> int:
     le_p = spp.add_parser("learned", help="'What the pipeline learned' from a records folder (lessons.json + images)")
     le_p.add_argument("--records", required=True)
     le_p.add_argument("--out", required=True, help="the site folder (code/site)")
+    wk_p = spp.add_parser("week", help="'A week of content' from a steer batch run folder")
+    wk_p.add_argument("--run", required=True, help="the week folder (week.json, week.md, week.ics, contact-sheet.png)")
+    wk_p.add_argument("--out", required=True, help="the site folder (code/site)")
     po_p = spp.add_parser("posts", help="the finished-posts page: each health line with its stored quote, gate result and cross-check")
     po_p.add_argument("--db", required=True)
     po_p.add_argument("--posts", nargs="*", default=[], help="folders holding the written posts to show")
@@ -221,6 +224,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "site-pages":
         from . import sitepages
+        if args.page == "week":
+            print(f"wrote {sitepages.week_page(Path(args.run), Path(args.out))}", file=sys.stderr)
+            return 0
         if args.page == "learned":
             print(f"wrote {sitepages.learned_page(Path(args.records), Path(args.out))}", file=sys.stderr)
         else:

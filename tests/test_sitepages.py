@@ -62,3 +62,12 @@ def test_the_blocked_example_and_a_clean_posts_html(monkeypatch):
     h = posts_html(monkeypatch)
     assert "NUMBER_NOT_IN_CLAIM" in h and "never rendered and never published" in h and "post-bbbb0002" in h
     assert not re.search(r"trials/|/home|/tmp|<script|https?://", h)
+
+
+def test_week_page_shows_filled_and_unfilled_slots_and_copies_only_filled_assets(tmp_path):
+    page = sitepages.week_page(Path(__file__).parent / "fixtures" / "site_week", tmp_path).read_text()
+    assert "Planned by <code>steer batch</code>" in page and "NO_CLAIMS_LEFT" in page and "unfilled" in page
+    assert 'href="week.ics"' in page and (tmp_path / "week" / "week.ics").exists()
+    assert (tmp_path / "week" / "post-aaa" / "slide-01.png").exists()
+    assert not (tmp_path / "week" / "post-aaa" / "trace.json").exists()     # only the published assets are copied
+    assert "trials/" not in page and "run-x" not in page
