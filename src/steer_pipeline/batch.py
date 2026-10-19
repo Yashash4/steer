@@ -96,14 +96,15 @@ def scores(learn_dir: str | Path) -> tuple[dict, int]:
 
 def brief_for(cell: dict, used: set, fmt: str, n: int = N_CLAIMS_DEFAULT) -> dict | None:
     """pick_brief on the cell's claims not yet used; None when no finding/number is left."""
-    cur = (cell.get("curated") or {}).get(fmt)   # the paper's curated brief for this format, once, when its claims are all usable
-    if cur and (cur["theme"], cur["doubt"]) == (cell["theme"], cell["doubt"]) and not set(cur["claim_ids"]) & used \
-            and set(cur["claim_ids"]) <= cell.get("paper_usable", set()):
+    cur = (cell.get("curated") or {}).get(fmt)   # the paper's curated brief for this format (any slot of the family)
+    fits = cur and (cur["theme"], cur["doubt"]) == (cell["theme"], cell["doubt"]) and set(cur["claim_ids"]) <= cell.get("paper_usable", set())
+    if fits and not set(cur["claim_ids"]) & used:
         return cur | {"brief_source": f"curated brief code/briefs/{cell['pmcid']}.json"}
+    src = "automatic brief (next claim set; the curated set is already published this week)" if fits and set(cur["claim_ids"]) & used else "automatic brief"
     left = [c for c in cell["claims"] if c["claim_id"] not in used]
     if not any(c["claim_type"] in FINDINGS for c in left):
         return None
-    return pick_brief(left, fmt, n) | {"brief_source": "automatic brief"}
+    return pick_brief(left, fmt, n) | {"brief_source": src}
 
 
 def key(cell: dict) -> tuple:
@@ -241,17 +242,22 @@ def hook_of(rec: dict) -> str:
 
 def fill_slot(slot: dict, cell: dict, used: set, ctx: dict) -> dict:
     """Write (+ checks, render), Hinglish, and for a reel slot the v5 reel. One retry with the cell's next claim set."""
-    router, t0, tried, attempts = ctx["make_router"](), time.time(), set(used), []
+    router, t0, tried, attempts = ctx["make_router"](), time.time(), set(), []   # tried: claims of blocked automatic attempts
     week = ctx["week_dir"]
     out = slot | {"status": "unfilled", "post_id": None, "folder": None, "hinglish": False, "codes": [], "attempts": attempts}
-    for n in (1, 2):
-        brief = brief_for(cell, tried, "carousel" if slot["format"] == "reel" else slot["format"], ctx["n_claims"])
+    limit = 3
+    for n in (1, 2, 3):
+        if n > limit:
+            break
+        brief = brief_for(cell, used | tried, "carousel" if slot["format"] == "reel" else slot["format"], ctx["n_claims"])
         if brief is None:
             attempts.append({"attempt": n, "codes": ["NO_CLAIMS_LEFT"]})
             break
-        att = {"attempt": n, "claims": brief["claim_ids"]}
+        allowed = limit = 3 if brief["brief_source"].startswith("curated") else 2   # curated: like the hand runs; automatic: retry once
+        att = {"attempt": n, "claims": brief["claim_ids"], "tries_allowed": allowed}
         attempts.append(att)
-        tried |= set(brief["claim_ids"])
+        if allowed == 2:
+            tried |= set(brief["claim_ids"])
         try:
             rec = ctx["write"](ctx["con"], slot["run_id"], brief["format"], ctx["settings"], router=router, brief=brief,
                                out_dir=week / "posts")
@@ -262,7 +268,7 @@ def fill_slot(slot: dict, cell: dict, used: set, ctx: dict) -> dict:
         tp = Path(rec["folder"]) / "trace.json"
         if tp.exists():   # the trace says which brief the post was written from
             tr = json.loads(tp.read_text())
-            tp.write_text(json.dumps(tr | {"brief_source": brief["brief_source"]}, ensure_ascii=False, indent=1), encoding="utf-8")
+            tp.write_text(json.dumps(tr | {"brief_source": brief["brief_source"], "write_try": n, "write_tries_allowed": allowed}, ensure_ascii=False, indent=1), encoding="utf-8")
         att |= {"brief_source": brief["brief_source"], "post_id": rec["post_id"], "folder": str(folder.relative_to(week)), "status": rec["status"]}
         if rec["status"] != READY:
             att["codes"] = blocked_codes(rec, folder)
@@ -296,7 +302,7 @@ def fill_slot(slot: dict, cell: dict, used: set, ctx: dict) -> dict:
                 att["codes"] = [type(e).__name__]
                 continue
         return out | {"status": "filled", "post_id": rec["post_id"], "folder": att["folder"], "claims": rec["brief"]["claim_ids"],
-                      "hinglish": hi["status"] == "passed", "brief_source": brief["brief_source"], "hook": hook_of(rec), "brief_why": rec["brief"]["why"],
+                      "hinglish": hi["status"] == "passed", "brief_source": brief["brief_source"], "write_try": n, "hook": hook_of(rec), "brief_why": rec["brief"]["why"],
                       "post_status": rec["status"], "codes": [], "wall_seconds": round(time.time() - t0, 1), **usage(router)}
     return out | {"codes": sorted({c for a in attempts for c in a.get("codes", [])}), "wall_seconds": round(time.time() - t0, 1), **usage(router)}
 
@@ -358,7 +364,7 @@ def week_md(week_id: str, header: str, slots: list[dict], conflicts: list[str]) 
         ok = s["status"] == "filled"
         rows.append(f"| {s['weekday']} {s['date']} 19:00 IST | {s['format']} | {s['pmcid']} | {s['short']} | "
                     f"{(s.get('hook') or '').replace('|', '/')} | {'pending doctor review' if ok else 'slot unfilled (' + ', '.join(s['codes']) + ')'} | "
-                    f"{s['post_id'] + ' (' + s['folder'] + ')' if ok else '-'} | {(s.get('brief_source') or '').replace('code/briefs/', '').replace(' brief ', ' ') or '-'} | {'yes' if s.get('hinglish') else 'no'} |")
+                    f"{s['post_id'] + ' (' + s['folder'] + ')' if ok else '-'} | {((s.get('brief_source') or '').replace('code/briefs/', '').replace(' brief ', ' ') + (f" (try {s['write_try']})" if s.get('write_try') else '')) or '-'} | {'yes' if s.get('hinglish') else 'no'} |")
     why = [f"- {s['weekday']} {s['date']}: {s['reason']}" for s in slots]
     return "\n".join([header, "", f"The week starts {date.fromisoformat(week_id).strftime('%a %d %b %Y')}. Posts go out at 19:00 IST (week.ics); this is a draft plan, not a publishing schedule.",
                       "Method: cells ordered by the S6 score opp(doubt); equal scores: a cell with a curated brief first, then paper id; "
@@ -428,7 +434,8 @@ def batch(papers_file: str, week: str, db: str, out: str, settings: dict, days: 
     for s in plan["slots"]:
         c = by_key[(s["pmcid"], s["theme"], s["doubt"])]
         r = fill_slot(s, c, used.get(key(c), set()), ctx)
-        used.setdefault(key(c), set()).update(r["claims"] if r["status"] == "filled" else [x for a in r["attempts"] for x in a.get("claims", [])])
+        if r["status"] == "filled":   # only a published set is used up; a blocked one is free for the next slot
+            used.setdefault(key(c), set()).update(r["claims"])
         slots.append(r)
         print(f"slot {s['slot']} {s['date']} {s['format']}: {r['status']} {r['post_id'] or r['codes']}", flush=True)
     events = [{"date": s["date"], "uid": s["post_id"], "summary": s["hook"], "description": "\n".join(

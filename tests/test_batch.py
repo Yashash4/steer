@@ -207,14 +207,29 @@ def test_the_curated_brief_is_chosen_when_present_and_the_automatic_one_otherwis
     b = batch.brief_for(c, set(), "carousel")
     assert b["why"] == "hand-made" and b["brief_source"] == "curated brief code/briefs/PMC1.json"
     assert batch.brief_for(c, set(), "static")["brief_source"] == "automatic brief"       # no curated brief for that format
-    assert batch.brief_for(c, {"c001"}, "carousel")["brief_source"] == "automatic brief"  # its claims already used
+    assert batch.brief_for(c, {"c001"}, "carousel")["brief_source"].startswith("automatic brief (next claim set")  # already published
     assert batch.brief_for(c | {"paper_usable": {"c000"}}, set(), "carousel")["brief_source"] == "automatic brief"  # not all usable
     assert batch.brief_for(CELLS[0], set(), "carousel")["brief_source"] == "automatic brief"
     p = batch.plan_week([c] + CELLS[1:], SCORES, START)["slots"]
-    assert p[0]["brief_source"].startswith("curated") and p[2]["brief_source"] == "automatic brief"
+    assert p[0]["brief_source"].startswith("curated") and p[2]["brief_source"].startswith("automatic brief")
 
 
 def test_the_shipped_curated_briefs_are_well_formed():
     for pm in ("PMC8006839", "PMC12776922", "PMC13461373"):
         for fmt, b in batch.load_curated(pm).items():
             assert b["format"] == fmt and b["claim_ids"] and b["theme"] and b["doubt"]
+
+
+def test_a_curated_brief_gets_three_tries_with_the_same_claims_and_the_automatic_one_keeps_retry_once(tmp_path):
+    c = curated_cell()
+    ops = FakeOps(block_first=2)
+    r = batch.fill_slot(slot_for(c), c, set(), ops.ctx(tmp_path))
+    assert r["status"] == "filled" and r["write_try"] == 3 and len(ops.calls) == 3
+    assert ops.calls[0] == ops.calls[1] == ops.calls[2] == ["c000", "c001", "c006"]
+    assert r["brief_source"].startswith("curated")
+    ops = FakeOps(block_first=9)
+    r = batch.fill_slot(slot_for(c), c, set(), ops.ctx(tmp_path / "b"))
+    assert r["status"] == "unfilled" and len(ops.calls) == 3
+    ops = FakeOps(block_first=9)                       # the curated set already published: automatic, retry once
+    r = batch.fill_slot(slot_for(c), c, {"c000"}, ops.ctx(tmp_path / "c"))
+    assert len(ops.calls) == 2 and not set(ops.calls[0]) & {"c000"}
