@@ -285,8 +285,9 @@ def evidence_pages(doc: dict, claims: dict, folder: Path, cache: Path) -> dict:
         pw, ph = pages[page]["width"], pages[page]["height"]
         x0, x1 = max(0.0, min(b[0] for b in boxes) - 12), min(pw, max(b[2] for b in boxes) + 12)   # the quote's own width
         w = x1 - x0
-        y_mid = (min(b[1] for b in boxes) + max(b[3] for b in boxes)) / 2
-        h = min(ph, w * PHONE_ASPECT)
+        top, bottom = min(b[1] for b in boxes), max(b[3] for b in boxes)
+        y_mid = (top + bottom) / 2
+        h = min(ph, w * PHONE_ASPECT, bottom - top + 140)   # the quote's lines + a few lines of context, not the whole page
         y0 = min(max(0.0, y_mid - h / 2), ph - h)
         name = f"evidence-{cid}.jpg"
         pdf = pymupdf.open(cache / f"{doc['citation'].get('pmcid') or doc['document_id']}.pdf")

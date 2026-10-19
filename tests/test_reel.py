@@ -558,3 +558,12 @@ def test_a_v5_voice_over_brand_scene_gets_the_neutral_clip():
                "lines": [{"kind": "brand", "text": "Before you start, hear it from a doctor, not a reel.", "start": 0}]}]
     assert reel.edit_plan(scenes, {"broll": {"lane": "l.mp4"}}, v5=True)[0]["broll"] == "lane"
     assert reel.edit_plan(scenes, {"broll": {"lane": "l.mp4"}}, v5=False)[0]["broll"] is None
+
+
+def test_no_line_art_on_the_sources_card_when_the_citation_needs_the_room():
+    entry = lambda n: {"before": "x" * n, "journal": "J", "after": "."}
+    sc = lambda n: {"kind": "cta", "sources_at": 1.0, "presenter": None, "lines": [{"text": "Talk to a Steer doctor"}],
+                    "sources": {"entries": [entry(n)]}}
+    short, long = {"scenes": [sc(200)]}, {"scenes": [sc(300)]}
+    reel.reel_lineart(short, "lean mass", "will_i_lose_muscle"); reel.reel_lineart(long, "lean mass", "will_i_lose_muscle")
+    assert "lineart" not in long["scenes"][0]

@@ -81,11 +81,13 @@ export const PhoneEvidence = (p: { e: Evidence; t: number; ink: string; accent: 
           color: "#7A5A50" }}>{e.header}</div>
         {e.image ? (
           <div style={{ position: "absolute", left: 0, right: 0, top: 160, bottom: 0, overflow: "hidden" }}>
-            <Img src={staticFile(e.image)} style={{ width: "100%" }} />
-            {e.boxes.map((b, i) => (
-              <div key={i} style={{ position: "absolute", left: `${b[0] * 100}%`, top: `${b[1] * 100}%`, width: `${(b[2] - b[0]) * 100}%`,
-                height: `${(b[3] - b[1]) * 100}%`, background: "rgba(192, 78, 42, 0.28)", borderBottom: `3px solid ${p.accent}` }} />
-            ))}
+            <div style={{ position: "relative" }}>   {/* the boxes are fractions of the image, so they sit on it */}
+              <Img src={staticFile(e.image)} style={{ width: "100%", display: "block" }} />
+              {e.boxes.map((b, i) => (
+                <div key={i} style={{ position: "absolute", left: `${b[0] * 100}%`, top: `${b[1] * 100}%`, width: `${(b[2] - b[0]) * 100}%`,
+                  height: `${(b[3] - b[1]) * 100}%`, background: "rgba(192, 78, 42, 0.28)", borderBottom: `3px solid ${p.accent}` }} />
+              ))}
+            </div>
           </div>
         ) : (
           <div style={{ margin: "10px 40px", padding: "20px 24px", borderLeft: `6px solid ${p.accent}`, background: "rgba(192, 78, 42, 0.10)",

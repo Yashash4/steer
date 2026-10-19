@@ -1015,6 +1015,7 @@ def voice_problems(props: dict) -> list[dict]:
     return out
 
 
+LINEART_MAX_SOURCE_CHARS = 260   # ponytail: a char count stands in for the card's measured height; Narayan's 245 fit
 LINEART_DRAW = 2.0   # v5: the CTA scene's drawing is drawn on, stroke by stroke, in 2 s from the sources card, then held
 
 
@@ -1024,6 +1025,8 @@ def reel_lineart(props: dict, theme: str = "", doubt: str = "") -> dict:
     for sc in props["scenes"]:
         if sc["kind"] == "cta" and sc["sources"] and sc["sources_at"] is not None and not sc["presenter"]:
             texts = [ln["text"] for ln in sc["lines"]] + [e["before"] + e["journal"] + e["after"] for e in sc["sources"]["entries"]]
+            if sum(len(t) for t in texts[len(sc["lines"]):]) > LINEART_MAX_SOURCE_CHARS:
+                continue   # text beats art: a long citation needs the room the drawing would take (Reel.tsx SourcesCard)
             pick = lineart.choose([{"texts": texts, "has_health": False, "eligible": True}], theme, doubt)
             if pick:
                 d = lineart.drawing(pick[0])   # the same drawing data as the slides, drawn as SVG strokes (no WebGL)
