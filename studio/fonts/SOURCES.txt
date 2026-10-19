@@ -1,4 +1,4 @@
-Fonts bundled for the hackathon prototype studio (SIL Open Font License 1.1; licence texts sit next to the files).
+Fonts bundled for the prototype studio (SIL Open Font License 1.1; licence texts sit next to the files).
 InstrumentSerif-Regular.ttf  https://raw.githubusercontent.com/google/fonts/main/ofl/instrumentserif/InstrumentSerif-Regular.ttf
 InstrumentSerif-Italic.ttf   https://raw.githubusercontent.com/google/fonts/main/ofl/instrumentserif/InstrumentSerif-Italic.ttf
 OFL-InstrumentSerif.txt      https://raw.githubusercontent.com/google/fonts/main/ofl/instrumentserif/OFL.txt
