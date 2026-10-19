@@ -109,6 +109,11 @@ def main(argv: list[str] | None = None) -> int:
     hi.add_argument("folder", help="out/<run_id>/<post_id>")
     hi.add_argument("--db", required=True)
     hi.add_argument("--settings")
+    sp = sub.add_parser("site-pages", help="static site pages from stored records only")
+    spp = sp.add_subparsers(dest="page", required=True)
+    le_p = spp.add_parser("learned", help="'What the pipeline learned' from a records folder (lessons.json + images)")
+    le_p.add_argument("--records", required=True)
+    le_p.add_argument("--out", required=True, help="the site folder (code/site)")
     d = sub.add_parser("render", help="render (again) the PNGs of a written post folder")
     d.add_argument("folder", help="out/<run_id>/<post_id>")
     args = ap.parse_args(argv)
@@ -184,6 +189,12 @@ def main(argv: list[str] | None = None) -> int:
         r = posts.hinglish_caption(args.folder, store.connect(args.db), load_settings(args.settings))
         print(f"caption-hi {r['status']}" + (f": {r['failures']}" if r["status"] != "passed" else ""), file=sys.stderr)
         return 0 if r["status"] == "passed" else 1
+
+    if args.cmd == "site-pages":
+        from . import sitepages
+        if args.page == "learned":
+            print(f"wrote {sitepages.learned_page(Path(args.records), Path(args.out))}", file=sys.stderr)
+        return 0
 
     if args.cmd == "render":
         from .render import qa_line

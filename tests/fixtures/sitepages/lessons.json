@@ -1,0 +1,144 @@
+[
+ {
+  "id": "framing-attribute",
+  "failed": {
+   "post": "post-6e732e12",
+   "path": "slides/0/lines/0",
+   "kind": "framing",
+   "text": "Lean, active, eating home food. Does diabetes research still apply to you?",
+   "codes": [
+    {
+     "code": "FRAMING_ADDS_ATTRIBUTE",
+     "detail": "['active', 'home food']: not stated by the post's claims"
+    }
+   ],
+   "crosscheck": {
+    "verdict": "supported",
+    "model": "glm-5.3",
+    "independence": "different_provider"
+   },
+   "source": "re-check"
+  },
+  "rule": {
+   "sha": "b5f37cf",
+   "subject": "Framing lines may not add a lifestyle attribute the post's claims do not state",
+   "boundaries": null
+  },
+  "passed": {
+   "post": "post-6c5a0ef1",
+   "path": "reel_script/scenes/0/lines/0",
+   "kind": "framing",
+   "text": "Normal BMI, so diabetes is far away?",
+   "codes": [],
+   "crosscheck": {
+    "verdict": "supported",
+    "model": "glm-5.3",
+    "independence": "different_provider"
+   }
+  }
+ },
+ {
+  "id": "pending-tick",
+  "kind": "image",
+  "failed": {
+   "image": "pending-tick-before.jpg",
+   "source": "review",
+   "codes": [
+    {
+     "code": "PENDING_ITEM_TICKED",
+     "detail": "the frame showed all 3 items ticked, incl. 'Pending review by a Steer doctor'"
+    }
+   ]
+  },
+  "rule": {
+   "sha": "40a54a0",
+   "subject": "Reel: the pending review item is never drawn ticked (done flag; a decoded-frame check counts filled circles: PENDING_ITEM_TICKED); one-number lines get a hero card; the health scenes cycle the neutral clips; the evidence phone pans a readable strip of the quoted page lines (~30 px text)",
+   "boundaries": null
+  },
+  "passed": {
+   "image": "pending-tick-after.jpg",
+   "text": "the pending item stays an empty ring; the decoded-frame check counts 2 filled circles of 3"
+  }
+ },
+ {
+  "id": "learning-loop",
+  "kind": "learn",
+  "label": "benchmark of 11 public posts from 7 accounts, hand-picked, not market analysis",
+  "score_rows": [
+   [
+    "muscle",
+    "3",
+    "11",
+    "0",
+    "52",
+    "0",
+    "0",
+    "0.0000",
+    "0.2727"
+   ],
+   [
+    "safe",
+    "1",
+    "11",
+    "0",
+    "52",
+    "0",
+    "0",
+    "0.0000",
+    "0.0909"
+   ],
+   [
+    "for_me",
+    "1",
+    "11",
+    "46",
+    "52",
+    "91",
+    "930",
+    "0.0978",
+    "0.0115"
+   ],
+   [
+    "only_diabetics",
+    "0",
+    "11",
+    "0",
+    "52",
+    "0",
+    "0",
+    "0.0000",
+    "0.0000"
+   ],
+   [
+    "regain",
+    "0",
+    "11",
+    "6",
+    "52",
+    "3",
+    "132",
+    "0.0227",
+    "0.0000"
+   ]
+  ],
+  "why": "doubt muscle appears in 3 of 11 benchmark posts; our own output shows CONTEXT_NOT_IN_QUOTE x17 -> the next brief targets muscle with rule a context line is a verbatim run of the quote or is dropped",
+  "added": "\"rules\": [\"a context line is a verbatim run of the quote or is dropped\"],",
+  "passed": {
+   "post": "post-8369bdf3",
+   "text": "Losing weight, losing lean mass too?"
+  },
+  "rule": {
+   "sha": null,
+   "subject": "steer learn (S6): one brief rule from the benchmark and our own rejections",
+   "boundaries": null
+  },
+  "failed": {
+   "codes": [
+    {
+     "code": "CONTEXT_NOT_IN_QUOTE",
+     "detail": "doubt muscle appears in 3 of 11 benchmark posts; our own output shows CONTEXT_NOT_IN_QUOTE x17 -> the next brief targets muscle with rule a context line is a verbatim run of the quote or is dropped"
+    }
+   ]
+  }
+ }
+]
