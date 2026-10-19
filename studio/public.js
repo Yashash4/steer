@@ -11,6 +11,7 @@
   var NAV = [["index.html", "Run overview"], ["ledger.html", "Claim ledger"], ["posts.html", "Finished posts"], ["history.html", "Review history"]];
   var cls = function (c) { return c.bucket === "rejected" ? "st-rejected" : (c.status_word === "verified" ? "st-passed" : "st-needs"); };
   var chip = function (c) { return '<span class="chip ' + cls(c) + '">' + esc(c.status_word) + "</span>"; };
+  var aid = function (k) { return "claim-" + String(k).replace("/", "-"); };   // ledger anchor of one claim: claim-<pmcid>-<claim id>
   var paperOf = function (k) { return D.papers[k]; };
   var count = function (xs, f) { var o = {}; xs.forEach(function (x) { f(x).forEach(function (k) { o[k] = (o[k] || 0) + 1; }); }); return o; };
   var list = function (o) { var k = Object.keys(o).sort(function (a, b) { return o[b] - o[a]; }); return k.length ? "<ul>" + k.map(function (x) { return "<li>" + esc(rc(x)) + " &times; " + o[x] + "</li>"; }).join("") + "</ul>" : '<span class="muted">none</span>'; };
@@ -60,7 +61,7 @@
       out += '<h2 id="' + esc(k) + '">' + esc(p.short) + ' <span class="small muted">' + cs.length + " claims</span></h2>";
       cs.forEach(function (c) {
         var loc = c.pages ? "page " + c.pages.join(", ") : (p.no_page_layout ? "no page layout for this source; section text below" : "not stated");
-        out += '<details class="claim" id="' + esc(c.key) + '"><summary>' + chip(c) + ' <span class="small muted">' + esc(c.claim_id) + '</span><span class="ctext">' + esc(c.claim_text) + "</span></summary><div class=\"body\">" +
+        out += '<details class="claim" id="' + esc(aid(c.key)) + '"><summary>' + chip(c) + ' <span class="small muted">' + esc(c.claim_id) + '</span><span class="ctext">' + esc(c.claim_text) + "</span></summary><div class=\"body\">" +
           "<h3>Exact quote</h3><blockquote>" + esc(c.quote) + "</blockquote>" +
           '<dl class="kv"><dt>Status</dt><dd>' + chip(c) + " " + esc(c.status) + "</dd>" +
           "<dt>Source</dt><dd>" + esc((c0.authors || [])[0] || "") + " et al., " + esc(c0.journal) + " " + esc(c0.year) + (c0.doi ? ", doi " + esc(c0.doi) : "") + (p.pmc_url ? ' &middot; <a href="' + esc(p.pmc_url) + '">' + esc(p.pmcid) + "</a>" : "") + "</dd>" +
@@ -92,7 +93,7 @@
         (p.pngs.length ? '<div class="slides" style="margin:12px 0">' + p.pngs.map(function (u, i) { return '<a href="' + esc(u) + '"><img alt="Slide ' + (i + 1) + " of " + esc(p.id) + '" loading="lazy" style="width:100%;height:auto;border:1px solid var(--clay-text)" src="' + esc(u) + '"></a>'; }).join("") + "</div>" : '<p class="muted">No rendered images for this post.</p>') +
         (p.reel ? '<p><a href="' + esc(p.reel) + '">Watch the reel (MP4)</a></p>' : '<p class="small muted">No reel for this post yet.</p>') +
         '<div class="tablewrap"><table class="lines stack2"><caption>Lines and the claims behind them</caption><thead><tr><th>Kind</th><th>Line</th><th>Claims</th><th>Checks</th></tr></thead><tbody>' +
-        p.lines.map(function (l) { return '<tr><td data-l="Kind">' + esc(l.kind) + '</td><td data-l="Line" class="wide">' + esc(l.text) + '</td><td data-l="Claims">' + (l.claim_ids.length ? l.claim_ids.map(function (i) { return '<a href="ledger.html#' + esc(p.paper + "/" + i) + '">' + esc(i) + "</a>"; }).join(", ") : "&mdash;") + '</td><td data-l="Checks">' + (l.failures.length ? esc(l.failures.map(rc).join(", ")) : "passed") + "</td></tr>"; }).join("") + "</tbody></table></div></section>";
+        p.lines.map(function (l) { return '<tr><td data-l="Kind">' + esc(l.kind) + '</td><td data-l="Line" class="wide">' + esc(l.text) + '</td><td data-l="Claims">' + (l.claim_ids.length ? l.claim_ids.map(function (i) { return '<a href="ledger.html#' + esc(aid(p.paper + "/" + i)) + '">' + esc(i) + "</a>"; }).join(", ") : "&mdash;") + '</td><td data-l="Checks">' + (l.failures.length ? esc(l.failures.map(rc).join(", ")) : "passed") + "</td></tr>"; }).join("") + "</tbody></table></div></section>";
     });
     shell(out);
   }
@@ -101,7 +102,7 @@
     var out = "<h1>Review history</h1><p class=\"lede\">Every recorded reviewer action, in the order it happened. The log is append-only: a clearance that was later revoked stays here, followed by the revocation and any new clearance. Reasons are shown as written. Reviewers identified themselves by name (prototype, no login).</p>";
     if (!D.history.length) out += '<p class="note">No review actions have been recorded.</p>';
     else out += '<div class="tablewrap card"><table class="hist"><caption>' + D.history.length + ' actions</caption><thead><tr><th>#</th><th>When</th><th>Who</th><th>Action</th><th>On</th><th>Reason</th></tr></thead><tbody>' +
-      D.history.map(function (a) { return '<tr><td data-l="#">' + a.id + '</td><td data-l="When">' + esc(ist(a.at)) + '</td><td data-l="Who">' + esc(a.reviewer) + " (" + esc(a.role) + ')</td><td data-l="Action">' + esc(rc(a.action)) + (a.clears ? " (" + esc(rc(a.clears)) + ")" : "") + (a.revokes ? " of #" + a.revokes : "") + '</td><td data-l="On">' + (a.target_kind === "claim" ? '<a href="ledger.html#' + esc(a.target) + '">' + esc(a.target) + "</a>" : '<a href="posts.html#' + esc(a.target) + '">' + esc(a.target) + "</a>") + '</td><td data-l="Reason" class="reason">' + esc(a.reason || "") + "</td></tr>"; }).join("") + "</tbody></table></div>";
+      D.history.map(function (a) { return '<tr><td data-l="#">' + a.id + '</td><td data-l="When">' + esc(ist(a.at)) + '</td><td data-l="Who">' + esc(a.reviewer) + " (" + esc(a.role) + ')</td><td data-l="Action">' + esc(rc(a.action)) + (a.clears ? " (" + esc(rc(a.clears)) + ")" : "") + (a.revokes ? " of #" + a.revokes : "") + '</td><td data-l="On">' + (a.target_kind === "claim" ? '<a href="ledger.html#' + esc(aid(a.target)) + '">' + esc(a.target) + "</a>" : '<a href="posts.html#' + esc(a.target) + '">' + esc(a.target) + "</a>") + '</td><td data-l="Reason" class="reason">' + esc(a.reason || "") + "</td></tr>"; }).join("") + "</tbody></table></div>";
     shell(out);
   }
 
