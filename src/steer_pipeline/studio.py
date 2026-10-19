@@ -780,16 +780,9 @@ def source_rows(snap: dict) -> dict[str, list[dict]]:
             where = "page " + ", ".join(map(str, c["pages"]))
         else:
             where = "section text, no page layout; sentences " + ", ".join(c["sids"])
-        codes = ", ".join(c["reasons"])
-        if c["bucket"] == "rejected":
-            status = f"rejected ({codes})"
-        elif c["usable"]:
-            status = "cleared in the studio" if c["clearances"] else "verified"
-        else:
-            status = f"needs check ({', '.join(c['open']) or codes})"
         rows.setdefault(c["paper"], []).append({
             "claim id": c["claim_id"], "claim text": c["claim_text"], "exact quote": c["quote"], "location": where,
-            "status": status, "posts using it": " ".join(sorted({u["post"] for u in c["used_in"]}))})
+            "status": c["status"], "posts using it": " ".join(sorted({u["post"] for u in c["used_in"]}))})
     return rows
 
 

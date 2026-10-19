@@ -353,16 +353,18 @@ function link(l, cls) {
   return a;
 }
 
-function copyText(text) {
+function copyText(text, ok) {
   const old = () => {
     const ta = document.createElement("textarea");
     ta.value = text;
     document.body.append(ta);
     ta.select();
-    try { document.execCommand("copy"); } catch (x) { /* nothing to do */ }
+    let done = false;
+    try { done = document.execCommand("copy"); } catch (x) { /* nothing to do */ }
     ta.remove();
+    if (done && ok) ok();
   };
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(old);
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok || (() => {}), old);
   else old();
 }
 
@@ -416,12 +418,23 @@ function warmLead() {
     });
     return out.join(NL);
   };
-  const cp = button(w.copy_label, () => copyText(text()), "alt");
+  // "Copied" only after a successful write, for 2 s; a Web Animation times it (no timers in this file, and the reduced-motion CSS cannot stop it)
+  const note = h("p", ["small", "copied"], C.ui.copied);
+  note.hidden = true;
+  note.setAttribute("role", "status");
+  let flash = null;
+  const copied = () => {
+    if (flash) flash.cancel();
+    note.hidden = false;
+    flash = note.animate([{ opacity: 1 }, { opacity: 1 }], 2000);
+    flash.onfinish = () => { note.hidden = true; };
+  };
+  const cp = button(w.copy_label, () => copyText(text(), copied), "alt");
   const sh = button(w.share_label, () => {
     if (navigator.share) navigator.share({ title: w.share_title, text: text() }).catch(() => {});
     else copyText(text());
   }, "alt");
-  card.append(nl, pl, cl, showBtn, prev, cp, sh);
+  card.append(nl, pl, cl, showBtn, prev, cp, note, sh);
   return card;
 }
 

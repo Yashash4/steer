@@ -136,7 +136,31 @@ def test_sources_one_md_and_csv_per_paper_with_true_status_and_posts(tmp_path, m
     assert studio.export_sources(tmp_path / "s.db", [], Path(__file__).parent.parent / "reviewers.toml", out) == ["PMC1"]
     rows = {r["claim id"]: r for r in csv.DictReader(open(out / "PMC1.csv", encoding="utf-8"))}
     assert rows["c2"]["status"] == "verified" and rows["c2"]["posts using it"] == "post-00000001"
-    assert rows["c3"]["status"] == "cleared in the studio" and rows["c3"]["posts using it"] == ""
-    assert rows["c4"]["status"] == "rejected (QUOTE_NOT_FOUND)"
+    assert rows["c3"]["status"].startswith("verified; CONTEXT_NOT_IN_QUOTE cleared by Test editor") and rows["c3"]["posts using it"] == ""
+    assert rows["c4"]["status"] == "rejected by the gate"
     assert rows["c1"]["location"] == "page 1" and rows["c2"]["exact quote"] == "quote c2"
     assert "| c2 |" in (out / "PMC1.md").read_text(encoding="utf-8")
+
+
+def test_the_banner_is_the_fixed_demo_copy_wording_and_hackathon_is_nowhere(bundle):
+    out, _, _ = bundle
+    js = (out / "public.js").read_text()
+    assert ("<strong>Read-only demo copy: actions disabled.</strong> An independent prototype, not an official Steer product. Built '"
+            " + esc(ist(D.generated_at)) + \".</div>\"") in js
+    for f in out.rglob("*"):
+        if f.is_file() and f.suffix in TEXT_SUFFIXES:
+            assert "hackathon" not in f.read_text().lower(), f.name
+
+
+def test_the_sources_tables_carry_the_studios_own_status_string(bundle):
+    import csv
+    out, _, tmp = bundle
+    pub = json.loads((out / "data.js").read_text().removeprefix("window.STEER_PUBLIC = ").rstrip(";\n"))
+    studio.export_sources(tmp / "s.db", [], Path(__file__).parent.parent / "reviewers.toml", tmp / "src")
+    seen = {}
+    for f in (tmp / "src").glob("*.csv"):
+        for r in csv.DictReader(f.open(encoding="utf-8")):
+            seen[f"{f.stem}/{r['claim id']}"] = r["status"]
+    assert seen == {c["key"]: c["status"] for c in pub["claims"]}
+    assert any(s.startswith("rejected by the gate") or s.startswith("verified") for s in seen.values())
+    assert not [s for s in seen.values() if s.endswith("()")]

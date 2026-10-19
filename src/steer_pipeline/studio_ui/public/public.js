@@ -18,7 +18,7 @@
   function shell(body) {
     var cur = document.body.getAttribute("data-page");
     $("#main").insertAdjacentHTML("beforebegin",
-      '<div class="proto" role="note"><strong>Public read-only snapshot.</strong> Hackathon prototype, not an official steer product. Built ' + esc(ist(D.generated_at)) + ". Nothing on this page can be changed.</div>" +
+      '<div class="proto" role="note"><strong>Read-only demo copy: actions disabled.</strong> An independent prototype, not an official Steer product. Built ' + esc(ist(D.generated_at)) + ".</div>" +
       '<header class="top"><a class="wordmark" href="index.html">steer</a><nav aria-label="Pages"><ul>' + NAV.map(function (n) { return '<li><a href="' + n[0] + '"' + (n[0] === cur ? ' aria-current="page"' : "") + ">" + n[1] + "</a></li>"; }).join("") + "</ul></nav></header>");
     $("#main").innerHTML = body;
     document.body.insertAdjacentHTML("beforeend", '<footer><span><b>steer</b> public snapshot</span><span>' + esc(D.clinician_review) + ". Editorial review is not clinical approval.</span></footer>");

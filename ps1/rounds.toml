@@ -34,6 +34,7 @@ unscored = "Not scored"
 share_make = "Make a share card"
 share_line = "I matched the study range in {n} of {m} guesses. Try it."
 share_note = "Your score reflects quiz guesses, not your health."
+copied = "Copied"
 
 # points per result, fixed and deterministic (numbers, not copy)
 [points]

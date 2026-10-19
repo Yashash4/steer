@@ -382,3 +382,17 @@ def test_the_info_card_context_line_and_cite_show_on_the_card_and_in_the_readout
     assert "x.context" in body("readout") and "x.source.short" in body("readout") and "C.ui.unscored" in body("readout")
     schema = json.loads((ps1.PS1 / "claims.schema.json").read_text())
     assert "source" in schema["properties"]["gap_cards"]["items"]["properties"]
+
+
+def test_copy_my_questions_flashes_copied_for_2s_only_after_a_successful_write(stored, tmp_path):
+    js = (ps1.PS1 / "app.js").read_text()
+    assert ROUNDS["ui"]["copied"] == "Copied" and "copied" not in ROUNDS["warm_lead"]
+    # the string reaches claims.json through the same ui path as every other ui string (and its cross-check)
+    ps1.build(stored, tmp_path / "site", SETTINGS, rounds_file(tmp_path), playable=False, fonts=False)
+    assert json.loads((tmp_path / "site" / "claims.json").read_text())["ui"]["copied"] == "Copied"
+    # shown only from the success callback, hidden on load, hidden again after 2000 ms; no timer in the file
+    assert "C.ui.copied" in js and "note.hidden = true;\n  note.setAttribute" in js
+    assert "writeText(text).then(ok" in js and "if (done && ok) ok();" in js
+    assert "[{ opacity: 1 }, { opacity: 1 }], 2000" in js and "onfinish" in js and "setTimeout" not in js
+    assert "copyText(text(), copied)" in js and "copyText(text());" in js   # the share fallback copies without the note
+    assert "tick.checked = true" not in js and ".value = " not in js.replace("ta.value = text", "")   # the form starts blank

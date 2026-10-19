@@ -106,7 +106,8 @@
         "unscored",
         "share_make",
         "share_line",
-        "share_note"
+        "share_note",
+        "copied"
       ],
       "description": "fixed button and heading words, checked as framing copy (no numbers, no health assertion)"
     },
