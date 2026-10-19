@@ -1,0 +1,91 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Steer//steer batch//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Asia/Kolkata
+BEGIN:STANDARD
+DTSTART:19700101T000000
+TZOFFSETFROM:+0530
+TZOFFSETTO:+0530
+TZNAME:IST
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:post-3aa016d5@steer
+DTSTAMP:20261019T100301Z
+DTSTART;TZID=Asia/Kolkata:20261020T190000
+DTEND;TZID=Asia/Kolkata:20261020T193000
+SUMMARY:Losing weight\, losing lean mass too?
+DESCRIPTION:Dinner is done\, the chai is cold\, and the question stays: wha
+ t am I losing along with the weight?\nIn patients with obesity treated wit
+ h GLP-1 receptor agonists at obesity doses\, absolute lean mass changed by
+  -1.74 kg (95% CI: -3.04 to -0.45\; p < 0.00001)\; results varied a lot be
+ tween studies (I² = 98%).\nA meta-analysis of 7 studies (821 patients) fo
+ und that lean mass as a share of total weight rose 1.81% (95% CI: 1.1 to 2
+ .52\; p < 0.00001\; I² = 7%) in patients with obesity treated with GLP-1 
+ receptor agonists at obesity doses.\nPost folder: posts/run-e4d5ed8559e6/p
+ ost-3aa016d5\nPending doctor review.
+STATUS:TENTATIVE
+END:VEVENT
+BEGIN:VEVENT
+UID:post-b9efc2f8@steer
+DTSTAMP:20261019T100301Z
+DTSTART;TZID=Asia/Kolkata:20261021T190000
+DTEND;TZID=Asia/Kolkata:20261021T193000
+SUMMARY:Is it safe?
+DESCRIPTION:Thinking about GLP-1 medicines and wondering about side effects
+ ? Fair question.\nIn trials\, higher doses of this class of medicines were
+  linked to higher risks of nausea\, vomiting\, diarrhea\, constipation and
+  decreased appetite. A doctor weighs the benefits against the side effects
+ .\nOnly one trial looked at the risk of abdominal discomfort in patients r
+ eceiving GLP-1 medicines.\nPost folder: posts/run-b78a76213417/post-b9efc2
+ f8\nPending doctor review.
+STATUS:TENTATIVE
+END:VEVENT
+BEGIN:VEVENT
+UID:post-72926563@steer
+DTSTAMP:20261019T100301Z
+DTSTART;TZID=Asia/Kolkata:20261022T190000
+DTEND;TZID=Asia/Kolkata:20261022T193000
+SUMMARY:Will I lose muscle along the way?
+DESCRIPTION:Worried about muscle when you start a weight programme? Fair qu
+ estion.\nThe authors state the percentage of lean mass fell from baseline 
+ in all subgroups\, and they pair treatment with nutrition and exercise.\nT
+ alk to a Steer doctor\nPost folder: posts/run-e4d5ed8559e6/post-72926563\n
+ Pending doctor review.
+STATUS:TENTATIVE
+END:VEVENT
+BEGIN:VEVENT
+UID:post-0e31b93a@steer
+DTSTAMP:20261019T100301Z
+DTSTART;TZID=Asia/Kolkata:20261024T190000
+DTEND;TZID=Asia/Kolkata:20261024T193000
+SUMMARY:Is metabolic care for you?
+DESCRIPTION:Wondering if metabolic care is for you?\nIn men with BMI under 
+ 25 kg/m2\, aged 45 and over in Chennai\, Delhi and Karachi\, diabetes risk
+  was 2.99 times higher in South Asians (95% CI 2.09 to 4.28) than in US wh
+ ites.\nIn women with BMI under 25 kg/m2\, aged 45 and over in Chennai\, De
+ lhi and Karachi\, diabetes risk was 5.27 times higher in South Asians (95%
+  CI 3.64 to 7.54) than in US whites.\nPost folder: posts/run-244d0fbd0c04/
+ post-0e31b93a\nPending doctor review.
+STATUS:TENTATIVE
+END:VEVENT
+BEGIN:VEVENT
+UID:post-92f0b86a@steer
+DTSTAMP:20261019T100301Z
+DTSTART;TZID=Asia/Kolkata:20261026T190000
+DTEND;TZID=Asia/Kolkata:20261026T193000
+SUMMARY:Will the weight come back?
+DESCRIPTION:On average\, weight came back 0.4 kg a month (95% confidence in
+ terval 0.3 to 0.5) after stopping weight management medicines in adults wi
+ th overweight or obesity. It is an average across all weight management me
+ dicines\, not only GLP-1\, and not a prediction for you.\nAmong 28 randomi
+ sed controlled trials\, weight came back to the comparison group's level 1
+ .4 years after stopping. This is an average across all weight management m
+ edicines\, not only GLP-1\, and not a prediction for you.\nTalk to a Steer
+  doctor\nPost folder: posts/run-a7cddabed62e/post-92f0b86a\nPending doctor
+  review.
+STATUS:TENTATIVE
+END:VEVENT
+END:VCALENDAR
