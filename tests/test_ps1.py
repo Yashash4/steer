@@ -405,3 +405,30 @@ def test_no_ps1_source_or_built_text_says_hackathon(stored, tmp_path):
     for f in files:
         assert "hackathon" not in f.read_text(encoding="utf-8").lower(), f.name
     assert ROUNDS["footer"] == "Educational prototype · content pending review by a Steer doctor · not a medical assessment"
+
+
+WRAPPED = ("wrapped_title", "wrapped_score", "wrapped_surprise_title", "wrapped_questions", "wrapped_back", "wrapped_progress")
+
+
+def test_the_recap_cards_are_drawn_from_claims_json_strings_and_the_build_carries_them(stored, tmp_path):
+    js = (ps1.PS1 / "app.js").read_text()
+    body = js.split("function wrapped()", 1)[1].split("\nfunction readout()", 1)[0]
+    for k in WRAPPED:
+        assert k in ROUNDS["ui"] and f"C.ui.{k}" in body, k
+    assert "S.guesses" in body and "questions()" in body and "furthest()" in js and "wrapped();" in js
+    ps1.build(stored, tmp_path / "site", SETTINGS, rounds_file(tmp_path), playable=False, fonts=False)
+    ui = json.loads((tmp_path / "site" / "claims.json").read_text())["ui"]
+    assert all(ui[k] for k in WRAPPED) and ui["wrapped_title"] == "You played The Real Number"
+    assert ui["wrapped_surprise_title"] == "The finding furthest from your guess"
+
+
+def test_the_share_image_keeps_only_the_score_sentence_the_note_and_the_signoff():
+    js = (ps1.PS1 / "app.js").read_text()
+    img = js.split("async function shareCard(", 1)[1].split("\nfunction link(", 1)[0]
+    for ok in ("C.ui.share_line", "C.ui.share_note", "C.brand.wordmark", "C.brand.signoff"):
+        assert ok in img, ok
+    for leak in ("S.picked", "doubts", "guesses.map", "warm", "questions()", "wrapped", "reveals", "quote", "phone", "name"):
+        assert leak not in img.replace("S.guesses.length", "").replace("S.guesses.filter", ""), leak
+    css = (ps1.PS1 / "style.css").read_text()
+    wcss = "\n".join(ln for ln in css.splitlines() if ".wcard" in ln or ".wrapped" in ln or ".wnav" in ln)
+    assert "transition" not in wcss and "animation" not in wcss and "transition" not in js.split("function wrapped()", 1)[1].split("\nfunction readout()", 1)[0]

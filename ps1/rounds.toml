@@ -35,6 +35,12 @@ share_make = "Make a share card"
 share_line = "I matched the study range in {n} of {m} guesses. Try it."
 share_note = "Your score reflects quiz guesses, not your health."
 copied = "Copied"
+wrapped_title = "You played The Real Number"
+wrapped_score = "Closest range on {n} of {m}"
+wrapped_surprise_title = "The finding furthest from your guess"
+wrapped_questions = "Your questions for a doctor"
+wrapped_back = "Back"
+wrapped_progress = "Card {n} of {m}"
 
 # points per result, fixed and deterministic (numbers, not copy)
 [points]

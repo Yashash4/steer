@@ -1,7 +1,7 @@
 """Usage (from code/): uv run python ps1/test/offline_check.py ps1/out/playable.html [shots_dir]
 Loads the single-file build with every network request blocked and counted; plays the whole quiz;
 asserts zero requests, a one-tap hook and one tap on every round (no slider, no lock), the 10 s ring (aria-hidden, starts with the choices, dims at zero without locking), deterministic points/streak and result labels, the reveal staging, the grouped end screen with "Worth a chat", the share card made locally on a tap, an opener and "Question N of M" on every ask screen, the\nwarm-lead demo form (exact label, nothing sent, url unchanged), CTA hrefs equal claims.cta.*.url exactly."""
-import json, os, sys
+import json, os, re, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -41,6 +41,38 @@ def best(r):  # a tap that is the closest range
 
 def worst(r):  # a tap that is "different"
     return next(i for i in range(len(r["stops"])) if expected(r, i) == "different")
+
+def walk_wrapped(p, k, snap):
+    """The recap: one card at a time, drawn from claims.json; arrows, Back and Next work; the last Next opens the readout."""
+    ui = claims["ui"]
+    total = p.locator(".wcard").count()
+    assert total in (3, 4), total   # card 3 is skipped when every guess was in range
+    at = lambda: p.inner_text(".wcount")
+    num = lambda i: at() == ui["wrapped_progress"].replace("{n}", str(i)).replace("{m}", str(total))
+    for i in range(1, total + 1):
+        assert p.locator(".wcard:visible").count() == 1, "more than one recap card on screen"
+        assert num(i), at()
+        txt = " ".join(p.inner_text(".wcard:visible").split())
+        if i == 1: assert ui["wrapped_title"] in txt and claims["brand"]["wordmark"] in txt
+        if i == 2:
+            m = re.search(re.escape(ui["wrapped_score"]).replace(r"\{n\}", r"(\d+)").replace(r"\{m\}", r"(\d+)"), txt)
+            assert m and p.inner_text(".wbig") == m.group(1) and int(m.group(1)) <= int(m.group(2)), txt
+        if total == 4 and i == 3:
+            assert ui["wrapped_surprise_title"] in txt and ui["you_guessed"] in txt and ui["study_range"] in txt
+            assert any(r["source"]["short"] in txt and all(" ".join(q.split()).replace("/m2", "/m\u00b2") in txt for q in r["qualifiers"]) for r in played()), "caveat or cite missing on the surprise card"
+        if i == total:
+            assert ui["wrapped_questions"] in txt and 1 <= p.locator(".wq li").count() <= 3
+        assert p.locator(".wcard:visible a, .wcard:visible input, .wcard:visible textarea").count() == 0, "contact or link on a recap card"
+        snap(f"{k:02}-wrapped-{i}")
+        if i == 1:
+            p.keyboard.press("ArrowRight"); assert num(2)
+            p.keyboard.press("ArrowLeft"); assert num(1)
+        if i == 2:
+            p.click(".wnav .btn.alt"); assert num(1)
+            p.click(".wnav .btn:not(.alt)"); assert num(2)
+        p.click(".wnav .btn:not(.alt)")
+    p.wait_for_selector(".sharebox", state="attached")
+    return k + 1
 
 def play(browser, w, h, tag):
     reqs = []
@@ -114,6 +146,8 @@ def play(browser, w, h, tag):
         p.wait_for_timeout(350)
         if p.locator(".warm").count():
             break
+        if p.locator(".wrapped").count():
+            k = walk_wrapped(p, k, snap); continue
         if p.locator("h1.q").count() and p.inner_text("h1.q") == claims["ui"]["readout_title"]:
             if not readout_done:
                 body = p.inner_text("main")
@@ -210,7 +244,8 @@ def play(browser, w, h, tag):
     assert copied is not None and claims["ui"]["questions_title"] in copied, "the copied text could not be read back"
     need_everywhere(copied, "copied text")
     assert p.evaluate("location.href") == here, "the url changed"
-    assert "copied" not in p.inner_text("main").lower(), "a copy-confirmation state is back"   # no confirmation state at all
+    p.wait_for_timeout(2500)   # the Copied note shows only after a successful copy, for 2 s
+    assert not p.locator(".copied").is_visible() and "copied" not in p.inner_text("main").lower(), "the Copied note did not hide"
     hrefs = [p.locator("a.btn").nth(i).get_attribute("href") for i in (0, 1)]
     assert hrefs == [claims["cta"]["primary"]["url"], claims["cta"]["secondary"]["url"]], hrefs
     assert len(reqs) == 0, f"requests attempted: {reqs}"
@@ -222,7 +257,7 @@ def play(browser, w, h, tag):
         p.locator(".btn.alt").last.click(); p.wait_for_selector(".choice")
         p.locator(".choice").last.click(); p.wait_for_selector(".reveal"); p.click(".btn"); p.wait_for_selector(".chip")
         p.locator(".chip", has_text=gap_only[0]["label"]).click(); p.click(".btn")
-        p.wait_for_selector(".card.gap"); p.click(".btn"); p.wait_for_selector("h1.q")
+        p.wait_for_selector(".card.gap"); p.click(".btn"); p.wait_for_selector(".wrapped"); k = walk_wrapped(p, k, snap); p.wait_for_selector("h1.q")
         assert p.inner_text("h1.q") == claims["ui"]["readout_title"]
         assert p.locator(".card .big").count() == 1, "an info card was scored, or a count is missing"
         assert p.inner_text(".card .big") == claims["readout"]["numbers"].replace("{n}", "1").replace("{m}", "1")

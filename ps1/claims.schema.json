@@ -107,7 +107,13 @@
         "share_make",
         "share_line",
         "share_note",
-        "copied"
+        "copied",
+        "wrapped_title",
+        "wrapped_score",
+        "wrapped_surprise_title",
+        "wrapped_questions",
+        "wrapped_back",
+        "wrapped_progress"
       ],
       "description": "fixed button and heading words, checked as framing copy (no numbers, no health assertion)"
     },
